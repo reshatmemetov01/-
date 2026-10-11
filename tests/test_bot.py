@@ -382,6 +382,12 @@ async def scenario_browse_followups(h: Harness) -> None:
     assert "последнее сообщение" in texts[-1]
     assert (await h.db.get_user(uid))["next_followup_at"] is None
 
+    # админу напоминания не приходят
+    await h.text(ADMIN, "/start")
+    s.clear()
+    assert await h.force_followup(ADMIN) == 0
+    assert s.texts(ADMIN) == [] and (await h.db.get_user(ADMIN))["next_followup_at"] is None
+
 
 def test_quiet_hours():
     from zoneinfo import ZoneInfo

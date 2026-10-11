@@ -52,6 +52,9 @@ async def process_due(bot: Bot, db: Database, config: Config) -> int:
     sent_count = 0
     for user in await db.due_followups(now):
         uid = user["user_id"]
+        if uid in config.admin_ids:  # админам напоминания не шлём — только клиентам
+            await db.update_user(uid, next_followup_at=None)
+            continue
         sent = json.loads(user["followups_sent"] or "[]")
         key = await pick_next(db, config, user, sent)
         if key is None:
