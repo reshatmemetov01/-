@@ -4,10 +4,9 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, User
 
-from . import content
 from .config import Config
 from .db import Database
-from .followups import scaled
+from .followups import next_followup_time
 
 
 class UserMiddleware(BaseMiddleware):
@@ -24,10 +23,8 @@ class UserMiddleware(BaseMiddleware):
             return await handler(event, data)
         db: Database = data["db"]
         config: Config = data["config"]
-        first_delay = content.FOLLOWUPS["browse"][0][0]
         user, is_new = await db.touch_user(
-            tg_user.id, tg_user.username, tg_user.full_name,
-            int(time.time() + scaled(first_delay, config)),
+            tg_user.id, tg_user.username, tg_user.full_name, next_followup_time(int(time.time()), config),
         )
         data["user"] = user
         data["is_new"] = is_new

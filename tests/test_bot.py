@@ -183,7 +183,7 @@ async def scenario_purchase(h: Harness) -> None:
     # /start с меткой источника → приветствие с кнопкой подписки
     await h.text(uid, "/start insta")
     user = await db.get_user(uid)
-    assert user["source"] == "insta" and user["chain"] == "browse" and not user["subscribed"]
+    assert user["source"] == "insta" and not user["subscribed"] and user["next_followup_at"]
     assert "Эльдар" not in s.texts(uid)[0] and content.SUBSCRIBE_PROMPT in s.texts(uid)[0]
 
     # не подписан → не пускаем
@@ -198,6 +198,7 @@ async def scenario_purchase(h: Harness) -> None:
     assert (await db.get_user(uid))["subscribed"]
     texts = s.texts(uid)
     assert content.SUBSCRIBED_OK in texts and any("Меня зовут Эльдар" in t for t in texts)
+    assert any("Чат с учениками и поддержка" in t for t in texts)
 
     # «Показать» без видео → только текст
     s.clear()
@@ -224,7 +225,6 @@ async def scenario_purchase(h: Harness) -> None:
     s.clear()
     await h.click(uid, "f:offer")
     assert any("<b>Стоимость:</b> 1490₽" in t for t in s.texts(uid))
-    assert (await db.get_user(uid))["chain"] == "checkout"
     s.clear()
     assert await h.force_followup(uid) == 1
     assert "открыл оплату" in s.texts(uid)[0]
@@ -335,14 +335,37 @@ async def scenario_reject(h: Harness) -> None:
 async def scenario_browse_followups(h: Harness) -> None:
     s, uid = h.s, 701
     await h.text(uid, "/start")
+    # первое сообщение — через 6 часов, не раньше
+    first_at = (await h.db.get_user(uid))["next_followup_at"]
+    assert first_at - time.time() >= 6 * 3600 - 5
+    assert await process_due(h.bot, h.db, h.config) == 0
+
     s.clear()
-    assert await h.force_followup(uid) == 1
-    assert "так и не подписался" in s.texts(uid)[0]
-    assert await h.force_followup(uid) == 1
-    assert "бесплатный разбор" in s.texts(uid)[1]
-    assert await h.force_followup(uid) == 1
-    assert "Тренировка" in s.texts(uid)[2]
-    assert await h.force_followup(uid) == 0  # цепочка закончилась
+    total = 0
+    while await h.force_followup(uid):
+        total += 1
+        assert total < 50
+    texts = s.texts(uid)
+    # не подписан → сначала просьба подписаться, дальше все сообщения по порядку, без повторов
+    assert "так и не подписался" in texts[0]
+    assert "Почему зубрёжка не работает" in texts[1]
+    assert total == 1 + len(content.FOLLOWUP_ORDER) == len(set(texts))
+    assert "последнее сообщение" in texts[-1]
+    assert (await h.db.get_user(uid))["next_followup_at"] is None
+
+
+def test_quiet_hours():
+    from zoneinfo import ZoneInfo
+    from bot.followups import next_followup_time
+    cfg = make_config("x")
+    tz = ZoneInfo("Europe/Moscow")
+    at = lambda h, m=0: int(datetime(2026, 10, 12, h, m, tzinfo=tz).timestamp())
+    local = lambda ts: datetime.fromtimestamp(ts, tz)
+    assert local(next_followup_time(at(10), cfg)).hour == 16           # днём — ровно +6 ч
+    night = local(next_followup_time(at(18), cfg))                     # 00:00 → утро
+    assert (night.day, night.hour, night.minute) == (13, 9, 0)
+    early = local(next_followup_time(at(1), cfg))                      # 07:00 → 09:00
+    assert (early.day, early.hour) == (12, 9)
 
 
 async def scenario_exam(h: Harness) -> None:
@@ -400,5 +423,6 @@ if __name__ == "__main__":
     test_purchase()
     test_reject()
     test_browse_followups()
+    test_quiet_hours()
     test_exam()
     print("OK")

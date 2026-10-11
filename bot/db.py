@@ -14,9 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
     paid             INTEGER NOT NULL DEFAULT 0,
     paid_at          INTEGER,
     blocked          INTEGER NOT NULL DEFAULT 0,
-    -- дожимающая цепочка: 'browse' (не дошёл до оплаты) / 'checkout' (открыл оплату) / NULL
-    chain            TEXT,
-    followup_step    INTEGER NOT NULL DEFAULT 0,
+    -- дожимающие сообщения: какие уже отправлены (JSON-список ключей) и когда следующее
+    followups_sent   TEXT    NOT NULL DEFAULT '[]',
     next_followup_at INTEGER,
     -- текущий экзамен
     exam_ids         TEXT,
@@ -62,7 +61,14 @@ class Database:
         self.conn = await aiosqlite.connect(self.path)
         self.conn.row_factory = aiosqlite.Row
         await self.conn.executescript(SCHEMA)
+        await self._migrate()
         await self.conn.commit()
+
+    async def _migrate(self) -> None:
+        async with self.conn.execute("PRAGMA table_info(users)") as cur:
+            columns = {row["name"] for row in await cur.fetchall()}
+        if "followups_sent" not in columns:
+            await self.conn.execute("ALTER TABLE users ADD COLUMN followups_sent TEXT NOT NULL DEFAULT '[]'")
 
     async def close(self) -> None:
         if self.conn:
@@ -94,8 +100,8 @@ class Database:
         now = int(time.time())
         cur = await self.conn.execute(
             """INSERT OR IGNORE INTO users
-               (user_id, username, full_name, chain, next_followup_at, created_at, last_seen)
-               VALUES (?, ?, ?, 'browse', ?, ?, ?)""",
+               (user_id, username, full_name, next_followup_at, created_at, last_seen)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (user_id, username, full_name, first_followup_at, now, now),
         )
         is_new = cur.rowcount > 0
@@ -145,6 +151,9 @@ class Database:
         )
         await self.conn.commit()
         return cur.rowcount > 0
+
+    async def has_event(self, user_id: int, event: str) -> bool:
+        return await self._one("SELECT 1 FROM events WHERE user_id = ? AND event = ?", (user_id, event)) is not None
 
     async def event_counts(self, since: int) -> dict[str, int]:
         rows = await self._all("SELECT event, COUNT(*) AS n FROM events WHERE ts >= ? GROUP BY event", (since,))

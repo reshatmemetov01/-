@@ -7,7 +7,6 @@ from aiogram.types import CallbackQuery, Message
 from .. import content, keyboards
 from ..config import Config
 from ..db import Database
-from ..followups import start_checkout_chain
 from ..services import (
     ensure_subscribed,
     extract_media,
@@ -43,7 +42,6 @@ async def send_offer(bot: Bot, db: Database, config: Config, user: dict) -> None
         await send_access_again(bot, config, user["user_id"])
         return
     await db.add_event(user["user_id"], "checkout")
-    await start_checkout_chain(db, config, user)
     await bot.send_message(
         user["user_id"],
         content.offer_text(config.price, config.old_price, config.manager_username),

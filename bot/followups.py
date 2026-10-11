@@ -1,8 +1,14 @@
-"""Фоновая отправка дожимающих сообщений тем, кто не купил."""
+"""Фоновая отправка дожимающих сообщений тем, кто не купил.
+
+Раз в FOLLOWUP_INTERVAL пользователь получает новое сообщение (без повторов),
+ночью не пишем. После покупки или когда сообщения закончились — останавливаемся.
+"""
 import asyncio
+import json
 import logging
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
@@ -16,57 +22,66 @@ log = logging.getLogger(__name__)
 CHECK_INTERVAL = 20  # секунд
 
 
-def scaled(delay: timedelta, config: Config) -> float:
-    return delay.total_seconds() * config.followup_delay_scale
+def next_followup_time(now: int, config: Config) -> int:
+    ts = now + int(content.FOLLOWUP_INTERVAL.total_seconds() * config.followup_delay_scale)
+    if config.followup_delay_scale < 1:
+        return ts  # ускоренный режим для проверки — без ночной паузы
+    quiet_from, quiet_to = content.FOLLOWUP_QUIET_HOURS
+    dt = datetime.fromtimestamp(ts, ZoneInfo(config.timezone))
+    if dt.hour >= quiet_from:
+        dt = (dt + timedelta(days=1)).replace(hour=quiet_to, minute=0, second=0)
+    elif dt.hour < quiet_to:
+        dt = dt.replace(hour=quiet_to, minute=0, second=0)
+    return int(dt.timestamp())
 
 
-async def start_checkout_chain(db: Database, config: Config, user: dict) -> None:
-    """Пользователь открыл оплату: переключаем его на цепочку «не оплатил»."""
-    if user["paid"] or user["chain"] == "checkout":
-        return
-    first_delay = content.FOLLOWUPS["checkout"][0][0]
-    await db.update_user(
-        user["user_id"], chain="checkout", followup_step=0,
-        next_followup_at=int(time.time() + scaled(first_delay, config)),
-    )
+async def pick_next(db: Database, config: Config, user: dict, sent: list[str]) -> str | None:
+    if config.subscribe_channel and not user["subscribed"] and "subscribe" not in sent:
+        return "subscribe"
+    if "checkout" not in sent and await db.has_event(user["user_id"], "checkout"):
+        return "checkout"
+    return next((key for key in content.FOLLOWUP_ORDER if key not in sent), None)
 
 
-def render(user: dict, key: str, config: Config) -> tuple[str, object]:
-    if key == "browse_1" and not user["subscribed"] and config.subscribe_channel:
-        key = "browse_1_unsubscribed"
+def render(key: str, config: Config) -> tuple[str, object]:
+    text, button = content.FOLLOWUP_MESSAGES[key]
     manager = f": @{config.manager_username}" if config.manager_username else ""
-    text = content.FOLLOWUP_TEXTS[key].format(price=config.price, manager=manager)
-    return text, keyboards.followup(key, config)
+    return text.format(price=config.price, manager=manager), keyboards.followup(button, config)
 
 
 async def process_due(bot: Bot, db: Database, config: Config) -> int:
     now = int(time.time())
-    sent = 0
+    sent_count = 0
     for user in await db.due_followups(now):
-        chain = content.FOLLOWUPS.get(user["chain"] or "")
-        step = user["followup_step"]
-        if not chain or step >= len(chain):
-            await db.update_user(user["user_id"], next_followup_at=None)
+        uid = user["user_id"]
+        sent = json.loads(user["followups_sent"] or "[]")
+        key = await pick_next(db, config, user, sent)
+        if key is None:
+            await db.update_user(uid, next_followup_at=None)
             continue
 
-        text, markup = render(user, chain[step][1], config)
+        text, markup = render(key, config)
         try:
-            await bot.send_message(user["user_id"], text, reply_markup=markup)
-            sent += 1
+            await bot.send_message(uid, text, reply_markup=markup)
+            sent_count += 1
         except TelegramForbiddenError:
-            await db.update_user(user["user_id"], blocked=1, next_followup_at=None)
+            await db.update_user(uid, blocked=1, next_followup_at=None)
             continue
         except TelegramRetryAfter as e:
             await asyncio.sleep(e.retry_after)
             continue
         except Exception:
-            log.exception("Ошибка отправки дожима пользователю %s", user["user_id"])
+            log.exception("Ошибка отправки дожима пользователю %s", uid)
             continue
 
-        next_at = now + int(scaled(chain[step + 1][0], config)) if step + 1 < len(chain) else None
-        await db.update_user(user["user_id"], followup_step=step + 1, next_followup_at=next_at)
+        sent.append(key)
+        has_more = await pick_next(db, config, user, sent) is not None
+        await db.update_user(
+            uid, followups_sent=json.dumps(sent),
+            next_followup_at=next_followup_time(now, config) if has_more else None,
+        )
         await asyncio.sleep(0.05)
-    return sent
+    return sent_count
 
 
 async def followup_worker(bot: Bot, db: Database, config: Config) -> None:

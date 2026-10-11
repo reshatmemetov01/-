@@ -90,18 +90,15 @@ def exam_finish(failed: bool, paid: bool) -> InlineKeyboardMarkup:
 
 # ------------------------------------------------------------------ дожим
 
-def followup(key: str, config: Config) -> InlineKeyboardMarkup:
-    if key == "browse_1_unsubscribed":
+def followup(button: str, config: Config) -> InlineKeyboardMarkup:
+    if button == "subscribe":
         return subscribe(config)
-    if key == "browse_1":
-        return show()
-    if key == "browse_2":
+    if button == "show":
+        return inline(B(text="⭐ Посмотреть, что внутри", callback_data="f:show"))
+    if button == "free":
         return inline(B(text="🎁 Смотреть бесплатный разбор", callback_data="f:free"))
-    if key == "checkout_1" and config.manager_username:
-        return inline(
-            B(text="👑 ПОЛУЧИТЬ ДОСТУП", callback_data="f:offer"),
-            B(text="✍️ Написать Эльдару", url=f"https://t.me/{config.manager_username}"),
-        )
+    if button == "exam":
+        return inline(B(text="📝 Пройти экзамен", callback_data="ex:start"))
     return get_access()
 
 

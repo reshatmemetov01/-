@@ -102,7 +102,7 @@ async def grant_access(bot: Bot, db: Database, config: Config, user_id: int, via
     if user["paid"]:
         return False
 
-    await db.update_user(user_id, paid=1, paid_at=int(time.time()), chain=None, next_followup_at=None)
+    await db.update_user(user_id, paid=1, paid_at=int(time.time()), next_followup_at=None)
     await db.add_event(user_id, "paid")
 
     link = await make_access_link(bot, config, user_id)
