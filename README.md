@@ -101,46 +101,36 @@ docker run -d --restart=always --env-file .env -v pdd_db:/db pdd-bot
 
 5. Открой бота → «🛠 Админка» → «🎬 Видео в воронке» и загрузи видео.
 
-## Запуск на VPS (Ubuntu/Debian)
+## Запуск на VPS (Ubuntu 22.04+ / Debian 12+)
 
-Выполняй по шагам на сервере:
+**Установка — одна команда** (подключись к серверу по SSH и вставь):
 
 ```bash
-# 1. Python и git
-sudo apt update && sudo apt install -y python3 python3-venv git
-
-# 2. Отдельный пользователь для бота и папка
-sudo useradd -r -m -d /opt/pdd-bot pddbot
-sudo -u pddbot git clone https://github.com/reshatmemetov01/-.git /opt/pdd-bot/app
-# (или скопируй файлы проекта в /opt/pdd-bot любым способом)
-sudo -u pddbot bash -c 'cp -r /opt/pdd-bot/app/. /opt/pdd-bot/ && rm -rf /opt/pdd-bot/app'
-
-# 3. Зависимости
-sudo -u pddbot python3 -m venv /opt/pdd-bot/venv
-sudo -u pddbot /opt/pdd-bot/venv/bin/pip install -r /opt/pdd-bot/requirements.txt
-
-# 4. Настройки: скопируй пример и заполни (токен, ADMIN_IDS, каналы, реквизиты)
-sudo -u pddbot cp /opt/pdd-bot/.env.example /opt/pdd-bot/.env
-sudo -u pddbot nano /opt/pdd-bot/.env
-
-# 5. Автозапуск
-sudo cp /opt/pdd-bot/deploy/pdd-bot.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now pdd-bot
+curl -fsSL https://raw.githubusercontent.com/reshatmemetov01/-/claude/epic-fermat-yuhupj/deploy/install.sh | sudo bash
 ```
 
-Полезные команды:
+Скрипт сам поставит Python, скачает бота, спросит токен и остальные настройки
+(Enter — оставить предложенное значение) и включит автозапуск: бот стартует вместе с
+сервером и перезапускается при сбое.
+
+**Обновление после изменений** — тоже одна команда:
+
+```bash
+sudo bash /opt/pdd-bot/deploy/update.sh
+```
+
+Полезное:
 
 ```bash
 sudo systemctl status pdd-bot      # работает ли бот
-sudo journalctl -u pdd-bot -f      # логи в реальном времени
-sudo systemctl restart pdd-bot     # перезапуск (после изменения .env или кода)
+sudo journalctl -u pdd-bot -f      # логи в реальном времени (выход — Ctrl+C)
+sudo nano /opt/pdd-bot/.env        # поменять настройки, потом: sudo systemctl restart pdd-bot
 ```
 
-> Бот должен быть запущен **только в одном месте**. Если он работает на VPS,
-> не запускай его одновременно на компьютере — Telegram будет выдавать ошибку конфликта.
+> Бот должен быть запущен **только в одном месте** — иначе Telegram выдаёт ошибку конфликта.
 
-База (`pdd_bot.db`) лежит в `/opt/pdd-bot` — её стоит иногда копировать себе как резервную копию.
+База (`/opt/pdd-bot/pdd_bot.db`) — пользователи, статистика, оплаты. Её стоит иногда
+копировать себе как резервную копию.
 
 ## База вопросов
 
