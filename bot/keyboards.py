@@ -13,6 +13,24 @@ def inline(*rows: list[B] | B) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[r if isinstance(r, list) else [r] for r in rows])
 
 
+def back_button() -> B:
+    return B(text=content.BACK, callback_data="menu:back")
+
+
+def with_back(markup: InlineKeyboardMarkup | None) -> InlineKeyboardMarkup:
+    """Добавляет «Назад» под сообщение раздела из нижнего меню."""
+    rows = list(markup.inline_keyboard) if markup else []
+    return InlineKeyboardMarkup(inline_keyboard=[*rows, [back_button()]])
+
+
+def info() -> InlineKeyboardMarkup:
+    return inline(
+        B(text="📁 Пользовательское соглашение", url=content.AGREEMENT_URL),
+        B(text="📁 Политика конфиденциальности", url=content.PRIVACY_URL),
+        back_button(),
+    )
+
+
 def main_menu(is_admin: bool) -> ReplyKeyboardMarkup:
     rows = [
         [KeyboardButton(text=content.MENU_VIDEOS)],

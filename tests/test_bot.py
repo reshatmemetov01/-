@@ -18,6 +18,7 @@ from aiogram import Bot
 from aiogram.client.session.base import BaseSession
 from aiogram.methods import (
     AnswerCallbackQuery,
+    DeleteMessage,
     ExportChatInviteLink,
     GetChat,
     CopyMessage,
@@ -439,6 +440,55 @@ async def scenario_chat_setup(h: Harness) -> None:
     assert any("Меня зовут Эльдар" in t for t in s.texts(902))
 
 
+async def scenario_menu(h: Harness) -> None:
+    s, uid = h.s, 950
+    await h.text(uid, "/start")
+    await h.click(uid, "go:continue")
+
+    def last_markup_rows():
+        return s.of(SendMessage, uid)[-1].reply_markup.inline_keyboard
+
+    def is_back(row):
+        return row[0].callback_data == "menu:back" and row[0].text == content.BACK
+
+    # у каждого раздела нижнего меню последняя кнопка — «Назад»
+    for item in (content.MENU_VIDEOS, content.MENU_TRAINING, content.MENU_REVIEWS,
+                 content.MENU_FAQ, content.MENU_INFO, content.MENU_SUPPORT):
+        s.clear()
+        await h.text(uid, item)
+        assert is_back(last_markup_rows()[-1]), item
+
+    # «Видео разборы» — оффер с кнопками оплаты и «Назад»
+    s.clear()
+    await h.text(uid, content.MENU_VIDEOS)
+    rows = last_markup_rows()
+    assert rows[0][0].callback_data == "pay:sbp" and is_back(rows[-1])
+
+    # «Частые вопросы» — с юзернеймом поддержки
+    s.clear()
+    await h.text(uid, content.MENU_FAQ)
+    faq = s.of(SendMessage, uid)[0].text
+    assert "Частые вопросы" in faq and "@eldar" in faq and "pddAndrey" not in faq
+
+    # «Информация» — Эльдар, ссылки на документы
+    s.clear()
+    await h.text(uid, content.MENU_INFO)
+    msg = s.of(SendMessage, uid)[0]
+    assert "Меня зовут Эльдар" in msg.text and "Яковлев" not in msg.text
+    urls = [r[0].url for r in msg.reply_markup.inline_keyboard[:2]]
+    assert urls == [content.AGREEMENT_URL, content.PRIVACY_URL]
+
+    # «Назад» удаляет сообщение раздела
+    s.clear()
+    await h.click(uid, "menu:back")
+    assert s.of(DeleteMessage)
+
+    # оффер из воронки (не из меню) — без «Назад»
+    s.clear()
+    await h.click(uid, "f:offer")
+    assert not is_back(last_markup_rows()[-1])
+
+
 async def scenario_exam(h: Harness) -> None:
     db, s, uid = h.db, h.s, 888
     # канал не задан → сразу «о себе»
@@ -490,6 +540,10 @@ def test_chat_setup():
     asyncio.run(with_db(scenario_chat_setup, channel_url="", private_channel_id=None))
 
 
+def test_menu():
+    asyncio.run(with_db(scenario_menu))
+
+
 def test_exam():
     asyncio.run(with_db(scenario_exam, channel_url=""))
 
@@ -500,5 +554,6 @@ if __name__ == "__main__":
     test_browse_followups()
     test_quiet_hours()
     test_chat_setup()
+    test_menu()
     test_exam()
     print("OK")

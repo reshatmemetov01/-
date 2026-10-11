@@ -25,26 +25,31 @@ class PayForm(StatesGroup):
     promo = State()
 
 
-async def send_access_again(bot: Bot, db: Database, config: Config, user_id: int) -> None:
+async def send_access_again(bot: Bot, db: Database, config: Config, user_id: int, back: bool = False) -> None:
+    def markup(base=None):
+        return keyboards.with_back(base) if back else base
+
     if await is_channel_member(bot, db, config, user_id):
-        await bot.send_message(user_id, content.ACCESS_ALREADY_MEMBER)
+        await bot.send_message(user_id, content.ACCESS_ALREADY_MEMBER, reply_markup=markup())
         return
     link = await make_access_link(bot, db, config, user_id)
     if link:
-        await bot.send_message(user_id, content.ACCESS_LINK_AGAIN.format(link=link))
+        await bot.send_message(user_id, content.ACCESS_LINK_AGAIN.format(link=link), reply_markup=markup())
     else:
-        await bot.send_message(user_id, content.ACCESS_MANUAL, reply_markup=keyboards.manager(config))
+        await bot.send_message(user_id, content.ACCESS_MANUAL, reply_markup=markup(keyboards.manager(config)))
 
 
-async def send_offer(bot: Bot, db: Database, config: Config, user: dict) -> None:
+async def send_offer(bot: Bot, db: Database, config: Config, user: dict, back: bool = False) -> None:
+    """back=True — открыто из нижнего меню, добавляем кнопку «Назад»."""
     if user["paid"]:
-        await send_access_again(bot, db, config, user["user_id"])
+        await send_access_again(bot, db, config, user["user_id"], back=back)
         return
     await db.add_event(user["user_id"], "checkout")
+    markup = keyboards.offer(config.manager_username)
     await bot.send_message(
         user["user_id"],
         content.offer_text(config.price, config.old_price, config.manager_username),
-        reply_markup=keyboards.offer(config.manager_username),
+        reply_markup=keyboards.with_back(markup) if back else markup,
     )
 
 
