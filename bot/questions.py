@@ -35,6 +35,13 @@ class QuestionBank:
         self.questions = questions
         self.by_id = {q.id: q for q in questions}
 
+    def ticket_numbers(self) -> list[int]:
+        return sorted({q.ticket for q in self.questions if q.ticket})
+
+    def ticket(self, number: int) -> list[Question]:
+        """Вопросы билета по порядку (id = билет * 100 + номер вопроса)."""
+        return sorted((q for q in self.questions if q.ticket == number), key=lambda q: q.id)
+
     @classmethod
     def load(cls, path: str) -> "QuestionBank":
         file = Path(path)

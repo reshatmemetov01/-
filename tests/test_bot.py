@@ -519,6 +519,50 @@ async def scenario_menu(h: Harness) -> None:
     assert not is_back(last_markup_rows()[-1])
 
 
+async def scenario_tickets(h: Harness) -> None:
+    import json
+    db, s, uid = h.db, h.s, 960
+    await h.text(uid, "/start")
+
+    def questions_sent():
+        return [t for t in s.texts(uid) if t.startswith("<b>Вопрос ")]
+
+    # список билетов: только те, что есть в базе
+    s.clear()
+    await h.click(uid, "tk:list")
+    grid = s.of(SendMessage, uid)[0].reply_markup.inline_keyboard
+    numbers = [b.callback_data for row in grid for b in row if b.callback_data.startswith("tk:")]
+    assert numbers == [f"tk:{n}" for n in QUESTIONS.ticket_numbers()]
+
+    # билет 3: вопросы по порядку, 3 ошибки не прерывают, в конце итог и оффер
+    s.clear()
+    await h.click(uid, "tk:3")
+    ticket = QUESTIONS.ticket(3)
+    for i, q in enumerate(ticket):
+        assert json.loads((await db.get_user(uid))["exam_ids"])[i] == q.id
+        answer = q.correct if i >= 3 else (q.correct + 1) % len(q.answers)
+        await h.click(uid, f"ex:{i}:{answer}")
+    assert len(questions_sent()) == 20 and "Вопрос 1 из 20" in questions_sent()[0]
+    result = [r for r in s.of(SendMessage, uid) if "Билет 3 пройден" in r.text][0]
+    assert "17 из 20" in result.text and "ошибок: 3" in result.text
+    assert result.reply_markup.inline_keyboard[0][0].callback_data == "f:offer"
+
+    # картинки из билета отправляются фото
+    assert s.of(SendPhoto, uid)
+
+    # ссылка из поста в группе: /start ticket_4 сразу запускает билет 4
+    s.clear()
+    await h.text(uid, "/start ticket_4")
+    first = QUESTIONS.ticket(4)[0]
+    assert json.loads((await db.get_user(uid))["exam_ids"])[0] == first.id
+    assert (await db.get_user(uid))["exam_mode"] == "ticket:4"
+
+    # билета нет в базе
+    s.clear()
+    await h.text(uid, "/start ticket_39")
+    assert content.TICKET_NOT_FOUND in s.texts(uid)
+
+
 async def scenario_exam(h: Harness) -> None:
     db, s, uid = h.db, h.s, 888
     # канал не задан → сразу «о себе»
@@ -574,6 +618,10 @@ def test_menu():
     asyncio.run(with_db(scenario_menu))
 
 
+def test_tickets():
+    asyncio.run(with_db(scenario_tickets, channel_url=""))
+
+
 def test_exam():
     asyncio.run(with_db(scenario_exam, channel_url=""))
 
@@ -585,5 +633,6 @@ if __name__ == "__main__":
     test_quiet_hours()
     test_chat_setup()
     test_menu()
+    test_tickets()
     test_exam()
     print("OK")

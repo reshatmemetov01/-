@@ -109,6 +109,30 @@ def exam_start() -> InlineKeyboardMarkup:
     return inline(B(text="▶️ Начать экзамен", callback_data="ex:start"))
 
 
+def training() -> InlineKeyboardMarkup:
+    return inline(
+        B(text="🎫 По билетам", callback_data="tk:list"),
+        B(text="🎯 Экзамен", callback_data="ex:start"),
+    )
+
+
+def tickets(numbers: list[int]) -> InlineKeyboardMarkup:
+    buttons = [B(text=str(n), callback_data=f"tk:{n}") for n in numbers]
+    rows = [buttons[i:i + 5] for i in range(0, len(buttons), 5)]
+    return inline(*rows, back_button())
+
+
+def ticket_finish(ticket: int, show_offer: bool) -> InlineKeyboardMarkup:
+    rows = []
+    if show_offer:
+        rows.append(B(text="👑 ПОЛУЧИТЬ ДОСТУП", callback_data="f:offer"))
+    rows += [
+        B(text="🔄 Пройти билет ещё раз", callback_data=f"tk:{ticket}"),
+        B(text="🎫 Другой билет", callback_data="tk:list"),
+    ]
+    return inline(*rows)
+
+
 def exam_answers(index: int, count: int) -> InlineKeyboardMarkup:
     return inline([B(text=str(i + 1), callback_data=f"ex:{index}:{i}") for i in range(count)])
 

@@ -8,7 +8,9 @@ from aiogram.types import CallbackQuery, Message
 from .. import content, keyboards
 from ..config import Config
 from ..db import Database
+from ..questions import QuestionBank
 from ..services import channel_url, is_admin
+from .exam import start_ticket
 
 router = Router()
 
@@ -17,6 +19,17 @@ async def continue_funnel(bot: Bot, db: Database, config: Config, user_id: int) 
     await bot.send_message(user_id, content.MENU_HINT, reply_markup=keyboards.main_menu(is_admin(user_id, config)))
     await bot.send_message(user_id, content.ABOUT, reply_markup=keyboards.show())
     await db.add_event(user_id, "about")
+
+
+@router.message(CommandStart(deep_link=True, magic=F.args.regexp(r"^ticket_\d+$")))
+async def start_ticket_link(message: Message, command: CommandObject, state: FSMContext, bot: Bot,
+                            db: Database, config: Config, user: dict, questions: QuestionBank) -> None:
+    """t.me/бот?start=ticket_5 — сразу запускает тест по билету (ссылка под видео-разбором в группе)."""
+    await state.clear()
+    number = int(command.args.split("_")[1])
+    await message.answer(content.MENU_HINT, reply_markup=keyboards.main_menu(is_admin(user["user_id"], config)))
+    if not await start_ticket(bot, db, user["user_id"], questions, number):
+        await message.answer(content.TICKET_NOT_FOUND, reply_markup=keyboards.tickets(questions.ticket_numbers()))
 
 
 @router.message(CommandStart())

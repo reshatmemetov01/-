@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     next_followup_at INTEGER,
     -- текущий экзамен
     exam_ids         TEXT,
+    exam_mode        TEXT,              -- 'exam' или 'ticket:N'
     exam_index       INTEGER NOT NULL DEFAULT 0,
     exam_correct     INTEGER NOT NULL DEFAULT 0,
     exam_errors      INTEGER NOT NULL DEFAULT 0,
@@ -77,6 +78,8 @@ class Database:
             columns = {row["name"] for row in await cur.fetchall()}
         if "followups_sent" not in columns:
             await self.conn.execute("ALTER TABLE users ADD COLUMN followups_sent TEXT NOT NULL DEFAULT '[]'")
+        if "exam_mode" not in columns:
+            await self.conn.execute("ALTER TABLE users ADD COLUMN exam_mode TEXT")
 
     async def close(self) -> None:
         if self.conn:

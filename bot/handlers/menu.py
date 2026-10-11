@@ -27,10 +27,10 @@ async def training(message: Message, state: FSMContext, questions: QuestionBank)
         await message.answer(content.EXAM_NO_QUESTIONS, reply_markup=keyboards.with_back(None))
         return
     await message.answer(
-        content.EXAM_INTRO.format(
+        content.TRAINING_INTRO.format(
             n=min(content.EXAM_QUESTIONS, len(questions.questions)), max_errors=content.EXAM_MAX_ERRORS
         ),
-        reply_markup=keyboards.with_back(keyboards.exam_start()),
+        reply_markup=keyboards.with_back(keyboards.training()),
     )
 
 
