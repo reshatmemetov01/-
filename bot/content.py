@@ -113,7 +113,7 @@ ACCESS_MANUAL = (
 
 MENU_VIDEOS = "👑 Видео разборы"
 MENU_TRAINING = "📝 Тренировка"
-MENU_REVIEWS = "💬 Отзывы"
+MENU_REVIEWS = "👥 Отзывы"
 MENU_FAQ = "❓ Частые вопросы"
 MENU_INFO = "ℹ️ Информация"
 MENU_SUPPORT = "💬 Поддержка"
