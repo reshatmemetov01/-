@@ -26,11 +26,11 @@ class PayForm(StatesGroup):
     promo = State()
 
 
-async def send_access_again(bot: Bot, config: Config, user_id: int) -> None:
-    if await is_channel_member(bot, config, user_id):
+async def send_access_again(bot: Bot, db: Database, config: Config, user_id: int) -> None:
+    if await is_channel_member(bot, db, config, user_id):
         await bot.send_message(user_id, content.ACCESS_ALREADY_MEMBER)
         return
-    link = await make_access_link(bot, config, user_id)
+    link = await make_access_link(bot, db, config, user_id)
     if link:
         await bot.send_message(user_id, content.ACCESS_LINK_AGAIN.format(link=link))
     else:
@@ -39,7 +39,7 @@ async def send_access_again(bot: Bot, config: Config, user_id: int) -> None:
 
 async def send_offer(bot: Bot, db: Database, config: Config, user: dict) -> None:
     if user["paid"]:
-        await send_access_again(bot, config, user["user_id"])
+        await send_access_again(bot, db, config, user["user_id"])
         return
     await db.add_event(user["user_id"], "checkout")
     await bot.send_message(

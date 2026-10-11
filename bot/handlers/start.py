@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 from .. import content, keyboards
 from ..config import Config
 from ..db import Database
-from ..services import check_subscription, is_admin, mark_subscribed
+from ..services import check_subscription, is_admin, mark_subscribed, subscribe_target
 
 router = Router()
 
@@ -35,8 +35,9 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
         return
 
     welcome = content.WELCOME.format(name=escape(message.from_user.first_name or "друг"))
-    if config.subscribe_channel and not user["subscribed"]:
-        await message.answer(f"{welcome}\n\n{content.SUBSCRIBE_PROMPT}", reply_markup=keyboards.subscribe(config))
+    target = await subscribe_target(db, config)
+    if target and not user["subscribed"]:
+        await message.answer(f"{welcome}\n\n{content.SUBSCRIBE_PROMPT}", reply_markup=keyboards.subscribe(target[1]))
         return
 
     await message.answer(welcome)
@@ -49,7 +50,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
 async def sub_check(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict) -> None:
     uid = user["user_id"]
     if not user["subscribed"]:
-        if not await check_subscription(bot, config, uid):
+        if not await check_subscription(bot, db, config, uid):
             await callback.answer("Не вижу подписки 🙈 Подпишись и нажми ещё раз", show_alert=True)
             return
         await mark_subscribed(db, uid)

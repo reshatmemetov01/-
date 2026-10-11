@@ -26,10 +26,10 @@ def main_menu(is_admin: bool) -> ReplyKeyboardMarkup:
 
 # ---------------------------------------------------------------- воронка
 
-def subscribe(config: Config) -> InlineKeyboardMarkup:
+def subscribe(url: str) -> InlineKeyboardMarkup:
     rows = []
-    if config.subscribe_button_url:
-        rows.append(B(text="🔗 ПОДПИСАТЬСЯ", url=config.subscribe_button_url))
+    if url:
+        rows.append(B(text="🔗 ПОДПИСАТЬСЯ", url=url))
     rows.append(B(text="✅ Я подписался", callback_data="sub:check"))
     return inline(*rows)
 
@@ -90,9 +90,9 @@ def exam_finish(failed: bool, paid: bool) -> InlineKeyboardMarkup:
 
 # ------------------------------------------------------------------ дожим
 
-def followup(button: str, config: Config) -> InlineKeyboardMarkup:
+def followup(button: str, subscribe_url: str = "") -> InlineKeyboardMarkup:
     if button == "subscribe":
-        return subscribe(config)
+        return subscribe(subscribe_url)
     if button == "show":
         return inline(B(text="⭐ Посмотреть, что внутри", callback_data="f:show"))
     if button == "free":
@@ -113,7 +113,24 @@ def admin_menu(pending: int) -> InlineKeyboardMarkup:
         B(text="📣 Рассылка", callback_data="adm:bc"),
         B(text="🎁 Выдать доступ", callback_data="adm:grant"),
         B(text="🎬 Видео в воронке", callback_data="adm:media"),
+        B(text="🔗 Каналы и группа", callback_data="adm:chats"),
     )
+
+
+def admin_setchat(chat_id: int) -> InlineKeyboardMarkup:
+    return inline(
+        B(text="🔒 Закрытая группа с разборами", callback_data=f"setchat:private:{chat_id}"),
+        B(text="📢 Канал для обязательной подписки", callback_data=f"setchat:sub:{chat_id}"),
+        B(text="✖️ Ни то, ни другое", callback_data="setchat:none:0"),
+    )
+
+
+def admin_chats(has_sub: bool) -> InlineKeyboardMarkup:
+    rows = []
+    if has_sub:
+        rows.append(B(text="🚫 Отключить обязательную подписку", callback_data="setchat:sub_off:0"))
+    rows.append(B(text="⬅️ В админку", callback_data="adm:menu"))
+    return inline(*rows)
 
 
 def admin_back() -> InlineKeyboardMarkup:

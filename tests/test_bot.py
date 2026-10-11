@@ -18,6 +18,8 @@ from aiogram import Bot
 from aiogram.client.session.base import BaseSession
 from aiogram.methods import (
     AnswerCallbackQuery,
+    ExportChatInviteLink,
+    GetChat,
     CopyMessage,
     CreateChatInviteLink,
     GetChatMember,
@@ -28,6 +30,9 @@ from aiogram.methods import (
 )
 from aiogram.types import (
     CallbackQuery,
+    ChatFullInfo,
+    ChatMemberAdministrator,
+    ChatMemberUpdated,
     Chat,
     ChatInviteLink,
     ChatMemberLeft,
@@ -62,6 +67,14 @@ class MockSession(BaseSession):
 
     async def make_request(self, bot, method, timeout=None):
         self.requests.append(method)
+        if isinstance(method, GetChatMember) and method.user_id == bot.id:
+            return admin_member(bot.id)
+        if isinstance(method, GetChat):
+            username = "eldar_channel" if method.chat_id == -100900 else None
+            return ChatFullInfo(id=method.chat_id, type="supergroup", title=f"Chat {method.chat_id}",
+                                username=username, accent_color_id=0, max_reaction_count=0)
+        if isinstance(method, ExportChatInviteLink):
+            return "https://t.me/+exported"
         if isinstance(method, GetChatMember):
             u = User(id=method.user_id, is_bot=False, first_name="x")
             if (method.chat_id, method.user_id) in self.members:
@@ -102,6 +115,16 @@ class MockSession(BaseSession):
 
     def clear(self) -> None:
         self.requests.clear()
+
+
+def admin_member(user_id: int) -> ChatMemberAdministrator:
+    flags = dict.fromkeys([
+        "can_be_edited", "is_anonymous", "can_manage_chat", "can_delete_messages", "can_manage_video_chats",
+        "can_restrict_members", "can_promote_members", "can_change_info", "can_post_stories",
+        "can_edit_stories", "can_delete_stories",
+    ], False)
+    return ChatMemberAdministrator(user=User(id=user_id, is_bot=True, first_name="bot"),
+                                   can_invite_users=True, **flags)
 
 
 def make_config(db_path: str, **overrides) -> Config:
@@ -368,6 +391,53 @@ def test_quiet_hours():
     assert (early.day, early.hour) == (12, 9)
 
 
+async def scenario_chat_setup(h: Harness) -> None:
+    """Бота добавили админом в группу → админ выбирает роль чата кнопкой."""
+    db, s = h.db, h.s
+
+    async def added_to(chat_id: int) -> None:
+        await h._feed(my_chat_member=ChatMemberUpdated(
+            chat=Chat(id=chat_id, type="supergroup", title="ПДД | Правила"),
+            from_user=h._user(ADMIN), date=datetime.now(),
+            old_chat_member=ChatMemberLeft(user=User(id=42, is_bot=True, first_name="b")),
+            new_chat_member=admin_member(42),
+        ))
+
+    await added_to(-100777)
+    question = [r for r in s.of(SendMessage, ADMIN) if "Меня сделали админом" in r.text][0]
+    assert "ПДД | Правила" in question.text
+    buttons = [b.callback_data for row in question.reply_markup.inline_keyboard for b in row]
+    assert "setchat:private:-100777" in buttons
+
+    await h.click(ADMIN, "setchat:private:-100777")
+    assert (await db.get_setting("private_chat"))["id"] == -100777
+
+    await added_to(-100900)
+    await h.click(ADMIN, "setchat:sub:-100900")
+    assert (await db.get_setting("subscribe_chat"))["url"] == "https://t.me/eldar_channel"
+
+    # новый пользователь видит кнопку подписки на выбранный канал
+    s.clear()
+    await h.text(901, "/start")
+    welcome = s.of(SendMessage, 901)[0]
+    assert welcome.reply_markup.inline_keyboard[0][0].url == "https://t.me/eldar_channel"
+    s.members.add((-100900, 901))
+    await h.click(901, "sub:check")
+    assert (await db.get_user(901))["subscribed"]
+
+    # после выдачи доступа ссылка создаётся в выбранной группе
+    s.clear()
+    await h.click(ADMIN, "adm:grant")
+    await h.text(ADMIN, "901")
+    assert s.of(CreateChatInviteLink)[0].chat_id == -100777
+
+    # отключение обязательной подписки
+    await h.click(ADMIN, "setchat:sub_off:0")
+    s.clear()
+    await h.text(902, "/start")
+    assert any("Меня зовут Эльдар" in t for t in s.texts(902))
+
+
 async def scenario_exam(h: Harness) -> None:
     db, s, uid = h.db, h.s, 888
     # канал для подписки не настроен → сразу «о себе»
@@ -415,6 +485,10 @@ def test_browse_followups():
     asyncio.run(with_db(scenario_browse_followups))
 
 
+def test_chat_setup():
+    asyncio.run(with_db(scenario_chat_setup, subscribe_channel="", private_channel_id=None))
+
+
 def test_exam():
     asyncio.run(with_db(scenario_exam, subscribe_channel=""))
 
@@ -424,5 +498,6 @@ if __name__ == "__main__":
     test_reject()
     test_browse_followups()
     test_quiet_hours()
+    test_chat_setup()
     test_exam()
     print("OK")

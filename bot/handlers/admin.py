@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from html import escape
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -12,7 +13,15 @@ from aiogram.types import CallbackQuery, Message, User
 from .. import content, keyboards
 from ..config import Config
 from ..db import Database
-from ..services import extract_media, grant_access, manager_suffix, send_media, user_link
+from ..services import (
+    extract_media,
+    grant_access,
+    manager_suffix,
+    private_chat_id,
+    send_media,
+    subscribe_target,
+    user_link,
+)
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -390,3 +399,64 @@ async def media_preview(callback: CallbackQuery, bot: Bot, db: Database) -> None
         await send_media(bot, uid, demo, caption=content.SHOW, reply_markup=keyboards.after_show())
     for media in await db.get_setting("free_media", []):
         await send_media(bot, uid, media)
+
+
+# ------------------------------------------------------- каналы и группа
+
+@router.callback_query(F.data == "adm:chats")
+async def chats_screen(callback: CallbackQuery, db: Database, config: Config) -> None:
+    await callback.answer()
+    private = await db.get_setting("private_chat")
+    sub = await db.get_setting("subscribe_chat")
+    private_line = (f"✅ {private['title']}" if private
+                    else ("✅ задана в .env" if await private_chat_id(db, config) else "❌ не выбрана"))
+    sub_line = (f"✅ {sub['title']}" if sub
+                else ("✅ задан в .env" if await subscribe_target(db, config) else "❌ выключена"))
+    await callback.message.answer(
+        "🔗 <b>Каналы и группа</b>\n\n"
+        f"🔒 Закрытая группа с разборами: {private_line}\n"
+        f"📢 Обязательная подписка: {sub_line}\n\n"
+        "<i>Чтобы выбрать: добавь бота <b>администратором</b> в нужный канал или группу "
+        "(с правом «Пригласительные ссылки») — он сразу пришлёт сюда вопрос, что это за чат.</i>",
+        reply_markup=keyboards.admin_chats(bool(sub)),
+    )
+
+
+@router.callback_query(F.data.startswith("setchat:"))
+async def set_chat(callback: CallbackQuery, bot: Bot, db: Database) -> None:
+    _, role, chat_id_s = callback.data.split(":")
+    chat_id = int(chat_id_s)
+
+    if role == "none":
+        await callback.answer("Ок")
+        await callback.message.edit_reply_markup(reply_markup=None)
+        return
+    if role == "sub_off":
+        await db.set_setting("subscribe_chat", None)
+        await callback.answer("Обязательная подписка выключена")
+        await callback.message.edit_reply_markup(reply_markup=None)
+        return
+
+    try:
+        chat = await bot.get_chat(chat_id)
+        me = await bot.get_chat_member(chat_id, bot.id)
+    except Exception:
+        await callback.answer("Не могу получить доступ к чату — проверь, что я там админ", show_alert=True)
+        return
+    if not getattr(me, "can_invite_users", False):
+        await callback.answer(
+            "Дай мне право «Пригласительные ссылки» (Add members / Invite users) и нажми ещё раз", show_alert=True
+        )
+        return
+
+    title = chat.title or str(chat_id)
+    if role == "private":
+        await db.set_setting("private_chat", {"id": chat_id, "title": title})
+        note = (f"✅ «{escape(title)}» — закрытая группа с разборами.\n"
+                "После оплаты я буду выдавать в неё одноразовые ссылки.")
+    else:
+        url = f"https://t.me/{chat.username}" if chat.username else (await bot.export_chat_invite_link(chat_id))
+        await db.set_setting("subscribe_chat", {"id": chat_id, "title": title, "url": url})
+        note = f"✅ «{escape(title)}» — канал для обязательной подписки.\nБез подписки на него бот дальше не пустит."
+    await callback.answer("Сохранено")
+    await callback.message.edit_text(note, reply_markup=keyboards.admin_back())

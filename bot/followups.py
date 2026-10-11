@@ -16,6 +16,7 @@ from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
 from . import content, keyboards
 from .config import Config
 from .db import Database
+from .services import subscribe_target
 
 log = logging.getLogger(__name__)
 
@@ -36,17 +37,19 @@ def next_followup_time(now: int, config: Config) -> int:
 
 
 async def pick_next(db: Database, config: Config, user: dict, sent: list[str]) -> str | None:
-    if config.subscribe_channel and not user["subscribed"] and "subscribe" not in sent:
+    if not user["subscribed"] and "subscribe" not in sent and await subscribe_target(db, config):
         return "subscribe"
     if "checkout" not in sent and await db.has_event(user["user_id"], "checkout"):
         return "checkout"
     return next((key for key in content.FOLLOWUP_ORDER if key not in sent), None)
 
 
-def render(key: str, config: Config) -> tuple[str, object]:
+async def render(db: Database, key: str, config: Config) -> tuple[str, object]:
     text, button = content.FOLLOWUP_MESSAGES[key]
     manager = f": @{config.manager_username}" if config.manager_username else ""
-    return text.format(price=config.price, manager=manager), keyboards.followup(button, config)
+    target = await subscribe_target(db, config) if button == "subscribe" else None
+    return (text.format(price=config.price, manager=manager),
+            keyboards.followup(button, target[1] if target else ""))
 
 
 async def process_due(bot: Bot, db: Database, config: Config) -> int:
@@ -60,7 +63,7 @@ async def process_due(bot: Bot, db: Database, config: Config) -> int:
             await db.update_user(uid, next_followup_at=None)
             continue
 
-        text, markup = render(key, config)
+        text, markup = await render(db, key, config)
         try:
             await bot.send_message(uid, text, reply_markup=markup)
             sent_count += 1

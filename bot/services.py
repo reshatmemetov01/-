@@ -39,16 +39,38 @@ async def notify_admins(bot: Bot, config: Config, text: str, **kwargs: Any) -> N
             log.exception("Не удалось написать админу %s", admin_id)
 
 
+# ------------------------------------------------------------------ каналы
+#
+# Каналы можно задать в .env, но удобнее так: добавить бота админом в канал/группу,
+# и он сам спросит у админа, что это за чат (см. handlers/admin.py → setchat).
+# Выбор сохраняется в базе и имеет приоритет над .env.
+
+async def subscribe_target(db: Database, config: Config) -> tuple[int | str, str] | None:
+    """(чат для проверки подписки, ссылка для кнопки) или None, если подписка не нужна."""
+    saved = await db.get_setting("subscribe_chat")
+    if saved:
+        return saved["id"], saved["url"]
+    if config.subscribe_channel:
+        return config.subscribe_channel, config.subscribe_button_url
+    return None
+
+
+async def private_chat_id(db: Database, config: Config) -> int | None:
+    saved = await db.get_setting("private_chat")
+    return saved["id"] if saved else config.private_channel_id
+
+
 # ----------------------------------------------------------------- подписка
 
-async def check_subscription(bot: Bot, config: Config, user_id: int) -> bool:
-    if not config.subscribe_channel:
+async def check_subscription(bot: Bot, db: Database, config: Config, user_id: int) -> bool:
+    target = await subscribe_target(db, config)
+    if not target:
         return True
     try:
-        member = await bot.get_chat_member(config.subscribe_channel, user_id)
+        member = await bot.get_chat_member(target[0], user_id)
     except Exception:
         # Чаще всего бот не добавлен админом в канал. Не блокируем пользователя из-за нашей настройки.
-        log.exception("Не удалось проверить подписку — бот должен быть админом канала %s", config.subscribe_channel)
+        log.exception("Не удалось проверить подписку — бот должен быть админом канала %s", target[0])
         return True
     return member.status in MEMBER_STATUSES
 
@@ -57,10 +79,12 @@ async def ensure_subscribed(bot: Bot, db: Database, config: Config, user: dict[s
     """True — можно пускать дальше. Иначе отправляет просьбу подписаться."""
     if user["subscribed"]:
         return True
-    if await check_subscription(bot, config, user["user_id"]):
+    if await check_subscription(bot, db, config, user["user_id"]):
         await mark_subscribed(db, user["user_id"])
         return True
-    await bot.send_message(user["user_id"], content.NOT_SUBSCRIBED, reply_markup=keyboards.subscribe(config))
+    target = await subscribe_target(db, config)
+    await bot.send_message(user["user_id"], content.NOT_SUBSCRIBED,
+                           reply_markup=keyboards.subscribe(target[1] if target else ""))
     return False
 
 
@@ -71,23 +95,23 @@ async def mark_subscribed(db: Database, user_id: int) -> None:
 
 # ------------------------------------------------------------------ доступ
 
-async def make_access_link(bot: Bot, config: Config, user_id: int) -> str | None:
-    if config.private_channel_id:
+async def make_access_link(bot: Bot, db: Database, config: Config, user_id: int) -> str | None:
+    chat_id = await private_chat_id(db, config)
+    if chat_id:
         try:
-            link = await bot.create_chat_invite_link(
-                config.private_channel_id, name=f"user {user_id}", member_limit=1
-            )
+            link = await bot.create_chat_invite_link(chat_id, name=f"user {user_id}", member_limit=1)
             return link.invite_link
         except Exception:
             log.exception("Не удалось создать ссылку — бот должен быть админом закрытого канала")
     return config.access_link or None
 
 
-async def is_channel_member(bot: Bot, config: Config, user_id: int) -> bool:
-    if not config.private_channel_id:
+async def is_channel_member(bot: Bot, db: Database, config: Config, user_id: int) -> bool:
+    chat_id = await private_chat_id(db, config)
+    if not chat_id:
         return False
     try:
-        member = await bot.get_chat_member(config.private_channel_id, user_id)
+        member = await bot.get_chat_member(chat_id, user_id)
         return member.status in MEMBER_STATUSES
     except Exception:
         return False
@@ -105,7 +129,7 @@ async def grant_access(bot: Bot, db: Database, config: Config, user_id: int, via
     await db.update_user(user_id, paid=1, paid_at=int(time.time()), next_followup_at=None)
     await db.add_event(user_id, "paid")
 
-    link = await make_access_link(bot, config, user_id)
+    link = await make_access_link(bot, db, config, user_id)
     try:
         if link:
             await bot.send_message(user_id, content.ACCESS_GRANTED.format(link=link))
@@ -114,7 +138,7 @@ async def grant_access(bot: Bot, db: Database, config: Config, user_id: int, via
     except Exception:
         log.exception("Не удалось отправить доступ пользователю %s", user_id)
 
-    note = "" if link else "\n\n⚠️ Закрытый канал не настроен — отправь ссылку вручную!"
+    note = "" if link else "\n\n⚠️ Закрытая группа не настроена — отправь ссылку вручную!"
     await notify_admins(
         bot, config,
         f"💰 <b>Новая покупка — {config.price} ₽</b> ({via})\n\n{user_link(user)}{note}",
