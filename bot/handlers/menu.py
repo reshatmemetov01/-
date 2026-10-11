@@ -1,4 +1,5 @@
 from aiogram import Bot, F, Router
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
@@ -36,6 +37,16 @@ async def training(message: Message, state: FSMContext, bot: Bot, db: Database, 
         ),
         reply_markup=keyboards.exam_start(),
     )
+
+
+@router.message(F.text == content.MENU_SUPPORT)
+@router.message(Command("support"))
+async def support(message: Message, state: FSMContext, config: Config) -> None:
+    await state.clear()
+    if not config.manager_username:
+        await message.answer(content.SUPPORT_NOT_SET)
+        return
+    await message.answer(content.SUPPORT, reply_markup=keyboards.manager(config))
 
 
 @router.message(F.text.in_({content.MENU_REVIEWS, content.MENU_FAQ, content.MENU_INFO}))

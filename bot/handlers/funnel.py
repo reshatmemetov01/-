@@ -45,7 +45,7 @@ async def send_offer(bot: Bot, db: Database, config: Config, user: dict) -> None
     await bot.send_message(
         user["user_id"],
         content.offer_text(config.price, config.old_price, config.manager_username),
-        reply_markup=keyboards.offer(),
+        reply_markup=keyboards.offer(config.manager_username),
     )
 
 
@@ -60,21 +60,6 @@ async def show(callback: CallbackQuery, bot: Bot, db: Database, config: Config, 
         await send_media(bot, user["user_id"], demo, caption=content.SHOW, reply_markup=keyboards.after_show())
     else:
         await callback.message.answer(content.SHOW, reply_markup=keyboards.after_show())
-
-
-@router.callback_query(F.data == "f:free")
-async def free(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict) -> None:
-    await callback.answer()
-    if not await ensure_subscribed(bot, db, config, user):
-        return
-    await db.add_event(user["user_id"], "free")
-    videos = await db.get_setting("free_media", [])
-    if not videos:
-        await callback.message.answer(content.FREE_NOT_READY, reply_markup=keyboards.get_access())
-        return
-    for media in videos:
-        await send_media(bot, user["user_id"], media)
-    await callback.message.answer(content.FREE_AFTER, reply_markup=keyboards.get_access())
 
 
 @router.callback_query(F.data == "f:offer")
@@ -142,7 +127,7 @@ async def promo(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message(StateFilter(PayForm.promo), F.text)
-async def promo_code(message: Message, state: FSMContext) -> None:
+async def promo_code(message: Message, state: FSMContext, config: Config) -> None:
     # Промокодов пока нет — когда появятся, проверка будет здесь
     await state.clear()
-    await message.answer(content.PROMO_NOT_FOUND, reply_markup=keyboards.offer())
+    await message.answer(content.PROMO_NOT_FOUND, reply_markup=keyboards.offer(config.manager_username))

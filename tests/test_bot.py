@@ -228,29 +228,37 @@ async def scenario_purchase(h: Harness) -> None:
     await h.click(uid, "f:show")
     assert any("Вот как это выглядит" in t for t in s.texts(uid)) and not s.of(SendVideo)
 
-    # админ загружает видео-показ и бесплатный разбор
+    # админ загружает видео-показ
     await h.text(ADMIN, "/admin")
     await h.click(ADMIN, "adm:m_demo")
     await h.video(ADMIN, "demo_vid")
-    await h.click(ADMIN, "adm:m_free")
-    await h.video(ADMIN, "free_vid")
     assert (await db.get_setting("demo_media"))["file_id"] == "demo_vid"
-    assert [m["file_id"] for m in await db.get_setting("free_media")] == ["free_vid"]
 
     s.clear()
     await h.click(uid, "f:show")
-    assert s.of(SendVideo, uid)[0].video == "demo_vid"
-    await h.click(uid, "f:free")
-    assert s.of(SendVideo, uid)[1].video == "free_vid"
-    assert any("Вот так разобраны" in t for t in s.texts(uid))
+    show_msg = s.of(SendVideo, uid)[0]
+    assert show_msg.video == "demo_vid"
+    show_buttons = [b.text for row in show_msg.reply_markup.inline_keyboard for b in row]
+    assert show_buttons == ["👑 ПОЛУЧИТЬ ДОСТУП"]  # бесплатных разборов больше нет
 
-    # оффер → цепочка «не оплатил»
+    # оффер: юзернейм в тексте + кнопка поддержки
     s.clear()
     await h.click(uid, "f:offer")
-    assert any("<b>Стоимость:</b> 1490₽" in t for t in s.texts(uid))
+    offer_msg = [r for r in s.of(SendMessage, uid) if "<b>Стоимость:</b> 1490₽" in r.text][0]
+    assert "@eldar" in offer_msg.text
+    urls = [b.url for row in offer_msg.reply_markup.inline_keyboard for b in row if b.url]
+    assert urls == ["https://t.me/eldar"]
     s.clear()
     assert await h.force_followup(uid) == 1
-    assert "открыл оплату" in s.texts(uid)[0]
+    checkout_msg = s.of(SendMessage, uid)[0]
+    assert "открыл оплату" in checkout_msg.text
+    assert any(b.url == "https://t.me/eldar" for row in checkout_msg.reply_markup.inline_keyboard for b in row)
+
+    # кнопка «Поддержка» в меню
+    s.clear()
+    await h.text(uid, content.MENU_SUPPORT)
+    support_msg = s.of(SendMessage, uid)[0]
+    assert support_msg.reply_markup.inline_keyboard[0][0].url == "https://t.me/eldar"
 
     # промокод → не найден
     s.clear()

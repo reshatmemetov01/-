@@ -18,6 +18,7 @@ def main_menu(is_admin: bool) -> ReplyKeyboardMarkup:
         [KeyboardButton(text=content.MENU_VIDEOS)],
         [KeyboardButton(text=content.MENU_TRAINING), KeyboardButton(text=content.MENU_REVIEWS)],
         [KeyboardButton(text=content.MENU_FAQ), KeyboardButton(text=content.MENU_INFO)],
+        [KeyboardButton(text=content.MENU_SUPPORT)],
     ]
     if is_admin:
         rows.append([KeyboardButton(text=content.MENU_ADMIN)])
@@ -39,22 +40,28 @@ def show() -> InlineKeyboardMarkup:
 
 
 def after_show() -> InlineKeyboardMarkup:
-    return inline(
-        B(text="🎁 Бесплатные разборы", callback_data="f:free"),
-        B(text="👑 ПОЛУЧИТЬ ДОСТУП", callback_data="f:offer"),
-    )
+    return get_access()
 
 
 def get_access() -> InlineKeyboardMarkup:
     return inline(B(text="👑 ПОЛУЧИТЬ ДОСТУП", callback_data="f:offer"))
 
 
-def offer() -> InlineKeyboardMarkup:
+def support_button(manager_username: str) -> B | None:
+    if not manager_username:
+        return None
+    return B(text="💬 Поддержка", url=f"https://t.me/{manager_username}")
+
+
+def offer(manager_username: str) -> InlineKeyboardMarkup:
     # Сюда же добавится кнопка Platega, когда платёжка будет подключена
-    return inline(
+    rows = [
         B(text="💳 Оплатить по СБП", callback_data="pay:sbp"),
         B(text="🎟 Ввести промокод", callback_data="pay:promo"),
-    )
+    ]
+    if support := support_button(manager_username):
+        rows.append(support)
+    return inline(*rows)
 
 
 def sbp() -> InlineKeyboardMarkup:
@@ -67,7 +74,7 @@ def sbp() -> InlineKeyboardMarkup:
 def manager(config: Config) -> InlineKeyboardMarkup | None:
     if not config.manager_username:
         return None
-    return inline(B(text="✍️ Написать Эльдару", url=f"https://t.me/{config.manager_username}"))
+    return inline(B(text="💬 Написать в поддержку", url=f"https://t.me/{config.manager_username}"))
 
 
 # ---------------------------------------------------------------- экзамен
@@ -90,13 +97,13 @@ def exam_finish(failed: bool, paid: bool) -> InlineKeyboardMarkup:
 
 # ------------------------------------------------------------------ дожим
 
-def followup(button: str, subscribe_url: str = "") -> InlineKeyboardMarkup:
+def followup(button: str, subscribe_url: str = "", manager_username: str = "") -> InlineKeyboardMarkup:
     if button == "subscribe":
         return subscribe(subscribe_url)
     if button == "show":
         return inline(B(text="⭐ Посмотреть, что внутри", callback_data="f:show"))
-    if button == "free":
-        return inline(B(text="🎁 Смотреть бесплатный разбор", callback_data="f:free"))
+    if button == "offer_support" and (support := support_button(manager_username)):
+        return inline(B(text="👑 ПОЛУЧИТЬ ДОСТУП", callback_data="f:offer"), support)
     if button == "exam":
         return inline(B(text="📝 Пройти экзамен", callback_data="ex:start"))
     return get_access()
@@ -188,14 +195,11 @@ def admin_broadcast_confirm() -> InlineKeyboardMarkup:
     ])
 
 
-def admin_media(has_demo: bool, free_count: int) -> InlineKeyboardMarkup:
+def admin_media(has_demo: bool) -> InlineKeyboardMarkup:
     rows = [
         B(text=("🔁 Заменить" if has_demo else "➕ Загрузить") + " видео-показ канала", callback_data="adm:m_demo"),
-        B(text="➕ Добавить бесплатный разбор", callback_data="adm:m_free"),
     ]
-    if has_demo or free_count:
+    if has_demo:
         rows.append(B(text="👁 Посмотреть, как видит клиент", callback_data="adm:m_preview"))
-    if free_count:
-        rows.append(B(text=f"🗑 Удалить бесплатные разборы ({free_count})", callback_data="adm:m_free_clear"))
     rows.append(B(text="⬅️ В админку", callback_data="adm:menu"))
     return inline(*rows)

@@ -53,15 +53,8 @@ SHOW = (
     "<b><i>3. Чат с поддержкой</i></b> — не понял вопрос? Спроси, объясним ещё раз\n\n"
     "<b><i>4. Доступ навсегда</i></b> — пересматривай перед экзаменом сколько угодно\n\n"
     "<b><i>5. Тренажёр экзамена</i></b> — проверь себя прямо сейчас: нажми «Тренировка» в меню 👇\n\n"
-    "🎁 Хочешь сначала посмотреть, как я объясняю? Держи бесплатные разборы"
-)
-
-FREE_AFTER = (
-    "Ну как? 😉 Вот так разобраны все 800 вопросов.\n\n"
     "✅ <b>Не рискуй правами — забирай разборы</b> ⤵️"
 )
-FREE_NOT_READY = "Бесплатные разборы скоро появятся 🙂 А пока — загляни в «Тренировку» в меню."
-
 
 def offer_text(price: int, old_price: int | None, manager: str) -> str:
     price_line = f"<s>{old_price}</s> {price}₽" if old_price else f"{price}₽"
@@ -123,9 +116,12 @@ MENU_TRAINING = "📝 Тренировка"
 MENU_REVIEWS = "💬 Отзывы"
 MENU_FAQ = "❓ Частые вопросы"
 MENU_INFO = "ℹ️ Информация"
+MENU_SUPPORT = "💬 Поддержка"
 MENU_ADMIN = "🛠 Админка"
 
 COMING_SOON = "Раздел скоро появится 🙂"
+SUPPORT = "💬 Есть вопрос или что-то не работает? Напиши мне — отвечу 👇"
+SUPPORT_NOT_SET = "💬 Поддержка скоро будет подключена 🙂"
 
 # ------------------------------------------------------------------ Экзамен
 
@@ -165,7 +161,7 @@ EXAM_PASS = "🔥 <b>Экзамен сдан!</b> {correct} из {total}, оши
 #   3. дальше — по порядку из FOLLOWUP_ORDER
 # Когда сообщения закончились — больше не пишем.
 #
-# Кнопка под сообщением: show / free / offer / exam / subscribe.
+# Кнопка под сообщением: show / offer / offer_support / exam / subscribe.
 
 FOLLOWUP_INTERVAL = timedelta(hours=6)
 FOLLOWUP_QUIET_HOURS = (23, 9)  # с 23:00 до 9:00 по TIMEZONE не пишем
@@ -180,7 +176,7 @@ FOLLOWUP_MESSAGES: dict[str, tuple[str, str]] = {
         "Вижу, ты открыл оплату, но не завершил 🤔\n\n"
         "Если что-то не получилось или остались вопросы — напиши мне{manager}, помогу разобраться.\n\n"
         "Доступ навсегда за {price} ₽ — и вопрос с теорией ПДД закрыт.",
-        "offer",
+        "offer_support",
     ),
     "why_not_cram": (
         "Почему зубрёжка не работает? 🤔\n\n"
@@ -208,12 +204,6 @@ FOLLOWUP_MESSAGES: dict[str, tuple[str, str]] = {
         "А понимание остаётся — даже если руки трясутся.\n\n"
         "Поэтому я делаю ставку не на запоминание, а на то, чтобы ты понял, как устроены правила.",
         "offer",
-    ),
-    "free_sample": (
-        "Не уверен, подойдёт ли тебе мой формат? 🙂\n\n"
-        "Посмотри бесплатный разбор — за пару минут станет понятно, как я объясняю и "
-        "получится ли у тебя учиться так же.",
-        "free",
     ),
     "tricky_wording": (
         "Знаешь, на чём чаще всего ошибаются? ⚠️\n\n"
@@ -312,7 +302,7 @@ FOLLOWUP_MESSAGES: dict[str, tuple[str, str]] = {
 }
 
 FOLLOWUP_ORDER = [
-    "why_not_cram", "support_chat", "free_sample", "time", "exam_stress", "self_check",
+    "why_not_cram", "support_chat", "time", "exam_stress", "self_check",
     "tricky_wording", "forever", "intersections", "not_alone", "phone", "real_road",
     "retake", "position_trap", "price", "signs", "little_time", "first_try", "last_call",
 ]

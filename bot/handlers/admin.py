@@ -42,7 +42,6 @@ class AdminForm(StatesGroup):
     broadcast = State()
     grant = State()
     demo = State()
-    free = State()
 
 
 async def admin_menu_text(db: Database) -> tuple[str, object]:
@@ -94,7 +93,6 @@ async def stats(callback: CallbackQuery, db: Database, config: Config) -> None:
         f"👋 Зашли в бота: <b>{started}</b>",
         f"✅ Подписались на канал: <b>{c.get('subscribed', 0)}</b>{pct(c.get('subscribed', 0), started)}",
         f"⭐ Смотрели «Показать»: <b>{c.get('show', 0)}</b>{pct(c.get('show', 0), started)}",
-        f"🎁 Смотрели бесплатные разборы: <b>{c.get('free', 0)}</b>",
         f"🛒 Дошли до оплаты: <b>{c.get('checkout', 0)}</b>{pct(c.get('checkout', 0), started)}",
         f"💳 Нажали «Оплатить»: <b>{c.get('pay_click', 0)}</b>",
         f"💰 Купили: <b>{paid}</b>{pct(paid, started)}",
@@ -326,14 +324,12 @@ async def grant_input(message: Message, state: FSMContext, bot: Bot, db: Databas
 
 async def media_screen(db: Database) -> tuple[str, object]:
     demo = await db.get_setting("demo_media")
-    free = await db.get_setting("free_media", [])
     text = (
         "🎬 <b>Видео в воронке</b>\n\n"
-        f"• Видео-показ канала (после кнопки «Показать»): {'✅ есть' if demo else '❌ нет'}\n"
-        f"• Бесплатные разборы: {len(free)} шт.\n\n"
+        f"• Видео-показ канала (после кнопки «Показать»): {'✅ есть' if demo else '❌ нет'}\n\n"
         "<i>Пока видео нет, клиенты видят только текст.</i>"
     )
-    return text, keyboards.admin_media(bool(demo), len(free))
+    return text, keyboards.admin_media(bool(demo))
 
 
 @router.callback_query(F.data == "adm:media")
@@ -351,43 +347,17 @@ async def media_demo(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.answer("Пришли видео, где ты показываешь канал 🎬", reply_markup=keyboards.admin_back())
 
 
-@router.callback_query(F.data == "adm:m_free")
-async def media_free(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(AdminForm.free)
-    await callback.answer()
-    await callback.message.answer(
-        "Пришли видео с бесплатным разбором 🎁 Можно несколько подряд.", reply_markup=keyboards.admin_back()
-    )
-
-
-@router.message(StateFilter(AdminForm.demo, AdminForm.free))
+@router.message(StateFilter(AdminForm.demo))
 async def media_upload(message: Message, state: FSMContext, db: Database) -> None:
     media = extract_media(message)
     if not media:
         await message.answer("Это не видео/фото 🤔 Пришли файл или нажми «В админку».")
         return
-    if await state.get_state() == AdminForm.demo.state:
-        await db.set_setting("demo_media", media)
-        await state.clear()
-        await message.answer("✅ Видео-показ сохранён.")
-        text, markup = await media_screen(db)
-        await message.answer(text, reply_markup=markup)
-    else:
-        free = await db.get_setting("free_media", [])
-        free.append(media)
-        await db.set_setting("free_media", free)
-        await message.answer(
-            f"✅ Добавлено (всего: {len(free)}). Пришли ещё или вернись в админку.",
-            reply_markup=keyboards.admin_back(),
-        )
-
-
-@router.callback_query(F.data == "adm:m_free_clear")
-async def media_free_clear(callback: CallbackQuery, db: Database) -> None:
-    await db.set_setting("free_media", [])
-    await callback.answer("Удалено")
+    await db.set_setting("demo_media", media)
+    await state.clear()
+    await message.answer("✅ Видео-показ сохранён.")
     text, markup = await media_screen(db)
-    await callback.message.edit_text(text, reply_markup=markup)
+    await message.answer(text, reply_markup=markup)
 
 
 @router.callback_query(F.data == "adm:m_preview")
@@ -397,8 +367,6 @@ async def media_preview(callback: CallbackQuery, bot: Bot, db: Database) -> None
     demo = await db.get_setting("demo_media")
     if demo:
         await send_media(bot, uid, demo, caption=content.SHOW, reply_markup=keyboards.after_show())
-    for media in await db.get_setting("free_media", []):
-        await send_media(bot, uid, media)
 
 
 # ------------------------------------------------------- каналы и группа

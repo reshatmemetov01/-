@@ -49,7 +49,7 @@ async def render(db: Database, key: str, config: Config) -> tuple[str, object]:
     manager = f": @{config.manager_username}" if config.manager_username else ""
     target = await subscribe_target(db, config) if button == "subscribe" else None
     return (text.format(price=config.price, manager=manager),
-            keyboards.followup(button, target[1] if target else ""))
+            keyboards.followup(button, target[1] if target else "", config.manager_username))
 
 
 async def process_due(bot: Bot, db: Database, config: Config) -> int:
