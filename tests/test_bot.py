@@ -18,7 +18,7 @@ from aiogram import Bot
 from aiogram.client.session.base import BaseSession
 from aiogram.methods import (
     AnswerCallbackQuery,
-    DeleteMessage,
+    EditMessageText,
     ExportChatInviteLink,
     GetChat,
     CopyMessage,
@@ -478,10 +478,32 @@ async def scenario_menu(h: Harness) -> None:
     urls = [r[0].url for r in msg.reply_markup.inline_keyboard[:2]]
     assert urls == [content.AGREEMENT_URL, content.PRIVACY_URL]
 
-    # «Назад» удаляет сообщение раздела
+    # «Назад» не удаляет сообщение, а превращает его в «Добро пожаловать!»
     s.clear()
     await h.click(uid, "menu:back")
-    assert s.of(DeleteMessage)
+    edits = [r for r in s.requests if isinstance(r, EditMessageText)]
+    assert edits and edits[0].text == content.MAIN_MENU and edits[0].reply_markup is None
+
+    # отзывы: пусто → админ добавляет → пользователь видит → админ удаляет
+    s.clear()
+    await h.text(uid, content.MENU_REVIEWS)
+    assert s.texts(uid)[0] == content.REVIEWS_EMPTY
+    for i in range(7):
+        await h.click(ADMIN, "adm:rev_add")
+        await h.text(ADMIN, f"Сдал с первого раза <{i}>")
+        await h.text(ADMIN, f"@student{i}")
+    s.clear()
+    await h.text(uid, content.MENU_REVIEWS)
+    page1 = s.of(SendMessage, uid)[0]
+    assert "@student6" in page1.text and "&lt;6&gt;" in page1.text and "(стр. 1/2)" in page1.text
+    assert page1.reply_markup.inline_keyboard[0][0].callback_data == "rev:1"
+    s.clear()
+    await h.click(uid, "rev:1")
+    page2 = [r for r in s.requests if isinstance(r, EditMessageText)][0]
+    assert "@student0" in page2.text and "@student6" not in page2.text
+    await h.click(ADMIN, "adm:rev_del:1")
+    rows, total = await h.db.reviews()
+    assert total == 6 and all(r["id"] != 1 for r in rows)
 
     # оффер из воронки (не из меню) — без «Назад»
     s.clear()

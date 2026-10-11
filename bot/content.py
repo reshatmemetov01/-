@@ -123,6 +123,18 @@ MENU_ADMIN = "🛠 Админка"
 
 COMING_SOON = "Раздел скоро появится 🙂"
 BACK = "⬅️ Назад"
+# Сообщение, в которое превращается раздел после нажатия «Назад»
+MAIN_MENU = "<b>Добро пожаловать!</b>\n\nЧтобы продолжить, выбери нужную категорию ⤵️"
+
+REVIEWS_PAGE_SIZE = 5
+REVIEWS_EMPTY = "Отзывов пока нет — скоро появятся 🙂"
+
+
+def reviews_text(reviews: list[dict], page: int, pages: int) -> str:
+    from html import escape
+    items = [f"⭐ «{escape(r['text'])}»\n— <i>{escape(r['author'])}</i>" for r in reviews]
+    head = "👥 <b>Отзывы учеников</b>" + (f" (стр. {page + 1}/{pages})" if pages > 1 else "")
+    return head + "\n\n" + "\n\n".join(items)
 
 AGREEMENT_URL = "https://telegra.ph/Polzovatelskoe-soglashenie-08-01-39"
 PRIVACY_URL = "https://telegra.ph/Politika-konfidencialnosti-08-01-83"

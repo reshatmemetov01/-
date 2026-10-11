@@ -42,6 +42,8 @@ class AdminForm(StatesGroup):
     broadcast = State()
     grant = State()
     demo = State()
+    review_text = State()
+    review_author = State()
 
 
 async def admin_menu_text(db: Database) -> tuple[str, object]:
@@ -429,3 +431,62 @@ async def set_chat(callback: CallbackQuery, bot: Bot, db: Database) -> None:
         note = f"✅ «{escape(title)}» — наш канал.\nСсылка на него будет в приветствии (подписка не обязательна)."
     await callback.answer("Сохранено")
     await callback.message.edit_text(note, reply_markup=keyboards.admin_back())
+
+
+# ------------------------------------------------------------------ отзывы
+
+async def reviews_screen(db: Database) -> tuple[str, object]:
+    reviews, total = await db.reviews(limit=30)
+    lines = [f"⭐ <b>Отзывы</b> — {total}\n"]
+    for r in reviews:
+        short = r["text"] if len(r["text"]) <= 80 else r["text"][:80] + "…"
+        lines.append(f"#{r['id']} <b>{escape(r['author'])}</b>: {escape(short)}")
+    if not reviews:
+        lines.append("Пока нет ни одного отзыва.")
+    if total > len(reviews):
+        lines.append(f"\n<i>Показаны последние {len(reviews)}.</i>")
+    return "\n".join(lines), keyboards.admin_reviews(reviews)
+
+
+@router.callback_query(F.data == "adm:reviews")
+async def reviews_menu(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
+    await state.clear()
+    await callback.answer()
+    text, markup = await reviews_screen(db)
+    await callback.message.answer(text, reply_markup=markup)
+
+
+@router.callback_query(F.data == "adm:rev_add")
+async def review_add(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AdminForm.review_text)
+    await callback.answer()
+    await callback.message.answer("✍️ Пришли текст отзыва:", reply_markup=keyboards.admin_back())
+
+
+@router.message(StateFilter(AdminForm.review_text), F.text)
+async def review_text(message: Message, state: FSMContext) -> None:
+    await state.update_data(review_text=message.text.strip()[:1500])
+    await state.set_state(AdminForm.review_author)
+    await message.answer(
+        "👤 Кто автор? Напиши имя или @username — например: <code>Анна</code> или <code>@anna_drive</code>",
+        reply_markup=keyboards.admin_back(),
+    )
+
+
+@router.message(StateFilter(AdminForm.review_author), F.text)
+async def review_author(message: Message, state: FSMContext, db: Database) -> None:
+    data = await state.get_data()
+    await state.clear()
+    review_id = await db.add_review(message.text.strip()[:64], data["review_text"])
+    await message.answer(f"✅ Отзыв #{review_id} добавлен — он уже виден в разделе «Отзывы».")
+    text, markup = await reviews_screen(db)
+    await message.answer(text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith("adm:rev_del:"))
+async def review_delete(callback: CallbackQuery, db: Database) -> None:
+    review_id = int(callback.data.split(":")[2])
+    deleted = await db.delete_review(review_id)
+    await callback.answer(f"Отзыв #{review_id} удалён" if deleted else "Уже удалён")
+    text, markup = await reviews_screen(db)
+    await callback.message.edit_text(text, reply_markup=markup)

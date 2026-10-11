@@ -23,6 +23,15 @@ def with_back(markup: InlineKeyboardMarkup | None) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[*rows, [back_button()]])
 
 
+def reviews_nav(page: int, pages: int) -> InlineKeyboardMarkup:
+    nav = []
+    if page > 0:
+        nav.append(B(text="◀️", callback_data=f"rev:{page - 1}"))
+    if page + 1 < pages:
+        nav.append(B(text="▶️", callback_data=f"rev:{page + 1}"))
+    return inline(*([nav] if nav else []), back_button())
+
+
 def info() -> InlineKeyboardMarkup:
     return inline(
         B(text="📁 Пользовательское соглашение", url=content.AGREEMENT_URL),
@@ -136,7 +145,16 @@ def admin_menu(pending: int) -> InlineKeyboardMarkup:
         B(text="🎁 Выдать доступ", callback_data="adm:grant"),
         B(text="🎬 Видео в воронке", callback_data="adm:media"),
         B(text="🔗 Каналы и группа", callback_data="adm:chats"),
+        B(text="⭐ Отзывы", callback_data="adm:reviews"),
     )
+
+
+def admin_reviews(reviews: list[dict]) -> InlineKeyboardMarkup:
+    rows = [B(text="➕ Добавить отзыв", callback_data="adm:rev_add")]
+    rows += [B(text=f"🗑 Удалить #{r['id']} — {r['author'][:20]}", callback_data=f"adm:rev_del:{r['id']}")
+             for r in reviews]
+    rows.append(B(text="⬅️ В админку", callback_data="adm:menu"))
+    return inline(*rows)
 
 
 def admin_setchat(chat_id: int) -> InlineKeyboardMarkup:

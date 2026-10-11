@@ -41,6 +41,14 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+-- Отзывы, которые админ добавляет через админку
+CREATE TABLE IF NOT EXISTS reviews (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    author     TEXT    NOT NULL,
+    text       TEXT    NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
 -- Заявки на ручное подтверждение оплаты (временная оплата по СБП)
 CREATE TABLE IF NOT EXISTS payment_requests (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -194,6 +202,25 @@ class Database:
             (key, json.dumps(value, ensure_ascii=False)),
         )
         await self.conn.commit()
+
+    # ------------------------------------------------------------ reviews
+
+    async def add_review(self, author: str, text: str) -> int:
+        cur = await self.conn.execute(
+            "INSERT INTO reviews (author, text, created_at) VALUES (?, ?, ?)", (author, text, int(time.time()))
+        )
+        await self.conn.commit()
+        return cur.lastrowid
+
+    async def delete_review(self, review_id: int) -> bool:
+        cur = await self.conn.execute("DELETE FROM reviews WHERE id = ?", (review_id,))
+        await self.conn.commit()
+        return cur.rowcount > 0
+
+    async def reviews(self, limit: int = 1000, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
+        rows = await self._all("SELECT * FROM reviews ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+        total = (await self._one("SELECT COUNT(*) AS n FROM reviews"))["n"]
+        return rows, total
 
     # ------------------------------------------------- payment requests
 

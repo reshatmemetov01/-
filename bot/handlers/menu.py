@@ -56,18 +56,35 @@ async def support(message: Message, state: FSMContext, config: Config) -> None:
     await message.answer(content.SUPPORT, reply_markup=keyboards.with_back(keyboards.manager(config)))
 
 
+async def reviews_page(db: Database, page: int) -> tuple[str, object]:
+    size = content.REVIEWS_PAGE_SIZE
+    reviews, total = await db.reviews(limit=size, offset=page * size)
+    if not total:
+        return content.REVIEWS_EMPTY, keyboards.with_back(None)
+    pages = (total + size - 1) // size
+    return content.reviews_text(reviews, page, pages), keyboards.reviews_nav(page, pages)
+
+
 @router.message(F.text == content.MENU_REVIEWS)
-async def reviews(message: Message, state: FSMContext) -> None:
+async def reviews(message: Message, state: FSMContext, db: Database) -> None:
     await state.clear()
-    await message.answer(content.COMING_SOON, reply_markup=keyboards.with_back(None))
+    text, markup = await reviews_page(db, 0)
+    await message.answer(text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith("rev:"))
+async def reviews_flip(callback: CallbackQuery, db: Database) -> None:
+    await callback.answer()
+    text, markup = await reviews_page(db, int(callback.data.split(":")[1]))
+    await callback.message.edit_text(text, reply_markup=markup)
 
 
 @router.callback_query(F.data == "menu:back")
 async def back(callback: CallbackQuery, state: FSMContext) -> None:
-    """«Назад» — закрываем раздел, пользователь возвращается к нижнему меню."""
+    """«Назад» — раздел превращается в «Добро пожаловать! Выбери категорию»."""
     await state.clear()
     await callback.answer()
     try:
-        await callback.message.delete()
-    except Exception:  # сообщение старше 48 часов удалить нельзя — просто убираем кнопки
-        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.edit_text(content.MAIN_MENU, reply_markup=None)
+    except Exception:  # например, сообщение слишком старое — отправим новое
+        await callback.message.answer(content.MAIN_MENU)
