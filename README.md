@@ -93,6 +93,47 @@ docker run -d --restart=always --env-file .env -v pdd_db:/db pdd-bot
 
 5. Открой бота → «🛠 Админка» → «🎬 Видео в воронке» и загрузи видео.
 
+## Запуск на VPS (Ubuntu/Debian)
+
+Выполняй по шагам на сервере:
+
+```bash
+# 1. Python и git
+sudo apt update && sudo apt install -y python3 python3-venv git
+
+# 2. Отдельный пользователь для бота и папка
+sudo useradd -r -m -d /opt/pdd-bot pddbot
+sudo -u pddbot git clone https://github.com/reshatmemetov01/-.git /opt/pdd-bot/app
+# (или скопируй файлы проекта в /opt/pdd-bot любым способом)
+sudo -u pddbot bash -c 'cp -r /opt/pdd-bot/app/. /opt/pdd-bot/ && rm -rf /opt/pdd-bot/app'
+
+# 3. Зависимости
+sudo -u pddbot python3 -m venv /opt/pdd-bot/venv
+sudo -u pddbot /opt/pdd-bot/venv/bin/pip install -r /opt/pdd-bot/requirements.txt
+
+# 4. Настройки: скопируй пример и заполни (токен, ADMIN_IDS, каналы, реквизиты)
+sudo -u pddbot cp /opt/pdd-bot/.env.example /opt/pdd-bot/.env
+sudo -u pddbot nano /opt/pdd-bot/.env
+
+# 5. Автозапуск
+sudo cp /opt/pdd-bot/deploy/pdd-bot.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pdd-bot
+```
+
+Полезные команды:
+
+```bash
+sudo systemctl status pdd-bot      # работает ли бот
+sudo journalctl -u pdd-bot -f      # логи в реальном времени
+sudo systemctl restart pdd-bot     # перезапуск (после изменения .env или кода)
+```
+
+> Бот должен быть запущен **только в одном месте**. Если он работает на VPS,
+> не запускай его одновременно на компьютере — Telegram будет выдавать ошибку конфликта.
+
+База (`pdd_bot.db`) лежит в `/opt/pdd-bot` — её стоит иногда копировать себе как резервную копию.
+
 ## База вопросов
 
 Сейчас в `data/questions.json` 10 вопросов для примера. Формат описан в `bot/questions.py`.

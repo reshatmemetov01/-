@@ -1,0 +1,16 @@
+# systemd-сервис: бот запускается вместе с сервером и перезапускается при сбое.
+# Установка — см. раздел «Запуск на VPS» в README.md
+[Unit]
+Description=PDD Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/pdd-bot
+ExecStart=/opt/pdd-bot/venv/bin/python -m bot
+Restart=always
+RestartSec=5
+User=pddbot
+
+[Install]
+WantedBy=multi-user.target
