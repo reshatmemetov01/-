@@ -1,10 +1,11 @@
 from aiogram import Router
 
-from . import admin, fallback, lead, offer, quiz, start
+from . import admin, exam, fallback, funnel, menu, start
 
 
 def setup_routers() -> Router:
     root = Router()
-    # admin — первым, чтобы команды админа не перехватывались; fallback — последним.
-    root.include_routers(admin.router, start.router, quiz.router, offer.router, lead.router, fallback.router)
+    # Порядок важен: /start и кнопки меню срабатывают в любом состоянии,
+    # fallback — последним.
+    root.include_routers(start.router, menu.router, admin.router, funnel.router, exam.router, fallback.router)
     return root

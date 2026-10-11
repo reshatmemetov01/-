@@ -14,4 +14,4 @@ async def any_message(message: Message) -> None:
 
 @router.callback_query()
 async def stale_callback(callback: CallbackQuery) -> None:
-    await callback.answer("Кнопка устарела. Нажмите /start")
+    await callback.answer("Кнопка устарела — нажми /start")

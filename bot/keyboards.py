@@ -1,83 +1,187 @@
 from aiogram.types import (
-    InlineKeyboardButton,
+    InlineKeyboardButton as B,
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
 )
 
 from . import content
+from .config import Config
 
 
-def _rows(*buttons: InlineKeyboardButton) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[b] for b in buttons])
+def inline(*rows: list[B] | B) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[r if isinstance(r, list) else [r] for r in rows])
 
 
-def segments() -> InlineKeyboardMarkup:
-    return _rows(
-        *(InlineKeyboardButton(text=t, callback_data=f"seg:{k}") for k, t in content.SEGMENTS.items())
-    )
-
-
-def start_quiz() -> InlineKeyboardMarkup:
-    return _rows(InlineKeyboardButton(text="▶️ Пройти тест", callback_data="quiz:start"))
-
-
-def quiz_options(index: int, question: content.Question) -> InlineKeyboardMarkup:
-    # Варианты перечислены в тексте вопроса, на кнопках — только номера (в один ряд),
-    # чтобы длинные ответы не обрезались на экране телефона.
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[
-            InlineKeyboardButton(text=str(i + 1), callback_data=f"q:{index}:{i}")
-            for i in range(len(question.options))
-        ]]
-    )
-
-
-def after_quiz() -> InlineKeyboardMarkup:
-    return _rows(
-        InlineKeyboardButton(text="🚀 Как сдать с первого раза", callback_data="offer:show"),
-        InlineKeyboardButton(text="🔄 Пройти тест ещё раз", callback_data="quiz:start"),
-    )
-
-
-def to_offer(text: str = "👉 Посмотреть тарифы") -> InlineKeyboardMarkup:
-    return _rows(InlineKeyboardButton(text=text, callback_data="offer:show"))
-
-
-def tariffs(discount_active: bool, manager_username: str) -> InlineKeyboardMarkup:
-    buttons = [
-        InlineKeyboardButton(
-            text=f"{t.title} — {content.discounted(t.price, discount_active)} ₽",
-            callback_data=f"tariff:{t.id}",
-        )
-        for t in content.TARIFFS
+def main_menu(is_admin: bool) -> ReplyKeyboardMarkup:
+    rows = [
+        [KeyboardButton(text=content.MENU_VIDEOS)],
+        [KeyboardButton(text=content.MENU_TRAINING), KeyboardButton(text=content.MENU_REVIEWS)],
+        [KeyboardButton(text=content.MENU_FAQ), KeyboardButton(text=content.MENU_INFO)],
     ]
-    buttons.append(
-        InlineKeyboardButton(text="💬 Задать вопрос / оставить заявку", callback_data="lead:start")
+    if is_admin:
+        rows.append([KeyboardButton(text=content.MENU_ADMIN)])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+# ---------------------------------------------------------------- воронка
+
+def subscribe(config: Config) -> InlineKeyboardMarkup:
+    rows = []
+    if config.subscribe_button_url:
+        rows.append(B(text="🔗 ПОДПИСАТЬСЯ", url=config.subscribe_button_url))
+    rows.append(B(text="✅ Я подписался", callback_data="sub:check"))
+    return inline(*rows)
+
+
+def show() -> InlineKeyboardMarkup:
+    return inline(B(text="⭐ ПОКАЗАТЬ", callback_data="f:show"))
+
+
+def after_show() -> InlineKeyboardMarkup:
+    return inline(
+        B(text="🎁 Бесплатные разборы", callback_data="f:free"),
+        B(text="👑 ПОЛУЧИТЬ ДОСТУП", callback_data="f:offer"),
     )
-    if manager_username:
-        buttons.append(
-            InlineKeyboardButton(text="👤 Написать менеджеру", url=f"https://t.me/{manager_username}")
-        )
-    return _rows(*buttons)
 
 
-def request_phone() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📱 Отправить номер", request_contact=True)]],
-        resize_keyboard=True,
-        one_time_keyboard=True,
+def get_access() -> InlineKeyboardMarkup:
+    return inline(B(text="👑 ПОЛУЧИТЬ ДОСТУП", callback_data="f:offer"))
+
+
+def offer() -> InlineKeyboardMarkup:
+    # Сюда же добавится кнопка Platega, когда платёжка будет подключена
+    return inline(
+        B(text="💳 Оплатить по СБП", callback_data="pay:sbp"),
+        B(text="🎟 Ввести промокод", callback_data="pay:promo"),
     )
 
 
-def followup(key: str, quiz_done: bool, manager_username: str) -> InlineKeyboardMarkup:
-    if key == "nudge" and not quiz_done:
-        return start_quiz()
-    if key == "discount":
-        return to_offer(f"🔥 Забрать скидку {content.DISCOUNT_PERCENT}%")
-    if key == "last_call" and manager_username:
-        return _rows(
-            InlineKeyboardButton(text="👉 Посмотреть тарифы", callback_data="offer:show"),
-            InlineKeyboardButton(text="👤 Написать менеджеру", url=f"https://t.me/{manager_username}"),
+def sbp() -> InlineKeyboardMarkup:
+    return inline(
+        B(text="✅ Я оплатил", callback_data="pay:sent"),
+        B(text="⬅️ Назад", callback_data="f:offer"),
+    )
+
+
+def manager(config: Config) -> InlineKeyboardMarkup | None:
+    if not config.manager_username:
+        return None
+    return inline(B(text="✍️ Написать Эльдару", url=f"https://t.me/{config.manager_username}"))
+
+
+# ---------------------------------------------------------------- экзамен
+
+def exam_start() -> InlineKeyboardMarkup:
+    return inline(B(text="▶️ Начать экзамен", callback_data="ex:start"))
+
+
+def exam_answers(index: int, count: int) -> InlineKeyboardMarkup:
+    return inline([B(text=str(i + 1), callback_data=f"ex:{index}:{i}") for i in range(count)])
+
+
+def exam_finish(failed: bool, paid: bool) -> InlineKeyboardMarkup:
+    rows = []
+    if failed and not paid:
+        rows.append(B(text="👑 ПОЛУЧИТЬ ДОСТУП", callback_data="f:offer"))
+    rows.append(B(text="🔄 Пройти ещё раз", callback_data="ex:start"))
+    return inline(*rows)
+
+
+# ------------------------------------------------------------------ дожим
+
+def followup(key: str, config: Config) -> InlineKeyboardMarkup:
+    if key == "browse_1_unsubscribed":
+        return subscribe(config)
+    if key == "browse_1":
+        return show()
+    if key == "browse_2":
+        return inline(B(text="🎁 Смотреть бесплатный разбор", callback_data="f:free"))
+    if key == "checkout_1" and config.manager_username:
+        return inline(
+            B(text="👑 ПОЛУЧИТЬ ДОСТУП", callback_data="f:offer"),
+            B(text="✍️ Написать Эльдару", url=f"https://t.me/{config.manager_username}"),
         )
-    return to_offer()
+    return get_access()
+
+
+# ------------------------------------------------------------------ админка
+
+def admin_menu(pending: int) -> InlineKeyboardMarkup:
+    pending_text = f"💳 Ждут подтверждения ({pending})" if pending else "💳 Ждут подтверждения"
+    return inline(
+        B(text="📊 Статистика", callback_data="adm:stats:day"),
+        B(text="👥 Пользователи", callback_data="adm:users"),
+        B(text=pending_text, callback_data="adm:pending"),
+        B(text="📣 Рассылка", callback_data="adm:bc"),
+        B(text="🎁 Выдать доступ", callback_data="adm:grant"),
+        B(text="🎬 Видео в воронке", callback_data="adm:media"),
+    )
+
+
+def admin_back() -> InlineKeyboardMarkup:
+    return inline(B(text="⬅️ В админку", callback_data="adm:menu"))
+
+
+def admin_stats(period: str) -> InlineKeyboardMarkup:
+    labels = {"day": "Сегодня", "week": "7 дней", "all": "Всё время"}
+    return inline(
+        [B(text=("• " if p == period else "") + t, callback_data=f"adm:stats:{p}") for p, t in labels.items()],
+        B(text="⬅️ В админку", callback_data="adm:menu"),
+    )
+
+
+def admin_users() -> InlineKeyboardMarkup:
+    return inline(
+        B(text="🛒 Дошли до оплаты, не купили", callback_data="adm:list:checkout:0"),
+        B(text="✅ Купили", callback_data="adm:list:paid:0"),
+        B(text="🆕 Все (новые сверху)", callback_data="adm:list:all:0"),
+        B(text="⬅️ В админку", callback_data="adm:menu"),
+    )
+
+
+def admin_list_nav(kind: str, page: int, has_next: bool) -> InlineKeyboardMarkup:
+    nav = []
+    if page > 0:
+        nav.append(B(text="◀️", callback_data=f"adm:list:{kind}:{page - 1}"))
+    if has_next:
+        nav.append(B(text="▶️", callback_data=f"adm:list:{kind}:{page + 1}"))
+    rows = [nav] if nav else []
+    rows.append(B(text="⬅️ Назад", callback_data="adm:users"))
+    return inline(*rows)
+
+
+def admin_payment(request_id: int) -> InlineKeyboardMarkup:
+    return inline([
+        B(text="✅ Подтвердить", callback_data=f"adm:pay_ok:{request_id}"),
+        B(text="❌ Отклонить", callback_data=f"adm:pay_no:{request_id}"),
+    ])
+
+
+def admin_broadcast_audience() -> InlineKeyboardMarkup:
+    return inline(
+        B(text="👥 Всем", callback_data="adm:bc_to:all"),
+        B(text="🛒 Кто не купил", callback_data="adm:bc_to:unpaid"),
+        B(text="✅ Кто купил", callback_data="adm:bc_to:paid"),
+        B(text="⬅️ В админку", callback_data="adm:menu"),
+    )
+
+
+def admin_broadcast_confirm() -> InlineKeyboardMarkup:
+    return inline([
+        B(text="🚀 Отправить", callback_data="adm:bc_go"),
+        B(text="✖️ Отмена", callback_data="adm:menu"),
+    ])
+
+
+def admin_media(has_demo: bool, free_count: int) -> InlineKeyboardMarkup:
+    rows = [
+        B(text=("🔁 Заменить" if has_demo else "➕ Загрузить") + " видео-показ канала", callback_data="adm:m_demo"),
+        B(text="➕ Добавить бесплатный разбор", callback_data="adm:m_free"),
+    ]
+    if has_demo or free_count:
+        rows.append(B(text="👁 Посмотреть, как видит клиент", callback_data="adm:m_preview"))
+    if free_count:
+        rows.append(B(text=f"🗑 Удалить бесплатные разборы ({free_count})", callback_data="adm:m_free_clear"))
+    rows.append(B(text="⬅️ В админку", callback_data="adm:menu"))
+    return inline(*rows)
