@@ -27,12 +27,11 @@ def main_menu(is_admin: bool) -> ReplyKeyboardMarkup:
 
 # ---------------------------------------------------------------- воронка
 
-def subscribe(url: str) -> InlineKeyboardMarkup:
-    rows = []
-    if url:
-        rows.append(B(text="🔗 ПОДПИСАТЬСЯ", url=url))
-    rows.append(B(text="✅ Я подписался", callback_data="sub:check"))
-    return inline(*rows)
+def welcome(channel_url: str) -> InlineKeyboardMarkup:
+    return inline(
+        B(text="📢 Подписаться на канал", url=channel_url),
+        B(text="➡️ Продолжить", callback_data="go:continue"),
+    )
 
 
 def show() -> InlineKeyboardMarkup:
@@ -97,9 +96,7 @@ def exam_finish(failed: bool, paid: bool) -> InlineKeyboardMarkup:
 
 # ------------------------------------------------------------------ дожим
 
-def followup(button: str, subscribe_url: str = "", manager_username: str = "") -> InlineKeyboardMarkup:
-    if button == "subscribe":
-        return subscribe(subscribe_url)
+def followup(button: str, manager_username: str = "") -> InlineKeyboardMarkup:
     if button == "show":
         return inline(B(text="⭐ Посмотреть, что внутри", callback_data="f:show"))
     if button == "offer_support" and (support := support_button(manager_username)):
@@ -127,15 +124,15 @@ def admin_menu(pending: int) -> InlineKeyboardMarkup:
 def admin_setchat(chat_id: int) -> InlineKeyboardMarkup:
     return inline(
         B(text="🔒 Закрытая группа с разборами", callback_data=f"setchat:private:{chat_id}"),
-        B(text="📢 Канал для обязательной подписки", callback_data=f"setchat:sub:{chat_id}"),
+        B(text="📢 Наш канал (ссылка в приветствии)", callback_data=f"setchat:channel:{chat_id}"),
         B(text="✖️ Ни то, ни другое", callback_data="setchat:none:0"),
     )
 
 
-def admin_chats(has_sub: bool) -> InlineKeyboardMarkup:
+def admin_chats(has_channel: bool) -> InlineKeyboardMarkup:
     rows = []
-    if has_sub:
-        rows.append(B(text="🚫 Отключить обязательную подписку", callback_data="setchat:sub_off:0"))
+    if has_channel:
+        rows.append(B(text="🚫 Убрать канал из приветствия", callback_data="setchat:channel_off:0"))
     rows.append(B(text="⬅️ В админку", callback_data="adm:menu"))
     return inline(*rows)
 

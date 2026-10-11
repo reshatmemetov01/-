@@ -19,7 +19,7 @@ from ..services import (
     manager_suffix,
     private_chat_id,
     send_media,
-    subscribe_target,
+    channel_url,
     user_link,
 )
 
@@ -91,7 +91,6 @@ async def stats(callback: CallbackQuery, db: Database, config: Config) -> None:
     lines = [
         f"📊 <b>Статистика {title}</b>\n",
         f"👋 Зашли в бота: <b>{started}</b>",
-        f"✅ Подписались на канал: <b>{c.get('subscribed', 0)}</b>{pct(c.get('subscribed', 0), started)}",
         f"⭐ Смотрели «Показать»: <b>{c.get('show', 0)}</b>{pct(c.get('show', 0), started)}",
         f"🛒 Дошли до оплаты: <b>{c.get('checkout', 0)}</b>{pct(c.get('checkout', 0), started)}",
         f"💳 Нажали «Оплатить»: <b>{c.get('pay_click', 0)}</b>",
@@ -375,18 +374,20 @@ async def media_preview(callback: CallbackQuery, bot: Bot, db: Database) -> None
 async def chats_screen(callback: CallbackQuery, db: Database, config: Config) -> None:
     await callback.answer()
     private = await db.get_setting("private_chat")
-    sub = await db.get_setting("subscribe_chat")
+    channel = await db.get_setting("channel")
     private_line = (f"✅ {private['title']}" if private
                     else ("✅ задана в .env" if await private_chat_id(db, config) else "❌ не выбрана"))
-    sub_line = (f"✅ {sub['title']}" if sub
-                else ("✅ задан в .env" if await subscribe_target(db, config) else "❌ выключена"))
+    url = await channel_url(db, config)
+    channel_line = (f"✅ {escape(channel['title'])}" if channel and channel.get("url")
+                    else (f"✅ {url}" if url else "❌ не показывается"))
     await callback.message.answer(
         "🔗 <b>Каналы и группа</b>\n\n"
         f"🔒 Закрытая группа с разборами: {private_line}\n"
-        f"📢 Обязательная подписка: {sub_line}\n\n"
+        f"📢 Канал в приветствии (необязательная подписка): {channel_line}\n\n"
         "<i>Чтобы выбрать: добавь бота <b>администратором</b> в нужный канал или группу "
         "(с правом «Пригласительные ссылки») — он сразу пришлёт сюда вопрос, что это за чат.</i>",
-        reply_markup=keyboards.admin_chats(bool(sub)),
+        reply_markup=keyboards.admin_chats(bool(url)),
+        disable_web_page_preview=True,
     )
 
 
@@ -399,9 +400,9 @@ async def set_chat(callback: CallbackQuery, bot: Bot, db: Database) -> None:
         await callback.answer("Ок")
         await callback.message.edit_reply_markup(reply_markup=None)
         return
-    if role == "sub_off":
-        await db.set_setting("subscribe_chat", None)
-        await callback.answer("Обязательная подписка выключена")
+    if role == "channel_off":
+        await db.set_setting("channel", {"title": "—", "url": ""})
+        await callback.answer("Канал убран из приветствия")
         await callback.message.edit_reply_markup(reply_markup=None)
         return
 
@@ -424,7 +425,7 @@ async def set_chat(callback: CallbackQuery, bot: Bot, db: Database) -> None:
                 "После оплаты я буду выдавать в неё одноразовые ссылки.")
     else:
         url = f"https://t.me/{chat.username}" if chat.username else (await bot.export_chat_invite_link(chat_id))
-        await db.set_setting("subscribe_chat", {"id": chat_id, "title": title, "url": url})
-        note = f"✅ «{escape(title)}» — канал для обязательной подписки.\nБез подписки на него бот дальше не пустит."
+        await db.set_setting("channel", {"id": chat_id, "title": title, "url": url})
+        note = f"✅ «{escape(title)}» — наш канал.\nСсылка на него будет в приветствии (подписка не обязательна)."
     await callback.answer("Сохранено")
     await callback.message.edit_text(note, reply_markup=keyboards.admin_back())

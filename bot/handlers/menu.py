@@ -7,7 +7,6 @@ from .. import content, keyboards
 from ..config import Config
 from ..db import Database
 from ..questions import QuestionBank
-from ..services import ensure_subscribed
 from .funnel import send_offer
 
 router = Router()
@@ -17,8 +16,6 @@ router = Router()
 async def videos(message: Message, state: FSMContext, bot: Bot, db: Database, config: Config,
                  user: dict) -> None:
     await state.clear()
-    if not user["paid"] and not await ensure_subscribed(bot, db, config, user):
-        return
     await send_offer(bot, db, config, user)  # купившим — ссылку на канал, остальным — оффер
 
 
@@ -26,8 +23,6 @@ async def videos(message: Message, state: FSMContext, bot: Bot, db: Database, co
 async def training(message: Message, state: FSMContext, bot: Bot, db: Database, config: Config,
                    user: dict, questions: QuestionBank) -> None:
     await state.clear()
-    if not await ensure_subscribed(bot, db, config, user):
-        return
     if not questions.questions:
         await message.answer(content.EXAM_NO_QUESTIONS)
         return

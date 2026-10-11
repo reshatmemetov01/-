@@ -8,7 +8,6 @@ from .. import content, keyboards
 from ..config import Config
 from ..db import Database
 from ..services import (
-    ensure_subscribed,
     extract_media,
     is_channel_member,
     make_access_link,
@@ -52,8 +51,6 @@ async def send_offer(bot: Bot, db: Database, config: Config, user: dict) -> None
 @router.callback_query(F.data == "f:show")
 async def show(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict) -> None:
     await callback.answer()
-    if not await ensure_subscribed(bot, db, config, user):
-        return
     await db.add_event(user["user_id"], "show")
     demo = await db.get_setting("demo_media")
     if demo:
@@ -67,8 +64,6 @@ async def offer(callback: CallbackQuery, state: FSMContext, bot: Bot, db: Databa
                 user: dict) -> None:
     await callback.answer()
     await state.clear()
-    if not await ensure_subscribed(bot, db, config, user):
-        return
     await send_offer(bot, db, config, user)
 
 

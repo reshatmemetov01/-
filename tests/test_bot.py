@@ -130,7 +130,7 @@ def admin_member(user_id: int) -> ChatMemberAdministrator:
 def make_config(db_path: str, **overrides) -> Config:
     base = Config(
         bot_token="42:TEST", admin_ids=(ADMIN,), db_path=db_path,
-        subscribe_channel="@eldar_pdd", subscribe_url="", private_channel_id=-100500, access_link="",
+        channel_url="https://t.me/+channel", private_channel_id=-100500, access_link="",
         price=1490, old_price=None, manager_username="eldar",
         payment_details="Т-Банк, +7 900 000-00-00, Эльдар", questions_path="",
         followup_delay_scale=1, timezone="Europe/Moscow",
@@ -203,24 +203,21 @@ async def with_db(fn, **cfg):
 async def scenario_purchase(h: Harness) -> None:
     db, s, uid = h.db, h.s, 501
 
-    # /start с меткой источника → приветствие с кнопкой подписки
+    # /start с меткой источника → приветствие + необязательный канал: «Подписаться» и «Продолжить»
     await h.text(uid, "/start insta")
     user = await db.get_user(uid)
-    assert user["source"] == "insta" and not user["subscribed"] and user["next_followup_at"]
-    assert "Эльдар" not in s.texts(uid)[0] and content.SUBSCRIBE_PROMPT in s.texts(uid)[0]
+    assert user["source"] == "insta" and user["next_followup_at"]
+    welcome = s.of(SendMessage, uid)[0]
+    assert "не обязательна" in welcome.text and "Подписка есть" not in welcome.text
+    buttons = [b for row in welcome.reply_markup.inline_keyboard for b in row]
+    assert buttons[0].url == "https://t.me/+channel" and buttons[1].callback_data == "go:continue"
 
-    # не подписан → не пускаем
-    await h.click(uid, "sub:check")
-    assert "Не вижу подписки" in s.alerts()[-1]
-    assert not (await db.get_user(uid))["subscribed"]
-
-    # подписался → меню + «о себе»
-    s.members.add(("@eldar_pdd", uid))
+    # «Продолжить» — без всякой проверки подписки → меню + «о себе»
     s.clear()
-    await h.click(uid, "sub:check")
-    assert (await db.get_user(uid))["subscribed"]
+    await h.click(uid, "go:continue")
+    assert not s.of(GetChatMember)
     texts = s.texts(uid)
-    assert content.SUBSCRIBED_OK in texts and any("Меня зовут Эльдар" in t for t in texts)
+    assert content.MENU_HINT in texts and any("Меня зовут Эльдар" in t for t in texts)
     assert any("Чат с учениками и поддержка" in t for t in texts)
 
     # «Показать» без видео → только текст
@@ -306,9 +303,8 @@ async def scenario_purchase(h: Harness) -> None:
     assert content.ACCESS_ALREADY_MEMBER in s.texts(uid) and not s.of(CreateChatInviteLink)
 
     # второй пользователь дошёл до оплаты и не купил
-    s.members.add(("@eldar_pdd", 777))
     await h.text(777, "/start")
-    await h.click(777, "sub:check")
+    await h.click(777, "go:continue")
     await h.click(777, "f:offer")
 
     # статистика и списки
@@ -350,9 +346,8 @@ async def scenario_purchase(h: Harness) -> None:
 
 async def scenario_reject(h: Harness) -> None:
     db, s, uid = h.db, h.s, 601
-    s.members.add(("@eldar_pdd", uid))
     await h.text(uid, "/start")
-    await h.click(uid, "sub:check")
+    await h.click(uid, "go:continue")
     await h.click(uid, "f:offer")
     await h.click(uid, "pay:sbp")
     await h.click(uid, "pay:sent")
@@ -377,10 +372,10 @@ async def scenario_browse_followups(h: Harness) -> None:
         total += 1
         assert total < 50
     texts = s.texts(uid)
-    # не подписан → сначала просьба подписаться, дальше все сообщения по порядку, без повторов
-    assert "так и не подписался" in texts[0]
-    assert "Почему зубрёжка не работает" in texts[1]
-    assert total == 1 + len(content.FOLLOWUP_ORDER) == len(set(texts))
+    # все сообщения по порядку, без повторов и без напоминаний про подписку
+    assert "Почему зубрёжка не работает" in texts[0]
+    assert not any("подписал" in t for t in texts)
+    assert total == len(content.FOLLOWUP_ORDER) == len(set(texts))
     assert "последнее сообщение" in texts[-1]
     assert (await h.db.get_user(uid))["next_followup_at"] is None
 
@@ -421,17 +416,15 @@ async def scenario_chat_setup(h: Harness) -> None:
     assert (await db.get_setting("private_chat"))["id"] == -100777
 
     await added_to(-100900)
-    await h.click(ADMIN, "setchat:sub:-100900")
-    assert (await db.get_setting("subscribe_chat"))["url"] == "https://t.me/eldar_channel"
+    await h.click(ADMIN, "setchat:channel:-100900")
+    assert (await db.get_setting("channel"))["url"] == "https://t.me/eldar_channel"
 
-    # новый пользователь видит кнопку подписки на выбранный канал
+    # новый пользователь видит кнопку «Подписаться» на выбранный канал
     s.clear()
     await h.text(901, "/start")
     welcome = s.of(SendMessage, 901)[0]
     assert welcome.reply_markup.inline_keyboard[0][0].url == "https://t.me/eldar_channel"
-    s.members.add((-100900, 901))
-    await h.click(901, "sub:check")
-    assert (await db.get_user(901))["subscribed"]
+    await h.click(901, "go:continue")
 
     # после выдачи доступа ссылка создаётся в выбранной группе
     s.clear()
@@ -439,8 +432,8 @@ async def scenario_chat_setup(h: Harness) -> None:
     await h.text(ADMIN, "901")
     assert s.of(CreateChatInviteLink)[0].chat_id == -100777
 
-    # отключение обязательной подписки
-    await h.click(ADMIN, "setchat:sub_off:0")
+    # канал можно убрать из приветствия
+    await h.click(ADMIN, "setchat:channel_off:0")
     s.clear()
     await h.text(902, "/start")
     assert any("Меня зовут Эльдар" in t for t in s.texts(902))
@@ -448,7 +441,7 @@ async def scenario_chat_setup(h: Harness) -> None:
 
 async def scenario_exam(h: Harness) -> None:
     db, s, uid = h.db, h.s, 888
-    # канал для подписки не настроен → сразу «о себе»
+    # канал не задан → сразу «о себе»
     await h.text(uid, "/start")
     assert any("Меня зовут Эльдар" in t for t in s.texts(uid))
 
@@ -494,11 +487,11 @@ def test_browse_followups():
 
 
 def test_chat_setup():
-    asyncio.run(with_db(scenario_chat_setup, subscribe_channel="", private_channel_id=None))
+    asyncio.run(with_db(scenario_chat_setup, channel_url="", private_channel_id=None))
 
 
 def test_exam():
-    asyncio.run(with_db(scenario_exam, subscribe_channel=""))
+    asyncio.run(with_db(scenario_exam, channel_url=""))
 
 
 if __name__ == "__main__":

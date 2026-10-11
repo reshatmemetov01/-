@@ -9,13 +9,11 @@ class Config:
     bot_token: str
     admin_ids: tuple[int, ...]
     db_path: str
-    # Канал, на который нужно подписаться перед использованием бота (@username или -100…)
-    subscribe_channel: str
-    # Ссылка для кнопки «Подписаться» (если пусто — t.me/<username канала>)
-    subscribe_url: str
-    # Закрытый канал с разборами: бот выдаёт в него одноразовые ссылки
+    # Ссылка на Telegram-канал для кнопки «Подписаться» в приветствии (подписка не обязательна)
+    channel_url: str
+    # Закрытая группа с разборами и чатом: бот выдаёт в неё одноразовые ссылки
     private_channel_id: int | None
-    # Запасная постоянная ссылка, если закрытый канал не настроен
+    # Запасная постоянная ссылка, если закрытая группа не настроена
     access_link: str
     price: int
     old_price: int | None
@@ -25,14 +23,6 @@ class Config:
     questions_path: str
     followup_delay_scale: float
     timezone: str
-
-    @property
-    def subscribe_button_url(self) -> str:
-        if self.subscribe_url:
-            return self.subscribe_url
-        if self.subscribe_channel.startswith("@"):
-            return f"https://t.me/{self.subscribe_channel[1:]}"
-        return ""
 
 
 def _int_or_none(value: str | None) -> int | None:
@@ -51,8 +41,7 @@ def load_config() -> Config:
         bot_token=token,
         admin_ids=tuple(int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",") if x),
         db_path=os.getenv("DB_PATH", "pdd_bot.db"),
-        subscribe_channel=os.getenv("SUBSCRIBE_CHANNEL", "").strip(),
-        subscribe_url=os.getenv("SUBSCRIBE_URL", "").strip(),
+        channel_url=os.getenv("CHANNEL_URL", "").strip(),
         private_channel_id=_int_or_none(os.getenv("PRIVATE_CHANNEL_ID")),
         access_link=os.getenv("ACCESS_LINK", "").strip(),
         price=int(os.getenv("PRICE", "1490")),

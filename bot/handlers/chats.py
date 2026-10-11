@@ -34,14 +34,13 @@ async def bot_membership_changed(event: ChatMemberUpdated, bot: Bot, db: Databas
             bot, config,
             f"🔔 Меня добавили в «<b>{title}</b>», но не админом.\n\n"
             "Сделай меня <b>администратором</b> с правом «Пригласительные ссылки» — "
-            "иначе я не смогу выдавать ссылки и проверять подписку.",
+            "иначе я не смогу выдавать ссылки.",
         )
     elif status in (ChatMemberStatus.LEFT, ChatMemberStatus.KICKED):
         private = await db.get_setting("private_chat")
-        sub = await db.get_setting("subscribe_chat")
-        if (private and private["id"] == chat.id) or (sub and sub["id"] == chat.id):
+        if private and private["id"] == chat.id:
             await notify_admins(
                 bot, config,
-                f"⚠️ Меня удалили из «<b>{title}</b>». Выдача ссылок/проверка подписки для него не работает — "
+                f"⚠️ Меня удалили из «<b>{title}</b>». Выдача ссылок в группу не работает — "
                 "верни меня админом.",
             )

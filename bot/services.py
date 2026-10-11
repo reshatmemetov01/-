@@ -45,52 +45,15 @@ async def notify_admins(bot: Bot, config: Config, text: str, **kwargs: Any) -> N
 # и он сам спросит у админа, что это за чат (см. handlers/admin.py → setchat).
 # Выбор сохраняется в базе и имеет приоритет над .env.
 
-async def subscribe_target(db: Database, config: Config) -> tuple[int | str, str] | None:
-    """(чат для проверки подписки, ссылка для кнопки) или None, если подписка не нужна."""
-    saved = await db.get_setting("subscribe_chat")
-    if saved:
-        return saved["id"], saved["url"]
-    if config.subscribe_channel:
-        return config.subscribe_channel, config.subscribe_button_url
-    return None
+async def channel_url(db: Database, config: Config) -> str:
+    """Ссылка на Telegram-канал для приветствия (подписка не обязательна). Пусто — не показываем."""
+    saved = await db.get_setting("channel")
+    return saved["url"] if saved else config.channel_url
 
 
 async def private_chat_id(db: Database, config: Config) -> int | None:
     saved = await db.get_setting("private_chat")
     return saved["id"] if saved else config.private_channel_id
-
-
-# ----------------------------------------------------------------- подписка
-
-async def check_subscription(bot: Bot, db: Database, config: Config, user_id: int) -> bool:
-    target = await subscribe_target(db, config)
-    if not target:
-        return True
-    try:
-        member = await bot.get_chat_member(target[0], user_id)
-    except Exception:
-        # Чаще всего бот не добавлен админом в канал. Не блокируем пользователя из-за нашей настройки.
-        log.exception("Не удалось проверить подписку — бот должен быть админом канала %s", target[0])
-        return True
-    return member.status in MEMBER_STATUSES
-
-
-async def ensure_subscribed(bot: Bot, db: Database, config: Config, user: dict[str, Any]) -> bool:
-    """True — можно пускать дальше. Иначе отправляет просьбу подписаться."""
-    if user["subscribed"]:
-        return True
-    if await check_subscription(bot, db, config, user["user_id"]):
-        await mark_subscribed(db, user["user_id"])
-        return True
-    target = await subscribe_target(db, config)
-    await bot.send_message(user["user_id"], content.NOT_SUBSCRIBED,
-                           reply_markup=keyboards.subscribe(target[1] if target else ""))
-    return False
-
-
-async def mark_subscribed(db: Database, user_id: int) -> None:
-    await db.update_user(user_id, subscribed=1)
-    await db.add_event(user_id, "subscribed")
 
 
 # ------------------------------------------------------------------ доступ

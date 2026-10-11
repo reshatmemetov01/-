@@ -8,15 +8,13 @@ from aiogram.types import CallbackQuery, Message
 from .. import content, keyboards
 from ..config import Config
 from ..db import Database
-from ..services import check_subscription, is_admin, mark_subscribed, subscribe_target
+from ..services import channel_url, is_admin
 
 router = Router()
 
 
-async def after_subscribed(bot: Bot, db: Database, config: Config, user_id: int) -> None:
-    await bot.send_message(
-        user_id, content.SUBSCRIBED_OK, reply_markup=keyboards.main_menu(is_admin(user_id, config))
-    )
+async def continue_funnel(bot: Bot, db: Database, config: Config, user_id: int) -> None:
+    await bot.send_message(user_id, content.MENU_HINT, reply_markup=keyboards.main_menu(is_admin(user_id, config)))
     await bot.send_message(user_id, content.ABOUT, reply_markup=keyboards.show())
     await db.add_event(user_id, "about")
 
@@ -35,25 +33,18 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
         return
 
     welcome = content.WELCOME.format(name=escape(message.from_user.first_name or "друг"))
-    target = await subscribe_target(db, config)
-    if target and not user["subscribed"]:
-        await message.answer(f"{welcome}\n\n{content.SUBSCRIBE_PROMPT}", reply_markup=keyboards.subscribe(target[1]))
+    url = await channel_url(db, config)
+    if url:
+        # Канал — по желанию: кнопки «Подписаться» и «Продолжить»
+        await message.answer(f"{welcome}\n\n{content.CHANNEL_PROMPT}", reply_markup=keyboards.welcome(url))
         return
-
     await message.answer(welcome)
-    if not user["subscribed"]:
-        await mark_subscribed(db, uid)
-    await after_subscribed(bot, db, config, uid)
+    await continue_funnel(bot, db, config, uid)
 
 
-@router.callback_query(F.data == "sub:check")
-async def sub_check(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict) -> None:
-    uid = user["user_id"]
-    if not user["subscribed"]:
-        if not await check_subscription(bot, db, config, uid):
-            await callback.answer("Не вижу подписки 🙈 Подпишись и нажми ещё раз", show_alert=True)
-            return
-        await mark_subscribed(db, uid)
+# sub:check — кнопка из старых сообщений, когда подписка была обязательной
+@router.callback_query(F.data.in_({"go:continue", "sub:check"}))
+async def go_continue(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict) -> None:
     await callback.answer()
     await callback.message.edit_reply_markup(reply_markup=None)
-    await after_subscribed(bot, db, config, uid)
+    await continue_funnel(bot, db, config, user["user_id"])
