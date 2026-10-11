@@ -50,6 +50,7 @@ async def send_offer(bot: Bot, db: Database, config: Config, user: dict, back: b
         user["user_id"],
         content.offer_text(config.price, config.old_price, config.manager_username),
         reply_markup=keyboards.with_back(markup) if back else markup,
+        disable_web_page_preview=True,
     )
 
 

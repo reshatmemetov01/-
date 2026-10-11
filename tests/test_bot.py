@@ -244,6 +244,8 @@ async def scenario_purchase(h: Harness) -> None:
     await h.click(uid, "f:offer")
     offer_msg = [r for r in s.of(SendMessage, uid) if "<b>Стоимость:</b> 1490₽" in r.text][0]
     assert "@eldar" in offer_msg.text
+    assert content.AGREEMENT_URL in offer_msg.text and content.PRIVACY_URL in offer_msg.text
+    assert offer_msg.disable_web_page_preview
     urls = [b.url for row in offer_msg.reply_markup.inline_keyboard for b in row if b.url]
     assert urls == ["https://t.me/eldar"]
     s.clear()

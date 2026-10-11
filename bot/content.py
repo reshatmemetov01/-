@@ -74,7 +74,9 @@ def offer_text(price: int, old_price: int | None, manager: str) -> str:
         "и объясним ещё раз, если что-то непонятно.\n\n"
         "<blockquote><i>После оплаты бот сразу пришлёт ссылку в закрытую группу — там разборы и чат с учениками. "
         f"Если что-то не работает —{contact}</i></blockquote>\n\n"
-        "👇 <b>Забирай доступ и закрой этот вопрос</b>"
+        "👇 <b>Забирай доступ и закрой этот вопрос</b>\n\n"
+        f'<i>Оплачивая доступ, ты соглашаешься с <a href="{AGREEMENT_URL}">пользовательским соглашением</a> '
+        f'и <a href="{PRIVACY_URL}">политикой конфиденциальности</a>.</i>'
     )
 
 
@@ -136,8 +138,9 @@ def reviews_text(reviews: list[dict], page: int, pages: int) -> str:
     head = "👥 <b>Отзывы учеников</b>" + (f" (стр. {page + 1}/{pages})" if pages > 1 else "")
     return head + "\n\n" + "\n\n".join(items)
 
-AGREEMENT_URL = "https://telegra.ph/Polzovatelskoe-soglashenie-08-01-39"
-PRIVACY_URL = "https://telegra.ph/Politika-konfidencialnosti-08-01-83"
+# Тексты документов — docs/legal.py (там же команда для публикации)
+AGREEMENT_URL = "https://telegra.ph/Polzovatelskoe-soglashenie-10-11-37"
+PRIVACY_URL = "https://telegra.ph/Politika-konfidencialnosti-10-11-57"
 
 INFO = (
     "ℹ️ <b>Информация</b>\n\n"
