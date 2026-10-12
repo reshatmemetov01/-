@@ -374,6 +374,24 @@ async def scenario_payment_link(h: Harness) -> None:
     assert any("СПАСИБО ЗА ПОКУПКУ" in t for t in s.texts(uid))
 
 
+async def scenario_admin_retest(h: Harness) -> None:
+    """Админ может проходить покупку сколько угодно раз и всегда видит оффер."""
+    db, s = h.db, h.s
+    await h.text(ADMIN, "/start")
+    for n in (1, 2):
+        await h.click(ADMIN, "pay:sent")
+        s.clear()
+        await h.click(ADMIN, f"adm:pay_ok:{n}")
+        assert any("СПАСИБО ЗА ПОКУПКУ" in t for t in s.texts(ADMIN)), n
+    assert (await db.get_user(ADMIN))["paid"]
+    # купил, но «Видеоразборы» всё равно показывают оффер (и старая подпись кнопки тоже работает)
+    for label in (content.MENU_VIDEOS, content.MENU_VIDEOS_OLD):
+        s.clear()
+        await h.text(ADMIN, label)
+        assert any("Стоимость" in t for t in s.texts(ADMIN)), label
+    assert content.MENU_VIDEOS == "👑 Видеоразборы"
+
+
 async def scenario_reject(h: Harness) -> None:
     db, s, uid = h.db, h.s, 601
     await h.text(uid, "/start")
@@ -636,6 +654,10 @@ def test_payment_link():
     asyncio.run(with_db(scenario_payment_link, payment_url="https://paydex.pro/pay/link-abc"))
 
 
+def test_admin_retest():
+    asyncio.run(with_db(scenario_admin_retest))
+
+
 def test_reject():
     asyncio.run(with_db(scenario_reject))
 
@@ -663,6 +685,7 @@ def test_exam():
 if __name__ == "__main__":
     test_purchase()
     test_payment_link()
+    test_admin_retest()
     test_reject()
     test_browse_followups()
     test_quiet_hours()

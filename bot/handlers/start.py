@@ -41,7 +41,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
     if is_new and command.args:
         await db.update_user(uid, source=command.args.strip()[:64])
 
-    if user["paid"]:
+    if user["paid"] and not is_admin(uid, config):
         await message.answer(content.WELCOME_BACK_PAID, reply_markup=keyboards.main_menu(is_admin(uid, config)))
         return
 

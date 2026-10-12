@@ -13,6 +13,7 @@ from .. import content, keyboards
 from ..config import Config
 from ..db import Database
 from ..services import (
+    is_admin,
     is_channel_member,
     make_access_link,
     manager_suffix,
@@ -44,7 +45,8 @@ async def send_access_again(bot: Bot, db: Database, config: Config, user_id: int
 
 async def send_offer(bot: Bot, db: Database, config: Config, user: dict, back: bool = False) -> None:
     """back=True — открыто из нижнего меню, добавляем кнопку «Назад»."""
-    if user["paid"]:
+    # Админ всегда видит оффер, чтобы можно было тестировать оплату повторно
+    if user["paid"] and not is_admin(user["user_id"], config):
         await send_access_again(bot, db, config, user["user_id"], back=back)
         return
     await db.add_event(user["user_id"], "checkout")
@@ -102,7 +104,7 @@ async def pay_sbp(callback: CallbackQuery, db: Database, config: Config, user: d
 async def pay_sent(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict) -> None:
     """«Я оплатил» — админу уходит заявка на проверку с кнопками «Подтвердить / Отклонить»."""
     uid = user["user_id"]
-    if user["paid"]:
+    if user["paid"] and not is_admin(uid, config):
         await callback.answer()
         await send_access_again(bot, db, config, uid)
         return

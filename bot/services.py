@@ -86,7 +86,8 @@ async def grant_access(bot: Bot, db: Database, config: Config, user_id: int, via
     if user is None:
         now = int(time.time())
         user, _ = await db.touch_user(user_id, None, str(user_id), now)
-    if user["paid"]:
+    # Админу доступ выдаётся повторно — чтобы можно было тестировать покупку сколько угодно раз
+    if user["paid"] and not is_admin(user_id, config):
         return False
 
     await db.update_user(user_id, paid=1, paid_at=int(time.time()), next_followup_at=None)

@@ -13,7 +13,7 @@ from .funnel import send_offer
 router = Router()
 
 
-@router.message(F.text == content.MENU_VIDEOS)
+@router.message(F.text.in_({content.MENU_VIDEOS, content.MENU_VIDEOS_OLD}))
 async def videos(message: Message, state: FSMContext, bot: Bot, db: Database, config: Config,
                  user: dict) -> None:
     await state.clear()
