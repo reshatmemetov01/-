@@ -1,3 +1,8 @@
+import time
+from datetime import datetime
+from html import escape
+from zoneinfo import ZoneInfo
+
 from aiogram import Bot, F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -8,7 +13,6 @@ from .. import content, keyboards
 from ..config import Config
 from ..db import Database
 from ..services import (
-    extract_media,
     is_channel_member,
     make_access_link,
     manager_suffix,
@@ -21,7 +25,6 @@ router = Router()
 
 
 class PayForm(StatesGroup):
-    receipt = State()
     promo = State()
 
 
@@ -92,31 +95,36 @@ async def pay_sbp(callback: CallbackQuery, db: Database, config: Config, user: d
 
 
 @router.callback_query(F.data == "pay:sent")
-async def pay_sent(callback: CallbackQuery, state: FSMContext, db: Database, user: dict) -> None:
-    await callback.answer()
-    await db.add_event(user["user_id"], "pay_click")
-    await state.set_state(PayForm.receipt)
-    await callback.message.answer(content.ASK_RECEIPT)
-
-
-@router.message(StateFilter(PayForm.receipt))
-async def receipt(message: Message, state: FSMContext, bot: Bot, db: Database, config: Config,
-                  user: dict) -> None:
-    media = extract_media(message)
-    if not media or media["type"] not in ("photo", "document"):
-        await message.answer(content.RECEIPT_NEED_PHOTO)
+async def pay_sent(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict) -> None:
+    """«Я оплатил» — админу уходит заявка на проверку с кнопками «Подтвердить / Отклонить»."""
+    uid = user["user_id"]
+    if user["paid"]:
+        await callback.answer()
+        await send_access_again(bot, db, config, uid)
         return
-    await state.clear()
-    request_id = await db.create_payment_request(user["user_id"], media["file_id"])
-    await message.answer(content.RECEIPT_RECEIVED)
+    if await db.pending_request_for(uid):
+        await callback.answer()
+        await callback.message.answer(content.PAYMENT_ALREADY_CHECKING)
+        return
+    await callback.answer()
+    await db.add_event(uid, "pay_click")
+    request_id = await db.create_payment_request(uid, None)
+    await callback.message.answer(content.PAYMENT_CHECKING)
+    await notify_admins(bot, config, payment_request_text(request_id, user, config),
+                        reply_markup=keyboards.admin_payment(request_id))
 
-    caption = f"💳 <b>Проверь оплату #{request_id}</b> — {config.price} ₽\n\n{user_link(user)}"
-    for admin_id in config.admin_ids:
-        try:
-            await send_media(bot, admin_id, media, caption=caption,
-                             reply_markup=keyboards.admin_payment(request_id))
-        except Exception:
-            await notify_admins(bot, config, caption, reply_markup=keyboards.admin_payment(request_id))
+
+def payment_request_text(request_id: int, user: dict, config: Config, created_at: int | None = None) -> str:
+    when = datetime.fromtimestamp(created_at or time.time(), ZoneInfo(config.timezone)).strftime("%d.%m.%Y %H:%M")
+    username = f"@{user['username']}" if user.get("username") else "нет username"
+    return (
+        f"💳 <b>Оплата на проверку #{request_id}</b>\n\n"
+        f"👤 {user_link(user)}\n"
+        f"🔗 {escape(username)} · ID <code>{user['user_id']}</code>\n"
+        f"🕒 {when} ({config.timezone.split('/')[-1]})\n"
+        f"💰 {config.price} ₽\n\n"
+        "Проверь поступление в кабинете Paydex."
+    )
 
 
 # ------------------------------------------------------------------ промокод

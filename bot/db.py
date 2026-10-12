@@ -246,6 +246,11 @@ class Database:
         await self.conn.commit()
         return cur.rowcount > 0
 
+    async def pending_request_for(self, user_id: int) -> dict[str, Any] | None:
+        return await self._one(
+            "SELECT * FROM payment_requests WHERE user_id = ? AND status = 'pending'", (user_id,)
+        )
+
     async def pending_payment_requests(self) -> list[dict[str, Any]]:
         return await self._all(
             "SELECT p.*, u.full_name, u.username FROM payment_requests p "

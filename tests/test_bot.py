@@ -4,6 +4,7 @@ Telegram API — сессия-заглушка, которая записыва�
 Запуск: python tests/test_bot.py   (или pytest)
 """
 import asyncio
+import re
 import os
 import sys
 import tempfile
@@ -271,12 +272,16 @@ async def scenario_purchase(h: Harness) -> None:
     await h.click(uid, "pay:sbp")
     assert any("Т-Банк" in t for t in s.texts(uid))
     await h.click(uid, "pay:sent")
-    await h.text(uid, "оплатил")
-    assert content.RECEIPT_NEED_PHOTO in s.texts(uid)
-    await h.photo(uid)
-    assert content.RECEIPT_RECEIVED in s.texts(uid)
-    admin_card = s.of(SendPhoto, ADMIN)[0]
-    assert admin_card.photo == "receipt" and "Проверь оплату #1" in admin_card.caption
+    assert content.PAYMENT_CHECKING in s.texts(uid)
+    admin_card = [r for r in s.of(SendMessage, ADMIN) if "Оплата на проверку #1" in r.text][0]
+    assert "@user501" in admin_card.text and "1490 ₽" in admin_card.text
+    assert re.search(r"\d\d\.\d\d\.\d{4} \d\d:\d\d", admin_card.text)  # дата и время
+    buttons = [b.callback_data for b in admin_card.reply_markup.inline_keyboard[0]]
+    assert buttons == ["adm:pay_ok:1", "adm:pay_no:1"]
+    # повторное «Я оплатил» не создаёт вторую заявку
+    s.clear()
+    await h.click(uid, "pay:sent")
+    assert content.PAYMENT_ALREADY_CHECKING in s.texts(uid) and not s.texts(ADMIN)
 
     # админ подтверждает → доступ и одноразовая ссылка
     s.clear()
@@ -285,7 +290,7 @@ async def scenario_purchase(h: Harness) -> None:
     assert user["paid"] and user["next_followup_at"] is None
     link_req = s.of(CreateChatInviteLink)[0]
     assert link_req.chat_id == -100500 and link_req.member_limit == 1
-    assert any("персональная ссылка" in t and "t.me/+invite" in t for t in s.texts(uid))
+    assert any("СПАСИБО ЗА ПОКУПКУ" in t and "t.me/+invite" in t for t in s.texts(uid))
     assert any("Новая покупка — 1490 ₽" in t for t in s.texts(ADMIN))
 
     # повторное нажатие не выдаёт доступ дважды
@@ -356,11 +361,10 @@ async def scenario_payment_link(h: Harness) -> None:
     assert rows[0][0].text == "💳 Оплатить по СБП" and rows[0][0].url == "https://paydex.pro/pay/link-abc"
     assert rows[1][0].callback_data == "pay:sent"
     await h.click(uid, "pay:sent")
-    await h.photo(uid)
-    assert s.of(SendPhoto, ADMIN)  # админу пришёл чек с кнопками
+    assert any("Оплата на проверку #1" in t for t in s.texts(ADMIN))
     await h.click(ADMIN, "adm:pay_ok:1")
     assert (await db.get_user(uid))["paid"]
-    assert any("персональная ссылка" in t for t in s.texts(uid))
+    assert any("СПАСИБО ЗА ПОКУПКУ" in t for t in s.texts(uid))
 
 
 async def scenario_reject(h: Harness) -> None:
@@ -370,11 +374,14 @@ async def scenario_reject(h: Harness) -> None:
     await h.click(uid, "f:offer")
     await h.click(uid, "pay:sbp")
     await h.click(uid, "pay:sent")
-    await h.photo(uid)
     s.clear()
     await h.click(ADMIN, "adm:pay_no:1")
     assert not (await db.get_user(uid))["paid"]
-    assert any("Не нашёл твою оплату" in t for t in s.texts(uid))
+    assert any("Платёж не найден" in t and "техподдержку" in t and "@eldar" in t for t in s.texts(uid))
+    # после отклонения можно снова нажать «Я оплатил»
+    s.clear()
+    await h.click(uid, "pay:sent")
+    assert content.PAYMENT_CHECKING in s.texts(uid)
 
 
 async def scenario_browse_followups(h: Harness) -> None:

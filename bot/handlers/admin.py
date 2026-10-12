@@ -161,18 +161,11 @@ async def pending(callback: CallbackQuery, bot: Bot, db: Database, config: Confi
     if not requests:
         await callback.message.answer("💳 Нет оплат, ожидающих подтверждения.", reply_markup=keyboards.admin_back())
         return
+    from .funnel import payment_request_text
     for r in requests:
-        caption = f"💳 <b>Проверь оплату #{r['id']}</b> — {config.price} ₽\n\n{user_link(r)}"
-        markup = keyboards.admin_payment(r["id"])
-        try:
-            await send_media(bot, callback.from_user.id, {"type": "photo", "file_id": r["file_id"]},
-                             caption=caption, reply_markup=markup)
-        except Exception:
-            try:
-                await send_media(bot, callback.from_user.id, {"type": "document", "file_id": r["file_id"]},
-                                 caption=caption, reply_markup=markup)
-            except Exception:
-                await callback.message.answer(caption, reply_markup=markup)
+        user = await db.get_user(r["user_id"]) or {"user_id": r["user_id"]}
+        await callback.message.answer(payment_request_text(r["id"], user, config, r["created_at"]),
+                                      reply_markup=keyboards.admin_payment(r["id"]))
 
 
 async def _mark_handled(callback: CallbackQuery, note: str) -> None:
