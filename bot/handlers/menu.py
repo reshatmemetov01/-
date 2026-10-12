@@ -8,6 +8,7 @@ from .. import content, keyboards
 from ..config import Config
 from ..db import Database
 from ..questions import QuestionBank
+from ..services import is_admin
 from .funnel import send_offer
 
 router = Router()
@@ -17,6 +18,8 @@ router = Router()
 async def videos(message: Message, state: FSMContext, bot: Bot, db: Database, config: Config,
                  user: dict) -> None:
     await state.clear()
+    if message.text == content.MENU_VIDEOS_OLD:  # у человека старая клавиатура — присылаем новую
+        await message.answer(content.MENU_HINT, reply_markup=keyboards.main_menu(is_admin(user["user_id"], config)))
     await send_offer(bot, db, config, user, back=True)  # купившим — ссылку в группу, остальным — оффер
 
 

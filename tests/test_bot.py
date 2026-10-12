@@ -389,6 +389,9 @@ async def scenario_admin_retest(h: Harness) -> None:
         s.clear()
         await h.text(ADMIN, label)
         assert any("Стоимость" in t for t in s.texts(ADMIN)), label
+        if label == content.MENU_VIDEOS_OLD:  # старая кнопка → бот присылает обновлённое меню
+            menus = [r for r in s.of(SendMessage, ADMIN) if r.text == content.MENU_HINT]
+            assert menus and menus[0].reply_markup.keyboard[0][0].text == "👑 Видеоразборы"
     assert content.MENU_VIDEOS == "👑 Видеоразборы"
 
 
