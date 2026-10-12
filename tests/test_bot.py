@@ -395,6 +395,19 @@ async def scenario_admin_retest(h: Harness) -> None:
     assert content.MENU_VIDEOS == "👑 Видеоразборы"
 
 
+async def scenario_group_silence(h: Harness) -> None:
+    """В группе (бот там админ) бот ничего не отвечает и не заносит людей в базу."""
+    s = h.s
+    for text in ("привет", "/start"):
+        entities = [MessageEntity(type="bot_command", offset=0, length=6)] if text == "/start" else None
+        msg = Message(message_id=next(_ids), date=datetime.now(),
+                      chat=Chat(id=-100777, type="supergroup", title="ПДД | Правила"),
+                      from_user=h._user(970), text=text, entities=entities)
+        await h._feed(message=msg)
+    assert not s.of(SendMessage)
+    assert await h.db.get_user(970) is None
+
+
 async def scenario_reject(h: Harness) -> None:
     db, s, uid = h.db, h.s, 601
     await h.text(uid, "/start")
@@ -661,6 +674,10 @@ def test_admin_retest():
     asyncio.run(with_db(scenario_admin_retest))
 
 
+def test_group_silence():
+    asyncio.run(with_db(scenario_group_silence))
+
+
 def test_reject():
     asyncio.run(with_db(scenario_reject))
 
@@ -689,6 +706,7 @@ if __name__ == "__main__":
     test_purchase()
     test_payment_link()
     test_admin_retest()
+    test_group_silence()
     test_reject()
     test_browse_followups()
     test_quiet_hours()

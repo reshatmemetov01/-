@@ -2,7 +2,7 @@ import time
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject, User
+from aiogram.types import Chat, TelegramObject, User
 
 from .config import Config
 from .db import Database
@@ -18,6 +18,11 @@ class UserMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        chat: Chat | None = data.get("event_chat")
+        if chat is not None and chat.type != "private":
+            # Бот — админ закрытой группы и видит её сообщения. В группах и каналах молчим
+            # и никого не заносим в базу: общение с клиентами только в личке.
+            return None
         tg_user: User | None = data.get("event_from_user")
         if tg_user is None or tg_user.is_bot:
             return await handler(event, data)
