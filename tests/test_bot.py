@@ -132,7 +132,7 @@ def make_config(db_path: str, **overrides) -> Config:
     base = Config(
         bot_token="42:TEST", admin_ids=(ADMIN,), db_path=db_path,
         channel_url="https://t.me/+channel", private_channel_id=-100500, access_link="",
-        price=1490, old_price=None, manager_username="eldar",
+        price=1490, old_price=None, manager_username="eldar", payment_url="",
         payment_details="Т-Банк, +7 900 000-00-00, Эльдар", questions_path="",
         followup_delay_scale=1, timezone="Europe/Moscow",
     )
@@ -345,6 +345,22 @@ async def scenario_purchase(h: Harness) -> None:
     s.clear()
     await h.text(uid, "/admin")
     assert s.texts(uid) == [content.FALLBACK]
+
+
+async def scenario_payment_link(h: Harness) -> None:
+    db, s, uid = h.db, h.s, 620
+    await h.text(uid, "/start")
+    s.clear()
+    await h.click(uid, "f:offer")
+    rows = [r for r in s.of(SendMessage, uid) if "Стоимость" in r.text][0].reply_markup.inline_keyboard
+    assert rows[0][0].text == "💳 Оплатить по СБП" and rows[0][0].url == "https://paydex.pro/pay/link-abc"
+    assert rows[1][0].callback_data == "pay:sent"
+    await h.click(uid, "pay:sent")
+    await h.photo(uid)
+    assert s.of(SendPhoto, ADMIN)  # админу пришёл чек с кнопками
+    await h.click(ADMIN, "adm:pay_ok:1")
+    assert (await db.get_user(uid))["paid"]
+    assert any("персональная ссылка" in t for t in s.texts(uid))
 
 
 async def scenario_reject(h: Harness) -> None:
@@ -602,6 +618,10 @@ def test_purchase():
     asyncio.run(with_db(scenario_purchase))
 
 
+def test_payment_link():
+    asyncio.run(with_db(scenario_payment_link, payment_url="https://paydex.pro/pay/link-abc"))
+
+
 def test_reject():
     asyncio.run(with_db(scenario_reject))
 
@@ -628,6 +648,7 @@ def test_exam():
 
 if __name__ == "__main__":
     test_purchase()
+    test_payment_link()
     test_reject()
     test_browse_followups()
     test_quiet_hours()

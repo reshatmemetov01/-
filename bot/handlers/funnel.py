@@ -45,7 +45,7 @@ async def send_offer(bot: Bot, db: Database, config: Config, user: dict, back: b
         await send_access_again(bot, db, config, user["user_id"], back=back)
         return
     await db.add_event(user["user_id"], "checkout")
-    markup = keyboards.offer(config.manager_username)
+    markup = keyboards.offer(config.manager_username, config.payment_url)
     await bot.send_message(
         user["user_id"],
         content.offer_text(config.price, config.old_price, config.manager_username),
@@ -92,8 +92,9 @@ async def pay_sbp(callback: CallbackQuery, db: Database, config: Config, user: d
 
 
 @router.callback_query(F.data == "pay:sent")
-async def pay_sent(callback: CallbackQuery, state: FSMContext) -> None:
+async def pay_sent(callback: CallbackQuery, state: FSMContext, db: Database, user: dict) -> None:
     await callback.answer()
+    await db.add_event(user["user_id"], "pay_click")
     await state.set_state(PayForm.receipt)
     await callback.message.answer(content.ASK_RECEIPT)
 
@@ -131,4 +132,4 @@ async def promo(callback: CallbackQuery, state: FSMContext) -> None:
 async def promo_code(message: Message, state: FSMContext, config: Config) -> None:
     # Промокодов пока нет — когда появятся, проверка будет здесь
     await state.clear()
-    await message.answer(content.PROMO_NOT_FOUND, reply_markup=keyboards.offer(config.manager_username))
+    await message.answer(content.PROMO_NOT_FOUND, reply_markup=keyboards.offer(config.manager_username, config.payment_url))

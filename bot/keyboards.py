@@ -79,12 +79,16 @@ def support_button(manager_username: str) -> B | None:
     return B(text="💬 Поддержка", url=f"https://t.me/{manager_username}")
 
 
-def offer(manager_username: str) -> InlineKeyboardMarkup:
-    # Сюда же добавится кнопка Platega, когда платёжка будет подключена
-    rows = [
-        B(text="💳 Оплатить по СБП", callback_data="pay:sbp"),
-        B(text="🎟 Ввести промокод", callback_data="pay:promo"),
-    ]
+def offer(manager_username: str, payment_url: str = "") -> InlineKeyboardMarkup:
+    if payment_url:
+        # Ссылка Paydex открывается сразу; после оплаты клиент жмёт «Я оплатил» и присылает чек
+        rows = [
+            B(text="💳 Оплатить по СБП", url=payment_url),
+            B(text="✅ Я оплатил", callback_data="pay:sent"),
+        ]
+    else:
+        rows = [B(text="💳 Оплатить по СБП", callback_data="pay:sbp")]
+    rows.append(B(text="🎟 Ввести промокод", callback_data="pay:promo"))
     if support := support_button(manager_username):
         rows.append(support)
     return inline(*rows)

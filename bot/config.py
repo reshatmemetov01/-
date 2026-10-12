@@ -18,7 +18,9 @@ class Config:
     price: int
     old_price: int | None
     manager_username: str
-    # Реквизиты для временной оплаты по СБП с ручным подтверждением
+    # Многоразовая ссылка на оплату (Paydex). Кнопка «Оплатить по СБП» ведёт на неё
+    payment_url: str
+    # Реквизиты для оплаты переводом, если ссылки нет (запасной вариант)
     payment_details: str
     questions_path: str
     followup_delay_scale: float
@@ -47,6 +49,7 @@ def load_config() -> Config:
         price=int(os.getenv("PRICE", "1490")),
         old_price=_int_or_none(os.getenv("OLD_PRICE")),
         manager_username=os.getenv("MANAGER_USERNAME", "").strip().lstrip("@"),
+        payment_url=os.getenv("PAYMENT_URL", "").strip(),
         payment_details=os.getenv("PAYMENT_DETAILS", "").replace("\\n", "\n").strip(),
         questions_path=os.getenv("QUESTIONS_PATH", "data/questions.json"),
         followup_delay_scale=float(os.getenv("FOLLOWUP_DELAY_SCALE", "1")),

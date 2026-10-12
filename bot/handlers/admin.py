@@ -95,7 +95,7 @@ async def stats(callback: CallbackQuery, db: Database, config: Config) -> None:
         f"👋 Зашли в бота: <b>{started}</b>",
         f"⭐ Смотрели «Показать»: <b>{c.get('show', 0)}</b>{pct(c.get('show', 0), started)}",
         f"🛒 Дошли до оплаты: <b>{c.get('checkout', 0)}</b>{pct(c.get('checkout', 0), started)}",
-        f"💳 Нажали «Оплатить»: <b>{c.get('pay_click', 0)}</b>",
+        f"💳 Нажали «Я оплатил»: <b>{c.get('pay_click', 0)}</b>",
         f"💰 Купили: <b>{paid}</b>{pct(paid, started)}",
         f"💵 Выручка: <b>{paid * config.price:,} ₽</b>".replace(",", " "),
         "",
