@@ -80,22 +80,20 @@ def support_button(manager_username: str) -> B | None:
 
 
 def offer(manager_username: str, payment_url: str = "") -> InlineKeyboardMarkup:
-    if payment_url:
-        # Ссылка Paydex открывается сразу; после оплаты клиент жмёт «Я оплатил» и присылает чек
-        rows = [
-            B(text="💳 Оплатить по СБП", url=payment_url),
-            B(text="✅ Я оплатил", callback_data="pay:sent"),
-        ]
-    else:
-        rows = [B(text="💳 Оплатить по СБП", callback_data="pay:sbp")]
-    rows.append(B(text="🎟 Ввести промокод", callback_data="pay:promo"))
+    # «Оплатить по СБП» открывает отдельное меню: «Оплатить» (ссылка) и «Я оплатил»
+    rows = [
+        B(text="💳 Оплатить по СБП", callback_data="pay:sbp"),
+        B(text="🎟 Ввести промокод", callback_data="pay:promo"),
+    ]
     if support := support_button(manager_username):
         rows.append(support)
     return inline(*rows)
 
 
-def sbp() -> InlineKeyboardMarkup:
+def sbp(payment_url: str = "") -> InlineKeyboardMarkup:
+    rows = [B(text="💳 Оплатить", url=payment_url)] if payment_url else []
     return inline(
+        *rows,
         B(text="✅ Я оплатил", callback_data="pay:sent"),
         B(text="⬅️ Назад", callback_data="f:offer"),
     )

@@ -358,8 +358,15 @@ async def scenario_payment_link(h: Harness) -> None:
     s.clear()
     await h.click(uid, "f:offer")
     rows = [r for r in s.of(SendMessage, uid) if "Стоимость" in r.text][0].reply_markup.inline_keyboard
-    assert rows[0][0].text == "💳 Оплатить по СБП" and rows[0][0].url == "https://paydex.pro/pay/link-abc"
-    assert rows[1][0].callback_data == "pay:sent"
+    assert rows[0][0].text == "💳 Оплатить по СБП" and rows[0][0].callback_data == "pay:sbp"
+    # отдельное меню оплаты: «Оплатить» (ссылка) и «Я оплатил»
+    s.clear()
+    await h.click(uid, "pay:sbp")
+    menu = s.of(SendMessage, uid)[0]
+    assert "Оплата по СБП" in menu.text and "1490 ₽" in menu.text
+    rows = menu.reply_markup.inline_keyboard
+    assert rows[0][0].text == "💳 Оплатить" and rows[0][0].url == "https://paydex.pro/pay/link-abc"
+    assert rows[1][0].callback_data == "pay:sent" and rows[2][0].callback_data == "f:offer"
     await h.click(uid, "pay:sent")
     assert any("Оплата на проверку #1" in t for t in s.texts(ADMIN))
     await h.click(ADMIN, "adm:pay_ok:1")

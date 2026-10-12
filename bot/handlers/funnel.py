@@ -81,7 +81,11 @@ async def offer(callback: CallbackQuery, state: FSMContext, bot: Bot, db: Databa
 @router.callback_query(F.data == "pay:sbp")
 async def pay_sbp(callback: CallbackQuery, db: Database, config: Config, user: dict) -> None:
     await callback.answer()
-    await db.add_event(user["user_id"], "pay_click")
+    if config.payment_url:
+        await callback.message.answer(
+            content.SBP_LINK_TEXT.format(price=config.price), reply_markup=keyboards.sbp(config.payment_url)
+        )
+        return
     if not config.payment_details:
         await callback.message.answer(
             content.PAYMENT_NOT_READY.format(manager=manager_suffix(config)),
