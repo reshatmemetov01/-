@@ -42,6 +42,7 @@ class AdminForm(StatesGroup):
     broadcast = State()
     grant = State()
     demo = State()
+    followup_video = State()
     review_text = State()
     review_author = State()
     clean_one = State()
@@ -319,12 +320,15 @@ async def grant_input(message: Message, state: FSMContext, bot: Bot, db: Databas
 
 async def media_screen(db: Database) -> tuple[str, object]:
     demo = await db.get_setting("demo_media")
+    videos = await db.get_setting("followup_media", [])
     text = (
         "🎬 <b>Видео в воронке</b>\n\n"
-        f"• Видео-показ канала (после кнопки «Показать»): {'✅ есть' if demo else '❌ нет'}\n\n"
-        "<i>Пока видео нет, клиенты видят только текст.</i>"
+        f"• Видео-показ канала (после кнопки «Показать»): {'✅ есть' if demo else '❌ нет'}\n"
+        f"• Видео к напоминаниям: {len(videos)} шт.\n\n"
+        "<i>Напоминания тем, кто не купил, приходят видео + текст + кнопка «Получить доступ». "
+        "Если видео несколько — бот чередует их по очереди. Пока видео нет — только текст.</i>"
     )
-    return text, keyboards.admin_media(bool(demo))
+    return text, keyboards.admin_media(bool(demo), len(videos))
 
 
 @router.callback_query(F.data == "adm:media")
@@ -559,3 +563,47 @@ async def clean_one(callback: CallbackQuery, db: Database) -> None:
     await callback.answer("Удалено")
     await callback.message.edit_text(f"✅ Пользователь <code>{user_id}</code> удалён.",
                                      reply_markup=keyboards.admin_back())
+
+
+# ------------------------------------------------------ видео к напоминаниям
+
+@router.callback_query(F.data == "adm:m_fu")
+async def followup_video_ask(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AdminForm.followup_video)
+    await callback.answer()
+    await callback.message.answer(
+        "🎬 Пришли видео-разбор для напоминаний. Можно несколько подряд — бот будет чередовать их.",
+        reply_markup=keyboards.admin_back(),
+    )
+
+
+@router.message(StateFilter(AdminForm.followup_video))
+async def followup_video_upload(message: Message, db: Database) -> None:
+    media = extract_media(message)
+    if not media:
+        await message.answer("Это не видео 🤔 Пришли видео или нажми «В админку».", reply_markup=keyboards.admin_back())
+        return
+    videos = await db.get_setting("followup_media", [])
+    videos.append(media)
+    await db.set_setting("followup_media", videos)
+    await message.answer(f"✅ Добавлено (всего: {len(videos)}). Пришли ещё или вернись в админку.",
+                         reply_markup=keyboards.admin_back())
+
+
+@router.callback_query(F.data == "adm:m_fu_clear")
+async def followup_video_clear(callback: CallbackQuery, db: Database) -> None:
+    await db.set_setting("followup_media", [])
+    await callback.answer("Удалено")
+    text, markup = await media_screen(db)
+    await callback.message.edit_text(text, reply_markup=markup)
+
+
+@router.callback_query(F.data == "adm:m_fu_preview")
+async def followup_video_preview(callback: CallbackQuery, bot: Bot, db: Database, config: Config) -> None:
+    from ..followups import render
+    await callback.answer()
+    videos = await db.get_setting("followup_media", [])
+    if not videos:
+        return
+    text, _ = await render(db, content.FOLLOWUP_ORDER[0], config)
+    await send_media(bot, callback.from_user.id, videos[0], caption=text, reply_markup=keyboards.get_access())

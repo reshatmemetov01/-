@@ -16,6 +16,7 @@ from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
 from . import content, keyboards
 from .config import Config
 from .db import Database
+from .services import send_media
 
 log = logging.getLogger(__name__)
 
@@ -62,8 +63,15 @@ async def process_due(bot: Bot, db: Database, config: Config) -> int:
             continue
 
         text, markup = await render(db, key, config)
+        videos = await db.get_setting("followup_media", [])
         try:
-            await bot.send_message(uid, text, reply_markup=markup)
+            if videos:
+                # Видео из админки: по очереди, у каждого напоминания своё; кнопка — «Получить доступ»
+                if content.FOLLOWUP_MESSAGES[key][1] != "offer_support":
+                    markup = keyboards.get_access()
+                await send_media(bot, uid, videos[len(sent) % len(videos)], caption=text, reply_markup=markup)
+            else:
+                await bot.send_message(uid, text, reply_markup=markup)
             sent_count += 1
         except TelegramForbiddenError:
             await db.update_user(uid, blocked=1, next_followup_at=None)

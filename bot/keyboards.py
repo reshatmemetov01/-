@@ -270,11 +270,15 @@ def admin_broadcast_confirm() -> InlineKeyboardMarkup:
     ])
 
 
-def admin_media(has_demo: bool) -> InlineKeyboardMarkup:
+def admin_media(has_demo: bool, followup_count: int = 0) -> InlineKeyboardMarkup:
     rows = [
         B(text=("🔁 Заменить" if has_demo else "➕ Загрузить") + " видео-показ канала", callback_data="adm:m_demo"),
     ]
     if has_demo:
         rows.append(B(text="👁 Посмотреть, как видит клиент", callback_data="adm:m_preview"))
+    rows.append(B(text="➕ Добавить видео к напоминаниям", callback_data="adm:m_fu"))
+    if followup_count:
+        rows.append(B(text="👁 Пример напоминания с видео", callback_data="adm:m_fu_preview"))
+        rows.append(B(text=f"🗑 Удалить видео напоминаний ({followup_count})", callback_data="adm:m_fu_clear"))
     rows.append(B(text="⬅️ В админку", callback_data="adm:menu"))
     return inline(*rows)

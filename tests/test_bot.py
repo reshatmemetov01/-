@@ -435,6 +435,30 @@ async def scenario_cleanup(h: Harness) -> None:
     assert (await db.reviews())[1] == 1  # отзывы остаются
 
 
+async def scenario_followup_videos(h: Harness) -> None:
+    s, uid = h.s, 990
+    await h.click(ADMIN, "adm:m_fu")
+    await h.video(ADMIN, "fu_a")
+    await h.video(ADMIN, "fu_b")
+    assert [m["file_id"] for m in await h.db.get_setting("followup_media")] == ["fu_a", "fu_b"]
+
+    await h.text(uid, "/start")
+    s.clear()
+    for _ in range(3):
+        assert await h.force_followup(uid) == 1
+    sent = s.of(SendVideo, uid)
+    assert [v.video for v in sent] == ["fu_a", "fu_b", "fu_a"]
+    assert "Почему зубрёжка" in sent[0].caption
+    assert sent[0].reply_markup.inline_keyboard[0][0].text == "👑 ПОЛУЧИТЬ ДОСТУП"
+    assert not s.of(SendMessage, uid)
+
+    # видео удалили → снова обычный текст
+    await h.click(ADMIN, "adm:m_fu_clear")
+    s.clear()
+    assert await h.force_followup(uid) == 1
+    assert s.of(SendMessage, uid) and not s.of(SendVideo, uid)
+
+
 async def scenario_reject(h: Harness) -> None:
     db, s, uid = h.db, h.s, 601
     await h.text(uid, "/start")
@@ -709,6 +733,10 @@ def test_cleanup():
     asyncio.run(with_db(scenario_cleanup))
 
 
+def test_followup_videos():
+    asyncio.run(with_db(scenario_followup_videos))
+
+
 def test_reject():
     asyncio.run(with_db(scenario_reject))
 
@@ -739,6 +767,7 @@ if __name__ == "__main__":
     test_admin_retest()
     test_group_silence()
     test_cleanup()
+    test_followup_videos()
     test_reject()
     test_browse_followups()
     test_quiet_hours()
