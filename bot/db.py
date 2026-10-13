@@ -152,6 +152,27 @@ class Database:
         total = (await self._one(f"SELECT COUNT(*) AS n {base[0]}"))["n"]
         return rows, total
 
+    async def delete_user(self, user_id: int) -> None:
+        """Удаляет пользователя вместе с его событиями и заявками на оплату."""
+        for table in ("events", "payment_requests", "users"):
+            await self.conn.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+        await self.conn.commit()
+
+    async def wipe_users_and_stats(self) -> int:
+        """Удаляет всех пользователей, статистику и заявки. Отзывы, видео и настройки остаются."""
+        n = (await self._one("SELECT COUNT(*) AS n FROM users"))["n"]
+        for table in ("events", "payment_requests", "users"):
+            await self.conn.execute(f"DELETE FROM {table}")
+        await self.conn.commit()
+        return n
+
+    async def find_user(self, value: str) -> dict[str, Any] | None:
+        """Поиск по ID или @username."""
+        value = value.strip()
+        if value.lstrip("-").isdigit():
+            return await self.get_user(int(value))
+        return await self.find_user_by_username(value)
+
     # ----------------------------------------------------------- events
 
     async def add_event(self, user_id: int, event: str) -> bool:

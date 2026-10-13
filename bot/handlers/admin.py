@@ -44,6 +44,7 @@ class AdminForm(StatesGroup):
     demo = State()
     review_text = State()
     review_author = State()
+    clean_one = State()
 
 
 async def admin_menu_text(db: Database) -> tuple[str, object]:
@@ -483,3 +484,78 @@ async def review_delete(callback: CallbackQuery, db: Database) -> None:
     await callback.answer(f"Отзыв #{review_id} удалён" if deleted else "Уже удалён")
     text, markup = await reviews_screen(db)
     await callback.message.edit_text(text, reply_markup=markup)
+
+
+# ------------------------------------------------------------------ очистка
+
+@router.callback_query(F.data == "adm:clean")
+async def clean_menu(callback: CallbackQuery, state: FSMContext, db: Database) -> None:
+    await state.clear()
+    await callback.answer()
+    _, total = await db.list_users("all", 1, 0)
+    await callback.message.answer(
+        "🧹 <b>Очистка</b>\n\n"
+        f"Сейчас в базе пользователей: <b>{total}</b>.\n\n"
+        "• <b>Очистить всё</b> — удалит всех пользователей, всю статистику и заявки на оплату.\n"
+        "• <b>Удалить одного</b> — удалит одного пользователя и его статистику.\n\n"
+        "<i>Отзывы, видео, каналы и настройки не удаляются.</i>",
+        reply_markup=keyboards.admin_clean(),
+    )
+
+
+@router.callback_query(F.data == "adm:clean_all")
+async def clean_all_ask(callback: CallbackQuery, db: Database) -> None:
+    await callback.answer()
+    rows, total = await db.list_users("paid", 1, 0)
+    warn = (f"\n\n⚠️ Среди них <b>{total}</b> купивших — после очистки бот перестанет считать их "
+            "покупателями (в группе они останутся)." if total else "")
+    await callback.message.edit_text(
+        "❗ Точно удалить <b>всех</b> пользователей и всю статистику? Отменить будет нельзя." + warn,
+        reply_markup=keyboards.admin_confirm("adm:clean_all_yes"),
+    )
+
+
+@router.callback_query(F.data == "adm:clean_all_yes")
+async def clean_all(callback: CallbackQuery, db: Database) -> None:
+    n = await db.wipe_users_and_stats()
+    await callback.answer("Очищено")
+    await callback.message.edit_text(f"✅ Готово: удалено пользователей — {n}, статистика обнулена.",
+                                     reply_markup=keyboards.admin_back())
+
+
+@router.callback_query(F.data == "adm:clean_one")
+async def clean_one_ask(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AdminForm.clean_one)
+    await callback.answer()
+    await callback.message.edit_text(
+        "👤 Пришли ID пользователя, его @username или перешли любое его сообщение.",
+        reply_markup=keyboards.admin_back(),
+    )
+
+
+@router.message(StateFilter(AdminForm.clean_one))
+async def clean_one_input(message: Message, state: FSMContext, db: Database) -> None:
+    user = None
+    if message.forward_from:
+        user = await db.get_user(message.forward_from.id)
+    elif message.text:
+        user = await db.find_user(message.text)
+    if not user:
+        await message.answer("Не нашёл такого пользователя 🤔 Проверь ID или @username.",
+                             reply_markup=keyboards.admin_back())
+        return
+    await state.clear()
+    status = "💰 купил" if user["paid"] else "не покупал"
+    await message.answer(
+        f"Удалить {user_link(user)} ({status}) и всю его статистику?",
+        reply_markup=keyboards.admin_confirm(f"adm:clean_one_yes:{user['user_id']}"),
+    )
+
+
+@router.callback_query(F.data.startswith("adm:clean_one_yes:"))
+async def clean_one(callback: CallbackQuery, db: Database) -> None:
+    user_id = int(callback.data.split(":")[2])
+    await db.delete_user(user_id)
+    await callback.answer("Удалено")
+    await callback.message.edit_text(f"✅ Пользователь <code>{user_id}</code> удалён.",
+                                     reply_markup=keyboards.admin_back())

@@ -408,6 +408,33 @@ async def scenario_group_silence(h: Harness) -> None:
     assert await h.db.get_user(970) is None
 
 
+async def scenario_cleanup(h: Harness) -> None:
+    db, s = h.db, h.s
+    for uid in (801, 802, 803):
+        await h.text(uid, "/start")
+        await h.click(uid, "f:offer")
+    await h.click(803, "pay:sent")
+    await db.add_review("Анна", "Супер")
+
+    # удалить одного по @username: сначала подтверждение, потом удаление
+    await h.click(ADMIN, "adm:clean_one")
+    s.clear()
+    await h.text(ADMIN, "@user802")
+    ask = s.of(SendMessage, ADMIN)[0]
+    assert "user802" in ask.text and ask.reply_markup.inline_keyboard[0][0].callback_data == "adm:clean_one_yes:802"
+    assert await db.get_user(802)
+    await h.click(ADMIN, "adm:clean_one_yes:802")
+    assert await db.get_user(802) is None and not await db.has_event(802, "checkout")
+    assert await db.get_user(801)
+
+    # очистить всё
+    await h.click(ADMIN, "adm:clean_all_yes")
+    assert (await db.event_counts(0)) == {}
+    assert await db.pending_payment_requests() == []
+    assert await db.get_user(801) is None and await db.get_user(803) is None
+    assert (await db.reviews())[1] == 1  # отзывы остаются
+
+
 async def scenario_reject(h: Harness) -> None:
     db, s, uid = h.db, h.s, 601
     await h.text(uid, "/start")
@@ -678,6 +705,10 @@ def test_group_silence():
     asyncio.run(with_db(scenario_group_silence))
 
 
+def test_cleanup():
+    asyncio.run(with_db(scenario_cleanup))
+
+
 def test_reject():
     asyncio.run(with_db(scenario_reject))
 
@@ -707,6 +738,7 @@ if __name__ == "__main__":
     test_payment_link()
     test_admin_retest()
     test_group_silence()
+    test_cleanup()
     test_reject()
     test_browse_followups()
     test_quiet_hours()

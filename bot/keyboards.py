@@ -172,7 +172,23 @@ def admin_menu(pending: int) -> InlineKeyboardMarkup:
         B(text="🎬 Видео в воронке", callback_data="adm:media"),
         B(text="🔗 Каналы и группа", callback_data="adm:chats"),
         B(text="⭐ Отзывы", callback_data="adm:reviews"),
+        B(text="🧹 Очистка", callback_data="adm:clean"),
     )
+
+
+def admin_clean() -> InlineKeyboardMarkup:
+    return inline(
+        B(text="🧹 Очистить всё", callback_data="adm:clean_all"),
+        B(text="👤 Удалить одного пользователя", callback_data="adm:clean_one"),
+        B(text="⬅️ В админку", callback_data="adm:menu"),
+    )
+
+
+def admin_confirm(yes_data: str) -> InlineKeyboardMarkup:
+    return inline([
+        B(text="✅ Да, удалить", callback_data=yes_data),
+        B(text="✖️ Отмена", callback_data="adm:clean"),
+    ])
 
 
 def admin_reviews(reviews: list[dict]) -> InlineKeyboardMarkup:
