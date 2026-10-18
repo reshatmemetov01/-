@@ -13,13 +13,16 @@ from .db import Database
 from .followups import followup_worker
 from .handlers import setup_routers
 from .middleware import UserMiddleware
+from .paydex import PaydexClient
+from .payments import payments_worker
 from .questions import QuestionBank
 
 log = logging.getLogger(__name__)
 
 
-def build_dispatcher(db: Database, config: Config, questions: QuestionBank) -> Dispatcher:
-    dp = Dispatcher(storage=MemoryStorage(), db=db, config=config, questions=questions)
+def build_dispatcher(db: Database, config: Config, questions: QuestionBank,
+                     paydex: PaydexClient | None = None) -> Dispatcher:
+    dp = Dispatcher(storage=MemoryStorage(), db=db, config=config, questions=questions, paydex=paydex)
     dp.message.outer_middleware(UserMiddleware())
     dp.callback_query.outer_middleware(UserMiddleware())
     dp.include_router(setup_routers())
@@ -46,15 +49,22 @@ async def main() -> None:
     questions = QuestionBank.load(config.questions_path)
 
     bot = Bot(config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = build_dispatcher(db, config, questions)
+    paydex = PaydexClient(config.paydex_secret_key, config.paydex_api_url) if config.paydex_secret_key else None
+    dp = build_dispatcher(db, config, questions, paydex)
     await setup_bot_profile(bot)
 
-    worker = asyncio.create_task(followup_worker(bot, db, config))
+    workers = [asyncio.create_task(followup_worker(bot, db, config))]
+    if paydex:
+        log.info("Paydex: автооплата включена")
+        workers.append(asyncio.create_task(payments_worker(bot, db, config, paydex)))
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     finally:
-        worker.cancel()
+        for w in workers:
+            w.cancel()
+        if paydex:
+            await paydex.close()
         await db.close()
         await bot.session.close()
 

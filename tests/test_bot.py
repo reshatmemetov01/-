@@ -22,6 +22,7 @@ from aiogram.methods import (
     EditMessageText,
     ExportChatInviteLink,
     GetChat,
+    GetMe,
     CopyMessage,
     CreateChatInviteLink,
     GetChatMember,
@@ -75,6 +76,8 @@ class MockSession(BaseSession):
             username = "eldar_channel" if method.chat_id == -100900 else None
             return ChatFullInfo(id=method.chat_id, type="supergroup", title=f"Chat {method.chat_id}",
                                 username=username, accent_color_id=0, max_reaction_count=0)
+        if isinstance(method, GetMe):
+            return User(id=bot.id, is_bot=True, first_name="ПДД бот", username="pdd_test_bot")
         if isinstance(method, ExportChatInviteLink):
             return "https://t.me/+exported"
         if isinstance(method, GetChatMember):
@@ -134,6 +137,7 @@ def make_config(db_path: str, **overrides) -> Config:
         bot_token="42:TEST", admin_ids=(ADMIN,), db_path=db_path,
         channel_url="https://t.me/+channel", private_channel_id=-100500, access_link="",
         price=1490, old_price=None, manager_username="eldar", payment_url="",
+        paydex_secret_key="", paydex_api_url="", paydex_expire_minutes=60,
         payment_details="Т-Банк, +7 900 000-00-00, Эльдар", questions_path="",
         followup_delay_scale=1, timezone="Europe/Moscow",
     )
@@ -152,11 +156,12 @@ class Harness:
             _DP = build_dispatcher(db, config, QUESTIONS)
         self.db, self.config = db, config
         self.s = MockSession()
+        self.paydex = None
         self.bot = Bot(config.bot_token, session=self.s)
 
     async def _feed(self, **upd) -> None:
         await _DP.feed_update(self.bot, Update(update_id=next(_ids), **upd),
-                              db=self.db, config=self.config, questions=QUESTIONS)
+                              db=self.db, config=self.config, questions=QUESTIONS, paydex=self.paydex)
 
     def _user(self, uid: int) -> User:
         return User(id=uid, is_bot=False, first_name=f"U{uid}", username=f"user{uid}")
@@ -459,6 +464,94 @@ async def scenario_followup_videos(h: Harness) -> None:
     assert s.of(SendMessage, uid) and not s.of(SendVideo, uid)
 
 
+class FakePaydex:
+    """Имитация Paydex API: счета хранятся в памяти, статус меняет тест."""
+    def __init__(self, fail: bool = False):
+        self.invoices, self.created, self.fail = {}, 0, fail
+
+    async def create_invoice(self, **kw):
+        if self.fail:
+            raise RuntimeError("paydex down")
+        self.created += 1
+        inv_id = f"inv-{self.created}"
+        self.invoices[inv_id] = {**kw, "id": inv_id, "url": f"https://paydex.pro/pay/{inv_id}",
+                                 "status": "created", "expiresAt": "2099-01-01T00:00:00Z",
+                                 "amount": f"{kw['amount']}.00"}
+        return dict(self.invoices[inv_id])
+
+    async def get_invoice(self, inv_id):
+        return dict(self.invoices[inv_id])
+
+
+async def scenario_paydex_auto(h: Harness) -> None:
+    from bot.payments import check_waiting
+    db, s, uid = h.db, h.s, 630
+    h.paydex = fake = FakePaydex()
+    await h.text(uid, "/start")
+
+    # «Оплатить по СБП» → личный счёт со ссылкой и кнопкой проверки
+    s.clear()
+    await h.click(uid, "pay:sbp")
+    msg = s.of(SendMessage, uid)[0]
+    assert "бот сам увидит оплату" in msg.text
+    rows = msg.reply_markup.inline_keyboard
+    assert rows[0][0].url == "https://paydex.pro/pay/inv-1" and rows[1][0].callback_data == "pay:check:inv-1"
+    assert fake.invoices["inv-1"]["amount"] == "1490.00" and fake.invoices["inv-1"]["user_id"] == uid
+
+    # повторное нажатие — тот же счёт, новый не создаётся
+    await h.click(uid, "pay:sbp")
+    assert fake.created == 1
+
+    # проверка до оплаты
+    s.clear()
+    await h.click(uid, "pay:check:inv-1")
+    assert content.PAYMENT_NOT_YET in s.alerts()
+    assert not (await db.get_user(uid))["paid"]
+
+    # клиент оплатил → фоновая проверка сама выдаёт доступ
+    fake.invoices["inv-1"]["status"] = "paid"
+    s.clear()
+    assert await check_waiting(h.bot, db, h.config, fake) == 1
+    assert (await db.get_user(uid))["paid"]
+    assert any("СПАСИБО ЗА ПОКУПКУ" in t for t in s.texts(uid))
+    assert any("Новая покупка" in t and "автооплата" in t for t in s.texts(ADMIN))
+
+    # повторная проверка и кнопка — доступ второй раз не выдаётся
+    s.clear()
+    assert await check_waiting(h.bot, db, h.config, fake) == 0
+    await h.click(uid, "pay:check:inv-1")
+    assert not any("СПАСИБО" in t for t in s.texts(uid))  # повторной «покупки» нет
+    assert not any("Новая покупка" in t for t in s.texts(ADMIN))
+    assert any("Твоя ссылка" in t for t in s.texts(uid))  # просто напоминаем ссылку
+
+    # чужой счёт проверить нельзя
+    s.clear()
+    await h.click(999, "pay:check:inv-1")
+    assert any("не найден" in a for a in s.alerts())
+
+    # истёкший счёт
+    await h.text(631, "/start")
+    await h.click(631, "pay:sbp")
+    fake.invoices["inv-2"]["status"] = "expired"
+    s.clear()
+    await h.click(631, "pay:check:inv-2")
+    assert content.PAYMENT_EXPIRED in s.texts(631)
+    # после истечения создаётся новый счёт
+    await h.click(631, "pay:sbp")
+    assert fake.created == 3
+
+
+async def scenario_paydex_down(h: Harness) -> None:
+    s, uid = h.s, 640
+    h.paydex = FakePaydex(fail=True)
+    await h.text(uid, "/start")
+    s.clear()
+    await h.click(uid, "pay:sbp")
+    # API не отвечает → запасной вариант: многоразовая ссылка и «Я оплатил»
+    rows = s.of(SendMessage, uid)[0].reply_markup.inline_keyboard
+    assert rows[0][0].url == "https://paydex.pro/pay/link-abc" and rows[1][0].callback_data == "pay:sent"
+
+
 async def scenario_reject(h: Harness) -> None:
     db, s, uid = h.db, h.s, 601
     await h.text(uid, "/start")
@@ -737,6 +830,14 @@ def test_followup_videos():
     asyncio.run(with_db(scenario_followup_videos))
 
 
+def test_paydex_auto():
+    asyncio.run(with_db(scenario_paydex_auto))
+
+
+def test_paydex_down():
+    asyncio.run(with_db(scenario_paydex_down, payment_url="https://paydex.pro/pay/link-abc"))
+
+
 def test_reject():
     asyncio.run(with_db(scenario_reject))
 
@@ -768,6 +869,8 @@ if __name__ == "__main__":
     test_group_silence()
     test_cleanup()
     test_followup_videos()
+    test_paydex_auto()
+    test_paydex_down()
     test_reject()
     test_browse_followups()
     test_quiet_hours()

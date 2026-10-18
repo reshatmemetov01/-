@@ -18,6 +18,11 @@ class Config:
     price: int
     old_price: int | None
     manager_username: str
+    # Секретный ключ Paydex API (sk_live_… / sk_test_…). Если задан — у каждого клиента свой счёт
+    # и автоматическая проверка оплаты. Если пусто — работает многоразовая ссылка PAYMENT_URL.
+    paydex_secret_key: str
+    paydex_api_url: str
+    paydex_expire_minutes: int
     # Многоразовая ссылка на оплату (Paydex). Кнопка «Оплатить по СБП» ведёт на неё
     payment_url: str
     # Реквизиты для оплаты переводом, если ссылки нет (запасной вариант)
@@ -49,6 +54,9 @@ def load_config() -> Config:
         price=int(os.getenv("PRICE", "1490")),
         old_price=_int_or_none(os.getenv("OLD_PRICE")),
         manager_username=os.getenv("MANAGER_USERNAME", "").strip().lstrip("@"),
+        paydex_secret_key=os.getenv("PAYDEX_SECRET_KEY", "").strip(),
+        paydex_api_url=os.getenv("PAYDEX_API_URL", "https://paydex.pro/api/v1").strip(),
+        paydex_expire_minutes=int(os.getenv("PAYDEX_EXPIRE_MINUTES", "60")),
         payment_url=os.getenv("PAYMENT_URL", "").strip(),
         payment_details=os.getenv("PAYMENT_DETAILS", "").replace("\\n", "\n").strip(),
         questions_path=os.getenv("QUESTIONS_PATH", "data/questions.json"),

@@ -1,3 +1,4 @@
+import logging
 import time
 from datetime import datetime
 from html import escape
@@ -12,6 +13,8 @@ from aiogram.types import CallbackQuery, Message
 from .. import content, keyboards
 from ..config import Config
 from ..db import Database
+from ..paydex import FINAL_UNPAID, PAID, PaydexClient
+from ..payments import get_or_create_invoice, refresh_invoice
 from ..services import (
     is_admin,
     is_channel_member,
@@ -22,6 +25,7 @@ from ..services import (
     user_link,
 )
 
+log = logging.getLogger(__name__)
 router = Router()
 
 
@@ -81,8 +85,29 @@ async def offer(callback: CallbackQuery, state: FSMContext, bot: Bot, db: Databa
 # ------------------------------------------------ оплата по СБП (временная)
 
 @router.callback_query(F.data == "pay:sbp")
-async def pay_sbp(callback: CallbackQuery, db: Database, config: Config, user: dict) -> None:
+async def pay_sbp(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict,
+                  paydex: PaydexClient | None = None) -> None:
     await callback.answer()
+    if paydex:
+        # Автооплата: у клиента свой счёт, бот сам проверяет статус
+        await db.add_event(user["user_id"], "pay_click")
+        try:
+            invoice = await get_or_create_invoice(bot, db, config, paydex, user["user_id"])
+        except Exception:
+            log.exception("Paydex: не удалось создать счёт для %s", user["user_id"])
+            invoice = None
+        if invoice:
+            minutes = max(1, (invoice["expires_at"] - int(time.time())) // 60)
+            await callback.message.answer(
+                content.SBP_AUTO_TEXT.format(price=config.price, minutes=minutes),
+                reply_markup=keyboards.sbp_auto(invoice["url"], invoice["id"]),
+            )
+            return
+        if not config.payment_url:
+            await callback.message.answer(content.PAYMENT_CREATE_FAILED.format(manager=manager_suffix(config)),
+                                          reply_markup=keyboards.manager(config))
+            return
+        # Paydex API недоступен — запасной вариант: многоразовая ссылка и «Я оплатил»
     if config.payment_url:
         await callback.message.answer(
             content.SBP_LINK_TEXT.format(price=config.price), reply_markup=keyboards.sbp(config.payment_url)
@@ -98,6 +123,32 @@ async def pay_sbp(callback: CallbackQuery, db: Database, config: Config, user: d
         content.SBP_TEXT.format(price=config.price, details=config.payment_details),
         reply_markup=keyboards.sbp(),
     )
+
+
+@router.callback_query(F.data.startswith("pay:check:"))
+async def pay_check(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict,
+                    paydex: PaydexClient | None = None) -> None:
+    invoice = await db.get_invoice(callback.data.split(":", 2)[2])
+    if not paydex or not invoice or invoice["user_id"] != user["user_id"]:
+        await callback.answer("Счёт не найден — нажми «Оплатить по СБП» ещё раз", show_alert=True)
+        return
+    if invoice["status"] == PAID:
+        await callback.answer()
+        await send_access_again(bot, db, config, user["user_id"])
+        return
+    try:
+        status = await refresh_invoice(bot, db, config, paydex, invoice)
+    except Exception:
+        log.exception("Paydex: не удалось проверить счёт %s", invoice["id"])
+        await callback.answer("Не получилось проверить, попробуй через минуту", show_alert=True)
+        return
+    if status == PAID:
+        await callback.answer("Оплата получена ✅")  # ссылку уже отправил grant_access
+    elif status in FINAL_UNPAID:
+        await callback.answer()
+        await callback.message.answer(content.PAYMENT_EXPIRED)
+    else:
+        await callback.answer(content.PAYMENT_NOT_YET, show_alert=True)
 
 
 @router.callback_query(F.data == "pay:sent")

@@ -99,6 +99,14 @@ def sbp(payment_url: str = "") -> InlineKeyboardMarkup:
     )
 
 
+def sbp_auto(pay_url: str, invoice_id: str) -> InlineKeyboardMarkup:
+    return inline(
+        B(text="💳 Оплатить", url=pay_url),
+        B(text="🔄 Проверить оплату", callback_data=f"pay:check:{invoice_id}"),
+        B(text="⬅️ Назад", callback_data="f:offer"),
+    )
+
+
 def manager(config: Config) -> InlineKeyboardMarkup | None:
     if not config.manager_username:
         return None

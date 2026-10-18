@@ -50,6 +50,18 @@ CREATE TABLE IF NOT EXISTS reviews (
     created_at INTEGER NOT NULL
 );
 
+-- Счета Paydex (автоматическая оплата)
+CREATE TABLE IF NOT EXISTS invoices (
+    id         TEXT    PRIMARY KEY,
+    user_id    INTEGER NOT NULL,
+    order_id   TEXT    NOT NULL,
+    url        TEXT    NOT NULL,
+    status     TEXT    NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+
 -- Заявки на ручное подтверждение оплаты (временная оплата по СБП)
 CREATE TABLE IF NOT EXISTS payment_requests (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,14 +166,14 @@ class Database:
 
     async def delete_user(self, user_id: int) -> None:
         """Удаляет пользователя вместе с его событиями и заявками на оплату."""
-        for table in ("events", "payment_requests", "users"):
+        for table in ("events", "payment_requests", "invoices", "users"):
             await self.conn.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
         await self.conn.commit()
 
     async def wipe_users_and_stats(self) -> int:
         """Удаляет всех пользователей, статистику и заявки. Отзывы, видео и настройки остаются."""
         n = (await self._one("SELECT COUNT(*) AS n FROM users"))["n"]
-        for table in ("events", "payment_requests", "users"):
+        for table in ("events", "payment_requests", "invoices", "users"):
             await self.conn.execute(f"DELETE FROM {table}")
         await self.conn.commit()
         return n
@@ -245,6 +257,43 @@ class Database:
         rows = await self._all("SELECT * FROM reviews ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
         total = (await self._one("SELECT COUNT(*) AS n FROM reviews"))["n"]
         return rows, total
+
+    # ----------------------------------------------------------- invoices
+
+    async def add_invoice(self, invoice_id: str, user_id: int, order_id: str, url: str, status: str,
+                          expires_at: int) -> None:
+        await self.conn.execute(
+            "INSERT OR REPLACE INTO invoices (id, user_id, order_id, url, status, created_at, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (invoice_id, user_id, order_id, url, status, int(time.time()), expires_at),
+        )
+        await self.conn.commit()
+
+    async def get_invoice(self, invoice_id: str) -> dict[str, Any] | None:
+        return await self._one("SELECT * FROM invoices WHERE id = ?", (invoice_id,))
+
+    async def active_invoice_for(self, user_id: int, min_left: int = 300) -> dict[str, Any] | None:
+        """Неоплаченный счёт, которым ещё можно воспользоваться (до истечения больше min_left секунд)."""
+        return await self._one(
+            "SELECT * FROM invoices WHERE user_id = ? AND status IN ('created', 'pending') AND expires_at > ? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (user_id, int(time.time()) + min_left),
+        )
+
+    async def waiting_invoices(self, grace: int = 900) -> list[dict[str, Any]]:
+        """Счета, которые ещё могут оплатить (с запасом grace после истечения)."""
+        return await self._all(
+            "SELECT * FROM invoices WHERE status IN ('created', 'pending') AND expires_at > ?",
+            (int(time.time()) - grace,),
+        )
+
+    async def set_invoice_status(self, invoice_id: str, status: str) -> bool:
+        """Меняет статус, если он другой. True — статус изменился (защита от двойной выдачи доступа)."""
+        cur = await self.conn.execute(
+            "UPDATE invoices SET status = ? WHERE id = ? AND status != ?", (status, invoice_id, status)
+        )
+        await self.conn.commit()
+        return cur.rowcount > 0
 
     # ------------------------------------------------- payment requests
 
