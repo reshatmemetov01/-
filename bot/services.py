@@ -21,6 +21,13 @@ def is_admin(user_id: int, config: Config) -> bool:
     return user_id in config.admin_ids
 
 
+def price_for(config: Config, user_id: int) -> int:
+    """Цена для конкретного человека: админам — ADMIN_PRICE (для тестов), остальным — PRICE."""
+    if config.admin_price and is_admin(user_id, config):
+        return config.admin_price
+    return config.price
+
+
 def manager_suffix(config: Config) -> str:
     return f": @{config.manager_username}" if config.manager_username else ""
 
@@ -105,7 +112,7 @@ async def grant_access(bot: Bot, db: Database, config: Config, user_id: int, via
     note = "" if link else "\n\n⚠️ Закрытая группа не настроена — отправь ссылку вручную!"
     await notify_admins(
         bot, config,
-        f"💰 <b>Новая покупка — {config.price} ₽</b> ({via})\n\n{user_link(user)}{note}",
+        f"💰 <b>Новая покупка — {price_for(config, user_id)} ₽</b> ({via})\n\n{user_link(user)}{note}",
     )
     return True
 

@@ -16,6 +16,7 @@ from ..db import Database
 from ..gateway import FINAL_UNPAID, PAID
 from ..payments import get_or_create_invoice, refresh_invoice
 from ..services import (
+    price_for,
     is_admin,
     is_channel_member,
     make_access_link,
@@ -58,7 +59,7 @@ async def send_offer(bot: Bot, db: Database, config: Config, user: dict, back: b
     markup = keyboards.offer(config.manager_username, config.payment_url, gateways)
     await bot.send_message(
         user["user_id"],
-        content.offer_text(config.price, config.old_price, config.manager_username),
+        content.offer_text(price_for(config, user["user_id"]), config.old_price, config.manager_username),
         reply_markup=keyboards.with_back(markup) if back else markup,
         disable_web_page_preview=True,
     )
@@ -106,7 +107,7 @@ async def pay_sbp(callback: CallbackQuery, bot: Bot, db: Database, config: Confi
         if invoice:
             minutes = max(1, (invoice["expires_at"] - int(time.time())) // 60)
             await callback.message.answer(
-                content.SBP_AUTO_TEXT.format(price=config.price, minutes=minutes),
+                content.SBP_AUTO_TEXT.format(price=price_for(config, user["user_id"]), minutes=minutes),
                 reply_markup=keyboards.sbp_auto(invoice["url"], invoice["id"]),
             )
             return
@@ -117,7 +118,7 @@ async def pay_sbp(callback: CallbackQuery, bot: Bot, db: Database, config: Confi
         # API платёжки недоступен — запасной вариант: многоразовая ссылка и «Я оплатил»
     if config.payment_url:
         await callback.message.answer(
-            content.SBP_LINK_TEXT.format(price=config.price), reply_markup=keyboards.sbp(config.payment_url)
+            content.SBP_LINK_TEXT.format(price=price_for(config, user["user_id"])), reply_markup=keyboards.sbp(config.payment_url)
         )
         return
     if not config.payment_details:
@@ -127,7 +128,7 @@ async def pay_sbp(callback: CallbackQuery, bot: Bot, db: Database, config: Confi
         )
         return
     await callback.message.answer(
-        content.SBP_TEXT.format(price=config.price, details=config.payment_details),
+        content.SBP_TEXT.format(price=price_for(config, user["user_id"]), details=config.payment_details),
         reply_markup=keyboards.sbp(),
     )
 
@@ -187,7 +188,7 @@ def payment_request_text(request_id: int, user: dict, config: Config, created_at
         f"👤 {user_link(user)}\n"
         f"🔗 {escape(username)} · ID <code>{user['user_id']}</code>\n"
         f"🕒 {when} ({config.timezone.split('/')[-1]})\n"
-        f"💰 {config.price} ₽\n\n"
+        f"💰 {price_for(config, user['user_id'])} ₽\n\n"
         "Проверь поступление в кабинете Paydex."
     )
 

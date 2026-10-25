@@ -16,6 +16,8 @@ class Config:
     # Запасная постоянная ссылка, если закрытая группа не настроена
     access_link: str
     price: int
+    # Цена для админов — чтобы проверять настоящую оплату за небольшие деньги. Пусто — как у всех
+    admin_price: int | None
     old_price: int | None
     manager_username: str
     # Секретный ключ Paydex API (sk_live_… / sk_test_…). Если задан — у каждого клиента свой счёт
@@ -56,6 +58,7 @@ def load_config() -> Config:
         private_channel_id=_int_or_none(os.getenv("PRIVATE_CHANNEL_ID")),
         access_link=os.getenv("ACCESS_LINK", "").strip(),
         price=int(os.getenv("PRICE", "1490")),
+        admin_price=_int_or_none(os.getenv("ADMIN_PRICE", "100")),
         old_price=_int_or_none(os.getenv("OLD_PRICE")),
         manager_username=os.getenv("MANAGER_USERNAME", "").strip().lstrip("@"),
         paydex_secret_key=os.getenv("PAYDEX_SECRET_KEY", "").strip(),

@@ -8,7 +8,7 @@ from aiogram import Bot
 from .config import Config
 from .db import Database
 from .gateway import FINAL_UNPAID, PAID, Gateway
-from .services import grant_access
+from .services import grant_access, price_for
 
 log = logging.getLogger(__name__)
 
@@ -18,17 +18,18 @@ CHECK_INTERVAL = 15  # секунд
 async def get_or_create_invoice(bot: Bot, db: Database, config: Config, gateway: Gateway,
                                 user_id: int, username: str | None = None) -> dict:
     """Действующий платёж клиента в этой платёжке или новый. Бросает исключение при ошибке API."""
-    existing = await db.active_invoice_for(user_id, gateway.name)
+    amount = price_for(config, user_id)
+    existing = await db.active_invoice_for(user_id, gateway.name, amount)
     if existing:
         return existing
     me = await bot.me()
     order_id = f"tg{user_id}-{int(time.time())}"
     link = await gateway.create(
-        order_id=order_id, amount=config.price, user_id=user_id, username=username,
+        order_id=order_id, amount=amount, user_id=user_id, username=username,
         description=f"Доступ к видеоразборам ПДД — @{me.username}",
         return_url=f"https://t.me/{me.username}",
     )
-    await db.add_invoice(link.id, user_id, order_id, link.url, link.status, link.expires_at, gateway.name)
+    await db.add_invoice(link.id, user_id, order_id, link.url, link.status, link.expires_at, gateway.name, amount)
     return await db.get_invoice(link.id)
 
 

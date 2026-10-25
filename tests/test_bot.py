@@ -136,7 +136,7 @@ def make_config(db_path: str, **overrides) -> Config:
     base = Config(
         bot_token="42:TEST", admin_ids=(ADMIN,), db_path=db_path,
         channel_url="https://t.me/+channel", private_channel_id=-100500, access_link="",
-        price=1490, old_price=None, manager_username="eldar", payment_url="",
+        price=1490, admin_price=None, old_price=None, manager_username="eldar", payment_url="",
         paydex_secret_key="", paydex_api_url="", paydex_expire_minutes=60,
         platega_merchant_id="", platega_secret="", platega_api_url="",
         payment_details="Т-Банк, +7 900 000-00-00, Эльдар", questions_path="",
@@ -634,6 +634,32 @@ def test_gateway_clients_parse_responses():
     asyncio.run(run())
 
 
+async def scenario_admin_price(h: Harness) -> None:
+    """Админу — тестовая цена 100 ₽, клиентам — 1490 ₽."""
+    from bot.payments import check_waiting
+    db, s = h.db, h.s
+    gw = FakeGateway()
+    h.gateways = {"paydex": gw}
+    for uid in (ADMIN, 660):
+        await h.text(uid, "/start")
+    s.clear()
+    await h.click(ADMIN, "f:offer")
+    await h.click(660, "f:offer")
+    assert any("<b>Стоимость:</b> 100₽" in t for t in s.texts(ADMIN))
+    assert any("<b>Стоимость:</b> 1490₽" in t for t in s.texts(660))
+
+    await h.click(ADMIN, "pay:sbp")
+    await h.click(660, "pay:sbp")
+    amounts = {p["user_id"]: p["amount"] for p in gw.payments.values()}
+    assert amounts == {ADMIN: 100, 660: 1490}
+    assert any("Сумма: <b>100 ₽</b>" in t for t in s.texts(ADMIN))
+
+    gw.payments["paydex-1"]["status"] = "paid"
+    s.clear()
+    await check_waiting(h.bot, db, h.config, h.gateways)
+    assert any("Новая покупка — 100 ₽" in t for t in s.texts(ADMIN))
+
+
 async def scenario_reject(h: Harness) -> None:
     db, s, uid = h.db, h.s, 601
     await h.text(uid, "/start")
@@ -924,6 +950,10 @@ def test_two_gateways():
     asyncio.run(with_db(scenario_two_gateways))
 
 
+def test_admin_price():
+    asyncio.run(with_db(scenario_admin_price, admin_price=100))
+
+
 def test_reject():
     asyncio.run(with_db(scenario_reject))
 
@@ -958,6 +988,7 @@ if __name__ == "__main__":
     test_paydex_auto()
     test_paydex_down()
     test_two_gateways()
+    test_admin_price()
     test_gateway_clients_parse_responses()
     test_reject()
     test_browse_followups()
