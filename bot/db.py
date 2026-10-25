@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS invoices (
     url        TEXT    NOT NULL,
     status     TEXT    NOT NULL,
     created_at INTEGER NOT NULL,
-    expires_at INTEGER NOT NULL
+    expires_at INTEGER NOT NULL,
+    provider   TEXT    NOT NULL DEFAULT 'paydex'
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
 
@@ -92,6 +93,10 @@ class Database:
             await self.conn.execute("ALTER TABLE users ADD COLUMN followups_sent TEXT NOT NULL DEFAULT '[]'")
         if "exam_mode" not in columns:
             await self.conn.execute("ALTER TABLE users ADD COLUMN exam_mode TEXT")
+        async with self.conn.execute("PRAGMA table_info(invoices)") as cur:
+            inv_columns = {row["name"] for row in await cur.fetchall()}
+        if inv_columns and "provider" not in inv_columns:
+            await self.conn.execute("ALTER TABLE invoices ADD COLUMN provider TEXT NOT NULL DEFAULT 'paydex'")
 
     async def close(self) -> None:
         if self.conn:
@@ -261,23 +266,23 @@ class Database:
     # ----------------------------------------------------------- invoices
 
     async def add_invoice(self, invoice_id: str, user_id: int, order_id: str, url: str, status: str,
-                          expires_at: int) -> None:
+                          expires_at: int, provider: str = "paydex") -> None:
         await self.conn.execute(
-            "INSERT OR REPLACE INTO invoices (id, user_id, order_id, url, status, created_at, expires_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (invoice_id, user_id, order_id, url, status, int(time.time()), expires_at),
+            "INSERT OR REPLACE INTO invoices (id, user_id, order_id, url, status, created_at, expires_at, provider) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (invoice_id, user_id, order_id, url, status, int(time.time()), expires_at, provider),
         )
         await self.conn.commit()
 
     async def get_invoice(self, invoice_id: str) -> dict[str, Any] | None:
         return await self._one("SELECT * FROM invoices WHERE id = ?", (invoice_id,))
 
-    async def active_invoice_for(self, user_id: int, min_left: int = 300) -> dict[str, Any] | None:
-        """Неоплаченный счёт, которым ещё можно воспользоваться (до истечения больше min_left секунд)."""
+    async def active_invoice_for(self, user_id: int, provider: str, min_left: int = 180) -> dict[str, Any] | None:
+        """Неоплаченный платёж в этой платёжке, которым ещё можно воспользоваться."""
         return await self._one(
-            "SELECT * FROM invoices WHERE user_id = ? AND status IN ('created', 'pending') AND expires_at > ? "
-            "ORDER BY created_at DESC LIMIT 1",
-            (user_id, int(time.time()) + min_left),
+            "SELECT * FROM invoices WHERE user_id = ? AND provider = ? AND status IN ('created', 'pending') "
+            "AND expires_at > ? ORDER BY created_at DESC LIMIT 1",
+            (user_id, provider, int(time.time()) + min_left),
         )
 
     async def waiting_invoices(self, grace: int = 900) -> list[dict[str, Any]]:

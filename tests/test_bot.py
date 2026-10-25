@@ -138,6 +138,7 @@ def make_config(db_path: str, **overrides) -> Config:
         channel_url="https://t.me/+channel", private_channel_id=-100500, access_link="",
         price=1490, old_price=None, manager_username="eldar", payment_url="",
         paydex_secret_key="", paydex_api_url="", paydex_expire_minutes=60,
+        platega_merchant_id="", platega_secret="", platega_api_url="",
         payment_details="Т-Банк, +7 900 000-00-00, Эльдар", questions_path="",
         followup_delay_scale=1, timezone="Europe/Moscow",
     )
@@ -156,12 +157,12 @@ class Harness:
             _DP = build_dispatcher(db, config, QUESTIONS)
         self.db, self.config = db, config
         self.s = MockSession()
-        self.paydex = None
+        self.gateways = {}
         self.bot = Bot(config.bot_token, session=self.s)
 
     async def _feed(self, **upd) -> None:
         await _DP.feed_update(self.bot, Update(update_id=next(_ids), **upd),
-                              db=self.db, config=self.config, questions=QUESTIONS, paydex=self.paydex)
+                              db=self.db, config=self.config, questions=QUESTIONS, gateways=self.gateways)
 
     def _user(self, uid: int) -> User:
         return User(id=uid, is_bot=False, first_name=f"U{uid}", username=f"user{uid}")
@@ -464,29 +465,34 @@ async def scenario_followup_videos(h: Harness) -> None:
     assert s.of(SendMessage, uid) and not s.of(SendVideo, uid)
 
 
-class FakePaydex:
-    """Имитация Paydex API: счета хранятся в памяти, статус меняет тест."""
-    def __init__(self, fail: bool = False):
-        self.invoices, self.created, self.fail = {}, 0, fail
+class FakeGateway:
+    """Имитация платёжки (интерфейс как у PaydexClient / PlategaClient): платежи в памяти, статус меняет тест."""
+    def __init__(self, name: str = "paydex", title: str = "Paydex", fail: bool = False):
+        self.name, self.title, self.fail = name, title, fail
+        self.payments, self.created = {}, 0
 
-    async def create_invoice(self, **kw):
+    async def create(self, **kw):
+        from bot.gateway import PaymentLink
         if self.fail:
-            raise RuntimeError("paydex down")
+            raise RuntimeError(f"{self.name} down")
         self.created += 1
-        inv_id = f"inv-{self.created}"
-        self.invoices[inv_id] = {**kw, "id": inv_id, "url": f"https://paydex.pro/pay/{inv_id}",
-                                 "status": "created", "expiresAt": "2099-01-01T00:00:00Z",
-                                 "amount": f"{kw['amount']}.00"}
-        return dict(self.invoices[inv_id])
+        pid = f"{self.name}-{self.created}"
+        self.payments[pid] = {**kw, "status": "pending"}
+        return PaymentLink(id=pid, url=f"https://pay.example/{pid}", status="pending",
+                           expires_at=int(time.time()) + 3600)
 
-    async def get_invoice(self, inv_id):
-        return dict(self.invoices[inv_id])
+    async def status(self, pid):
+        return self.payments[pid]["status"]
+
+    async def close(self):
+        pass
 
 
 async def scenario_paydex_auto(h: Harness) -> None:
     from bot.payments import check_waiting
     db, s, uid = h.db, h.s, 630
-    h.paydex = fake = FakePaydex()
+    fake = FakeGateway()
+    h.gateways = {"paydex": fake}
     await h.text(uid, "/start")
 
     # «Оплатить по СБП» → личный счёт со ссылкой и кнопкой проверки
@@ -495,8 +501,8 @@ async def scenario_paydex_auto(h: Harness) -> None:
     msg = s.of(SendMessage, uid)[0]
     assert "бот сам увидит оплату" in msg.text
     rows = msg.reply_markup.inline_keyboard
-    assert rows[0][0].url == "https://paydex.pro/pay/inv-1" and rows[1][0].callback_data == "pay:check:inv-1"
-    assert fake.invoices["inv-1"]["amount"] == "1490.00" and fake.invoices["inv-1"]["user_id"] == uid
+    assert rows[0][0].url == "https://pay.example/paydex-1" and rows[1][0].callback_data == "pay:check:paydex-1"
+    assert fake.payments["paydex-1"]["amount"] == 1490 and fake.payments["paydex-1"]["user_id"] == uid
 
     # повторное нажатие — тот же счёт, новый не создаётся
     await h.click(uid, "pay:sbp")
@@ -504,37 +510,37 @@ async def scenario_paydex_auto(h: Harness) -> None:
 
     # проверка до оплаты
     s.clear()
-    await h.click(uid, "pay:check:inv-1")
+    await h.click(uid, "pay:check:paydex-1")
     assert content.PAYMENT_NOT_YET in s.alerts()
     assert not (await db.get_user(uid))["paid"]
 
     # клиент оплатил → фоновая проверка сама выдаёт доступ
-    fake.invoices["inv-1"]["status"] = "paid"
+    fake.payments["paydex-1"]["status"] = "paid"
     s.clear()
-    assert await check_waiting(h.bot, db, h.config, fake) == 1
+    assert await check_waiting(h.bot, db, h.config, h.gateways) == 1
     assert (await db.get_user(uid))["paid"]
     assert any("СПАСИБО ЗА ПОКУПКУ" in t for t in s.texts(uid))
     assert any("Новая покупка" in t and "автооплата" in t for t in s.texts(ADMIN))
 
     # повторная проверка и кнопка — доступ второй раз не выдаётся
     s.clear()
-    assert await check_waiting(h.bot, db, h.config, fake) == 0
-    await h.click(uid, "pay:check:inv-1")
+    assert await check_waiting(h.bot, db, h.config, h.gateways) == 0
+    await h.click(uid, "pay:check:paydex-1")
     assert not any("СПАСИБО" in t for t in s.texts(uid))  # повторной «покупки» нет
     assert not any("Новая покупка" in t for t in s.texts(ADMIN))
     assert any("Твоя ссылка" in t for t in s.texts(uid))  # просто напоминаем ссылку
 
     # чужой счёт проверить нельзя
     s.clear()
-    await h.click(999, "pay:check:inv-1")
+    await h.click(999, "pay:check:paydex-1")
     assert any("не найден" in a for a in s.alerts())
 
     # истёкший счёт
     await h.text(631, "/start")
     await h.click(631, "pay:sbp")
-    fake.invoices["inv-2"]["status"] = "expired"
+    fake.payments["paydex-2"]["status"] = "expired"
     s.clear()
-    await h.click(631, "pay:check:inv-2")
+    await h.click(631, "pay:check:paydex-2")
     assert content.PAYMENT_EXPIRED in s.texts(631)
     # после истечения создаётся новый счёт
     await h.click(631, "pay:sbp")
@@ -543,13 +549,89 @@ async def scenario_paydex_auto(h: Harness) -> None:
 
 async def scenario_paydex_down(h: Harness) -> None:
     s, uid = h.s, 640
-    h.paydex = FakePaydex(fail=True)
+    h.gateways = {"paydex": FakeGateway(fail=True)}
     await h.text(uid, "/start")
     s.clear()
     await h.click(uid, "pay:sbp")
     # API не отвечает → запасной вариант: многоразовая ссылка и «Я оплатил»
     rows = s.of(SendMessage, uid)[0].reply_markup.inline_keyboard
     assert rows[0][0].url == "https://paydex.pro/pay/link-abc" and rows[1][0].callback_data == "pay:sent"
+
+
+async def scenario_two_gateways(h: Harness) -> None:
+    """Paydex и Platega вместе: две кнопки, у каждой свой платёж и автопроверка."""
+    from bot.payments import check_waiting
+    db, s, uid = h.db, h.s, 650
+    paydex, platega = FakeGateway("paydex", "Paydex"), FakeGateway("platega", "Platega")
+    h.gateways = {"paydex": paydex, "platega": platega}
+    await h.text(uid, "/start")
+    s.clear()
+    await h.click(uid, "f:offer")
+    rows = [r for r in s.of(SendMessage, uid) if "Стоимость" in r.text][0].reply_markup.inline_keyboard
+    assert [r[0].text for r in rows[:2]] == ["💳 СБП Paydex", "💳 СБП Platega"]
+    assert [r[0].callback_data for r in rows[:2]] == ["pay:auto:paydex", "pay:auto:platega"]
+
+    s.clear()
+    await h.click(uid, "pay:auto:platega")
+    assert platega.created == 1 and paydex.created == 0
+    assert platega.payments["platega-1"]["username"] == "user650"
+    msg = s.of(SendMessage, uid)[0]
+    assert msg.reply_markup.inline_keyboard[0][0].url == "https://pay.example/platega-1"
+    assert (await db.get_invoice("platega-1"))["provider"] == "platega"
+
+    # клиент передумал и открыл Paydex — у него отдельный платёж
+    await h.click(uid, "pay:auto:paydex")
+    assert paydex.created == 1
+
+    # оплатил через Platega → доступ выдан один раз, в уведомлении видно платёжку
+    platega.payments["platega-1"]["status"] = "paid"
+    s.clear()
+    assert await check_waiting(h.bot, db, h.config, h.gateways) == 1
+    assert (await db.get_user(uid))["paid"]
+    assert any("Platega, автооплата" in t for t in s.texts(ADMIN))
+
+
+def test_gateway_clients_parse_responses():
+    """Запросы и разбор ответов настоящих клиентов (сеть подменена)."""
+    from bot.gateway import PAID, FAILED, PENDING
+    from bot.paydex import PaydexClient
+    from bot.platega import PlategaClient
+
+    async def run():
+        pl = PlategaClient("merchant", "secret")
+        calls = []
+
+        async def fake_request(method, path, json=None):
+            calls.append((method, path, json))
+            if method == "POST":
+                return {"transactionId": "tx-1", "status": "PENDING", "expiresIn": "00:15:00",
+                        "url": "https://pay.platega.io/?id=tx-1", "rate": 90}
+            return {"id": "tx-1", "status": {"/transaction/tx-1": "CONFIRMED", "/transaction/tx-2": "CANCELED"}[path]}
+        pl._request = fake_request
+        link = await pl.create(order_id="tg1-1", amount=1490, description="d", return_url="https://t.me/b",
+                               user_id=1, username="ivan")
+        method, path, body = calls[0]
+        assert (method, path) == ("POST", "/v2/transaction/process")
+        assert body["paymentDetails"] == {"amount": 1490, "currency": "RUB"}
+        assert body["metadata"] == {"userId": "1", "userName": "@ivan"} and body["orderId"] == "tg1-1"
+        assert link.id == "tx-1" and link.status == PENDING and link.url.startswith("https://pay.platega.io")
+        assert 14 * 60 <= link.expires_at - time.time() <= 15 * 60 + 2
+        assert await pl.status("tx-1") == PAID and await pl.status("tx-2") == FAILED
+
+        pd = PaydexClient("sk_test_x", expire_minutes=60)
+
+        async def fake_pd(method, path, json=None):
+            calls.append((method, path, json))
+            if method == "POST":
+                return {"id": "inv-9", "url": "https://paydex.pro/pay/inv-9", "status": "created",
+                        "expiresAt": "2099-01-01T00:00:00Z"}
+            return {"id": "inv-9", "status": "paid"}
+        pd._request = fake_pd
+        link = await pd.create(order_id="tg1-2", amount=1490, description="d", return_url="https://t.me/b",
+                               user_id=1, username=None)
+        assert calls[-1][2]["amount"] == "1490.00" and calls[-1][2]["customer"] == {"userId": "1"}
+        assert link.id == "inv-9" and await pd.status("inv-9") == PAID
+    asyncio.run(run())
 
 
 async def scenario_reject(h: Harness) -> None:
@@ -838,6 +920,10 @@ def test_paydex_down():
     asyncio.run(with_db(scenario_paydex_down, payment_url="https://paydex.pro/pay/link-abc"))
 
 
+def test_two_gateways():
+    asyncio.run(with_db(scenario_two_gateways))
+
+
 def test_reject():
     asyncio.run(with_db(scenario_reject))
 
@@ -871,6 +957,8 @@ if __name__ == "__main__":
     test_followup_videos()
     test_paydex_auto()
     test_paydex_down()
+    test_two_gateways()
+    test_gateway_clients_parse_responses()
     test_reject()
     test_browse_followups()
     test_quiet_hours()

@@ -13,7 +13,7 @@ from aiogram.types import CallbackQuery, Message
 from .. import content, keyboards
 from ..config import Config
 from ..db import Database
-from ..paydex import FINAL_UNPAID, PAID, PaydexClient
+from ..gateway import FINAL_UNPAID, PAID
 from ..payments import get_or_create_invoice, refresh_invoice
 from ..services import (
     is_admin,
@@ -47,14 +47,15 @@ async def send_access_again(bot: Bot, db: Database, config: Config, user_id: int
         await bot.send_message(user_id, content.ACCESS_MANUAL, reply_markup=markup(keyboards.manager(config)))
 
 
-async def send_offer(bot: Bot, db: Database, config: Config, user: dict, back: bool = False) -> None:
+async def send_offer(bot: Bot, db: Database, config: Config, user: dict, back: bool = False,
+                     gateways: dict | None = None) -> None:
     """back=True — открыто из нижнего меню, добавляем кнопку «Назад»."""
     # Админ всегда видит оффер, чтобы можно было тестировать оплату повторно
     if user["paid"] and not is_admin(user["user_id"], config):
         await send_access_again(bot, db, config, user["user_id"], back=back)
         return
     await db.add_event(user["user_id"], "checkout")
-    markup = keyboards.offer(config.manager_username, config.payment_url)
+    markup = keyboards.offer(config.manager_username, config.payment_url, gateways)
     await bot.send_message(
         user["user_id"],
         content.offer_text(config.price, config.old_price, config.manager_username),
@@ -76,25 +77,31 @@ async def show(callback: CallbackQuery, bot: Bot, db: Database, config: Config, 
 
 @router.callback_query(F.data == "f:offer")
 async def offer(callback: CallbackQuery, state: FSMContext, bot: Bot, db: Database, config: Config,
-                user: dict) -> None:
+                user: dict, gateways: dict | None = None) -> None:
     await callback.answer()
     await state.clear()
-    await send_offer(bot, db, config, user)
+    await send_offer(bot, db, config, user, gateways=gateways)
 
 
 # ------------------------------------------------ оплата по СБП (временная)
 
 @router.callback_query(F.data == "pay:sbp")
+@router.callback_query(F.data.startswith("pay:auto:"))
 async def pay_sbp(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict,
-                  paydex: PaydexClient | None = None) -> None:
+                  gateways: dict | None = None) -> None:
     await callback.answer()
-    if paydex:
-        # Автооплата: у клиента свой счёт, бот сам проверяет статус
+    gateways = gateways or {}
+    if callback.data.startswith("pay:auto:"):
+        gateway = gateways.get(callback.data.split(":", 2)[2])
+    else:
+        gateway = next(iter(gateways.values()), None)
+    if gateway:
+        # Автооплата: у клиента свой платёж, бот сам проверяет статус
         await db.add_event(user["user_id"], "pay_click")
         try:
-            invoice = await get_or_create_invoice(bot, db, config, paydex, user["user_id"])
+            invoice = await get_or_create_invoice(bot, db, config, gateway, user["user_id"], user.get("username"))
         except Exception:
-            log.exception("Paydex: не удалось создать счёт для %s", user["user_id"])
+            log.exception("%s: не удалось создать платёж для %s", gateway.title, user["user_id"])
             invoice = None
         if invoice:
             minutes = max(1, (invoice["expires_at"] - int(time.time())) // 60)
@@ -107,7 +114,7 @@ async def pay_sbp(callback: CallbackQuery, bot: Bot, db: Database, config: Confi
             await callback.message.answer(content.PAYMENT_CREATE_FAILED.format(manager=manager_suffix(config)),
                                           reply_markup=keyboards.manager(config))
             return
-        # Paydex API недоступен — запасной вариант: многоразовая ссылка и «Я оплатил»
+        # API платёжки недоступен — запасной вариант: многоразовая ссылка и «Я оплатил»
     if config.payment_url:
         await callback.message.answer(
             content.SBP_LINK_TEXT.format(price=config.price), reply_markup=keyboards.sbp(config.payment_url)
@@ -127,9 +134,10 @@ async def pay_sbp(callback: CallbackQuery, bot: Bot, db: Database, config: Confi
 
 @router.callback_query(F.data.startswith("pay:check:"))
 async def pay_check(callback: CallbackQuery, bot: Bot, db: Database, config: Config, user: dict,
-                    paydex: PaydexClient | None = None) -> None:
+                    gateways: dict | None = None) -> None:
+    gateways = gateways or {}
     invoice = await db.get_invoice(callback.data.split(":", 2)[2])
-    if not paydex or not invoice or invoice["user_id"] != user["user_id"]:
+    if not invoice or invoice["user_id"] != user["user_id"] or invoice["provider"] not in gateways:
         await callback.answer("Счёт не найден — нажми «Оплатить по СБП» ещё раз", show_alert=True)
         return
     if invoice["status"] == PAID:
@@ -137,9 +145,9 @@ async def pay_check(callback: CallbackQuery, bot: Bot, db: Database, config: Con
         await send_access_again(bot, db, config, user["user_id"])
         return
     try:
-        status = await refresh_invoice(bot, db, config, paydex, invoice)
+        status = await refresh_invoice(bot, db, config, gateways, invoice)
     except Exception:
-        log.exception("Paydex: не удалось проверить счёт %s", invoice["id"])
+        log.exception("Не удалось проверить платёж %s", invoice["id"])
         await callback.answer("Не получилось проверить, попробуй через минуту", show_alert=True)
         return
     if status == PAID:
@@ -194,7 +202,8 @@ async def promo(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message(StateFilter(PayForm.promo), F.text)
-async def promo_code(message: Message, state: FSMContext, config: Config) -> None:
+async def promo_code(message: Message, state: FSMContext, config: Config, gateways: dict | None = None) -> None:
     # Промокодов пока нет — когда появятся, проверка будет здесь
     await state.clear()
-    await message.answer(content.PROMO_NOT_FOUND, reply_markup=keyboards.offer(config.manager_username, config.payment_url))
+    await message.answer(content.PROMO_NOT_FOUND,
+                         reply_markup=keyboards.offer(config.manager_username, config.payment_url, gateways))

@@ -23,6 +23,10 @@ class Config:
     paydex_secret_key: str
     paydex_api_url: str
     paydex_expire_minutes: int
+    # Platega: ID магазина и API-ключ (кабинет Platega → «Настройки»). Если заданы — автооплата через Platega
+    platega_merchant_id: str
+    platega_secret: str
+    platega_api_url: str
     # Многоразовая ссылка на оплату (Paydex). Кнопка «Оплатить по СБП» ведёт на неё
     payment_url: str
     # Реквизиты для оплаты переводом, если ссылки нет (запасной вариант)
@@ -57,6 +61,9 @@ def load_config() -> Config:
         paydex_secret_key=os.getenv("PAYDEX_SECRET_KEY", "").strip(),
         paydex_api_url=os.getenv("PAYDEX_API_URL", "https://paydex.pro/api/v1").strip(),
         paydex_expire_minutes=int(os.getenv("PAYDEX_EXPIRE_MINUTES", "60")),
+        platega_merchant_id=os.getenv("PLATEGA_MERCHANT_ID", "").strip(),
+        platega_secret=os.getenv("PLATEGA_SECRET", "").strip(),
+        platega_api_url=os.getenv("PLATEGA_API_URL", "https://app.platega.io").strip(),
         payment_url=os.getenv("PAYMENT_URL", "").strip(),
         payment_details=os.getenv("PAYMENT_DETAILS", "").replace("\\n", "\n").strip(),
         questions_path=os.getenv("QUESTIONS_PATH", "data/questions.json"),

@@ -79,12 +79,13 @@ def support_button(manager_username: str) -> B | None:
     return B(text="💬 Поддержка", url=f"https://t.me/{manager_username}")
 
 
-def offer(manager_username: str, payment_url: str = "") -> InlineKeyboardMarkup:
-    # «Оплатить по СБП» открывает отдельное меню: «Оплатить» (ссылка) и «Я оплатил»
-    rows = [
-        B(text="💳 Оплатить по СБП", callback_data="pay:sbp"),
-        B(text="🎟 Ввести промокод", callback_data="pay:promo"),
-    ]
+def offer(manager_username: str, payment_url: str = "", gateways: dict | None = None) -> InlineKeyboardMarkup:
+    # Несколько платёжек с автопроверкой — по кнопке на каждую; одна или ни одной — «Оплатить по СБП»
+    if gateways and len(gateways) > 1:
+        rows = [B(text=f"💳 СБП {g.title}", callback_data=f"pay:auto:{name}") for name, g in gateways.items()]
+    else:
+        rows = [B(text="💳 Оплатить по СБП", callback_data="pay:sbp")]
+    rows.append(B(text="🎟 Ввести промокод", callback_data="pay:promo"))
     if support := support_button(manager_username):
         rows.append(support)
     return inline(*rows)

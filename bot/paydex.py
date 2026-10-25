@@ -1,24 +1,22 @@
 """Клиент Paydex API v1 (https://paydex.pro/docs): создание счёта и проверка его статуса."""
-import logging
+import time
 from typing import Any
 
 import aiohttp
 
-log = logging.getLogger(__name__)
+from .gateway import PENDING, PaymentError, PaymentLink, iso_to_ts
 
-PAID = "paid"
-FINAL_UNPAID = {"failed", "expired"}
-WAITING = {"created", "pending"}
-
-
-class PaydexError(Exception):
-    pass
+PaydexError = PaymentError  # совместимость
 
 
 class PaydexClient:
-    def __init__(self, secret_key: str, base_url: str = "https://paydex.pro/api/v1"):
+    name = "paydex"
+    title = "Paydex"
+
+    def __init__(self, secret_key: str, base_url: str = "https://paydex.pro/api/v1", expire_minutes: int = 60):
         self.secret_key = secret_key
         self.base_url = base_url.rstrip("/")
+        self.expire_minutes = expire_minutes
         self._session: aiohttp.ClientSession | None = None
 
     async def _request(self, method: str, path: str, json: dict | None = None) -> dict[str, Any]:
@@ -35,23 +33,29 @@ class PaydexClient:
                 data = {}
             if resp.status >= 400:
                 err = (data or {}).get("error", {})
-                raise PaydexError(f"{resp.status} {err.get('code', '')}: {err.get('message', '')}".strip())
+                raise PaymentError(f"Paydex {resp.status} {err.get('code', '')}: {err.get('message', '')}".strip())
             return data
 
-    async def create_invoice(self, *, order_id: str, amount: int, description: str, success_url: str,
-                             expire_minutes: int, user_id: int) -> dict[str, Any]:
-        return await self._request("POST", "/invoices", {
+    async def create(self, *, order_id: str, amount: int, description: str, return_url: str,
+                     user_id: int, username: str | None) -> PaymentLink:
+        data = await self._request("POST", "/invoices", {
             "orderId": order_id,
             "amount": f"{amount}.00",
             "description": description,
-            "successUrl": success_url,
-            "failUrl": success_url,
-            "expire": expire_minutes,
+            "successUrl": return_url,
+            "failUrl": return_url,
+            "expire": self.expire_minutes,
             "customer": {"userId": str(user_id)},
         })
+        default = int(time.time()) + self.expire_minutes * 60
+        return PaymentLink(id=data["id"], url=data["url"], status=data.get("status") or PENDING,
+                           expires_at=iso_to_ts(data.get("expiresAt"), default))
 
-    async def get_invoice(self, invoice_id: str) -> dict[str, Any]:
-        return await self._request("GET", f"/invoices/{invoice_id}")
+    async def status(self, payment_id: str) -> str:
+        data = await self._request("GET", f"/invoices/{payment_id}")
+        # Статусы Paydex: created, pending, paid, failed, expired, refunded, partially_refunded
+        status = data.get("status") or PENDING
+        return "refunded" if status == "partially_refunded" else status
 
     async def close(self) -> None:
         if self._session and not self._session.closed:

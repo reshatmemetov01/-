@@ -16,11 +16,11 @@ router = Router()
 
 @router.message(F.text.in_({content.MENU_VIDEOS, content.MENU_VIDEOS_OLD}))
 async def videos(message: Message, state: FSMContext, bot: Bot, db: Database, config: Config,
-                 user: dict) -> None:
+                 user: dict, gateways: dict | None = None) -> None:
     await state.clear()
     if message.text == content.MENU_VIDEOS_OLD:  # у человека старая клавиатура — присылаем новую
         await message.answer(content.MENU_HINT, reply_markup=keyboards.main_menu(is_admin(user["user_id"], config)))
-    await send_offer(bot, db, config, user, back=True)  # купившим — ссылку в группу, остальным — оффер
+    await send_offer(bot, db, config, user, back=True, gateways=gateways)  # купившим — ссылку в группу, остальным — оффер
 
 
 @router.message(F.text == content.MENU_TRAINING)
