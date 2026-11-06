@@ -1,0 +1,22 @@
+{
+  "name": "lava-obby",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "LavaConfig": { "$path": "src/shared/LavaConfig.luau" }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "MapBuilder": { "$path": "src/server/MapBuilder.luau" },
+      "GameServer": { "$path": "src/server/GameServer.server.luau" }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "LavaClient": { "$path": "src/client/LavaClient.client.luau" }
+      }
+    }
+  }
+}
