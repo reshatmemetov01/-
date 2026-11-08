@@ -63,6 +63,7 @@ local function defaultData()
 		finishedRun = false,
 		vipChest = 0,
 		receipts = {},
+		autoEquipped = {},
 	}
 end
 
@@ -971,6 +972,28 @@ local function checkPasses(player)
 	end
 end
 
+-- После покупки пропуска сразу надеваем его вещи (один раз), чтобы игрок увидел, за что платил
+local AUTO_EQUIP = {
+	VIP = { skins = "gold", pets = "phoenix", trails = "vip" },
+	SkinPack = { skins = "rainbow" },
+	DragonPet = { pets = "dragon" },
+}
+
+local function autoEquip(player, key)
+	local s = sessions[player]
+	local set = AUTO_EQUIP[key]
+	if not s or not s.loaded or not set or s.data.autoEquipped[key] then
+		return
+	end
+	s.data.autoEquipped[key] = true
+	for category, id in pairs(set) do
+		s.data[Config.ItemCategories[category].equipped] = id
+	end
+	syncAttributes(player)
+	applyCharacter(player)
+	task.spawn(saveData, player)
+end
+
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
 	if not purchased then
 		return
@@ -980,6 +1003,8 @@ MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passI
 			player:SetAttribute("Pass" .. key, true)
 			notify(player, "n_thanks", Color3.fromRGB(120, 255, 140))
 			notifyAll("n_bought_pass", Color3.fromRGB(190, 140, 255), player.DisplayName, "@pass_" .. key)
+			syncAttributes(player)
+			autoEquip(player, key)
 		end
 	end
 	applyCharacter(player)
@@ -1245,6 +1270,12 @@ local function onPlayerAdded(player)
 	giveDaily(player, s)
 	syncAttributes(player)
 	player:SetAttribute("Loaded", true)
+	-- пропуск могли купить на странице игры, не заходя в неё
+	for key in pairs(AUTO_EQUIP) do
+		if player:GetAttribute("Pass" .. key) then
+			autoEquip(player, key)
+		end
+	end
 	if player.Character then
 		task.spawn(onCharacter, player, player.Character)
 	end
