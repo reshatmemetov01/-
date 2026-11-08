@@ -1070,86 +1070,351 @@ local function portalRing(ctx, cx, cy, cz, R, plane, colA, colB, skipBottom)
 	end
 end
 
+-- ============ ДЕТАЛИ ОКРУЖЕНИЯ (мультяшный стиль) ============
+local LEAVES = { RGB(80, 190, 70), RGB(100, 210, 80), RGB(60, 170, 60), RGB(120, 215, 90) }
+
+-- Кубическое дерево (как на картинках): ствол + 2–3 куба листвы
+local function blockyTree(cf, rng, scale, leafColor)
+	scale = scale or 1
+	local h = rng:NextNumber(5, 8) * scale
+	part({ Size = V3(1.6 * scale, h, 1.6 * scale), CFrame = cf * CF(0, h / 2, 0), Color = RGB(125, 82, 48), Material = M.Wood })
+	local leaf = leafColor or pick(rng, LEAVES)
+	local s1 = 7 * scale
+	part({ Size = V3(s1, s1 * 0.8, s1), CFrame = cf * CF(0, h + s1 * 0.25, 0) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = leaf })
+	local s2 = 5 * scale
+	part({ Size = V3(s2, s2 * 0.8, s2), CFrame = cf * CF(rng:NextNumber(-0.8, 0.8) * scale, h + s1 * 0.7 + s2 * 0.2, rng:NextNumber(-0.8, 0.8) * scale) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = leaf:Lerp(Color3.new(1, 1, 1), 0.12) })
+	if rng:NextNumber() < 0.5 then
+		local s3 = 3 * scale
+		part({ Size = V3(s3, s3 * 0.8, s3), CFrame = cf * CF(0, h + s1 * 1.05 + s2 * 0.4, 0) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = leaf:Lerp(Color3.new(1, 1, 1), 0.22) })
+	end
+end
+
+local function bush(cf, rng)
+	local s = rng:NextNumber(2, 3.5)
+	part({ Size = V3(s, s * 0.8, s), CFrame = cf * CF(0, s * 0.4, 0) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = pick(rng, LEAVES), CanCollide = false })
+	if rng:NextNumber() < 0.6 then
+		part({ Size = V3(0.6, 0.6, 0.6), CFrame = cf * CF(s * 0.3, s * 0.85, 0), Color = pick(rng, PARTY), CanCollide = false })
+	end
+end
+
+local function flower(cf, rng)
+	part({ Size = V3(0.2, 1, 0.2), CFrame = cf * CF(0, 0.5, 0), Color = RGB(60, 160, 60), CanCollide = false })
+	part({ Size = V3(0.7, 0.4, 0.7), CFrame = cf * CF(0, 1.1, 0) * CFrame.Angles(0, 0.7, 0), Color = pick(rng, PARTY), CanCollide = false })
+end
+
+local function lamp(cf)
+	part({ Size = V3(0.6, 7, 0.6), CFrame = cf * CF(0, 3.5, 0), Color = RGB(40, 40, 50), Material = M.Metal })
+	part({ Size = V3(1.6, 0.4, 1.6), CFrame = cf * CF(0, 7.2, 0), Color = RGB(40, 40, 50), Material = M.Metal })
+	local bulb = part({ Size = V3(1.2, 1.4, 1.2), CFrame = cf * CF(0, 8.1, 0), Color = RGB(255, 225, 140), Material = M.Neon })
+	part({ Size = V3(1.6, 0.3, 1.6), CFrame = cf * CF(0, 8.9, 0), Color = RGB(40, 40, 50), Material = M.Metal })
+	local l = Instance.new("PointLight")
+	l.Range = 20
+	l.Brightness = 1.4
+	l.Color = RGB(255, 210, 150)
+	l.Parent = bulb
+end
+
+local function fence(a, b)
+	local len = (b - a).Magnitude
+	local n = math.max(1, math.floor(len / 4))
+	for i = 0, n do
+		local p = a:Lerp(b, i / n)
+		part({ Size = V3(0.5, 2.4, 0.5), CFrame = CF(p + V3(0, 1.2, 0)), Color = RGB(150, 100, 60), Material = M.Wood })
+	end
+	for _, y in ipairs({ 1.0, 1.9 }) do
+		local pa, pb = a + V3(0, y, 0), b + V3(0, y, 0)
+		part({ Size = V3(0.3, 0.3, len), CFrame = CFrame.lookAt((pa + pb) / 2, pb), Color = RGB(170, 115, 70), Material = M.Wood })
+	end
+end
+
+-- Домик с двускатной крышей; передняя сторона смотрит по LookVector cf
+local function house(cf, w, d, h, wallColor, roofColor)
+	part({ Size = V3(w, h, d), CFrame = cf * CF(0, h / 2, 0), Color = wallColor })
+	local rh = math.min(w, d) * 0.4
+	local roofTop = cf * CF(0, h, 0)
+	local w1 = Instance.new("WedgePart")
+	w1.Anchored = true
+	w1.Size = V3(w + 1.5, rh, d / 2 + 0.8)
+	w1.CFrame = roofTop * CF(0, rh / 2, -(d / 2 + 0.8) / 2)
+	w1.Color = roofColor
+	w1.Parent = currentFolder
+	local w2 = w1:Clone()
+	w2.CFrame = roofTop * CF(0, rh / 2, (d / 2 + 0.8) / 2) * CFrame.Angles(0, PI, 0)
+	w2.Parent = currentFolder
+	-- дверь и окна
+	part({ Size = V3(3.2, 5, 0.3), CFrame = cf * CF(0, 2.5, -d / 2 - 0.1), Color = RGB(110, 70, 40), Material = M.Wood })
+	for sx = -1, 1, 2 do
+		part({ Size = V3(2.4, 2.4, 0.3), CFrame = cf * CF(sx * w * 0.3, h * 0.55, -d / 2 - 0.1), Color = RGB(130, 210, 255), Material = M.Neon })
+	end
+end
+
+-- Скала-остров (слоями, сужается вниз), сверху трава
+local function floatingIsland(cf, rng, size, grassColor)
+	part({ Size = V3(size, 2, size), CFrame = cf * CF(0, -1, 0), Color = grassColor or RGB(110, 205, 80), Material = M.SmoothPlastic })
+	local s = size
+	for i = 1, 4 do
+		s = s * 0.78
+		part({ Size = V3(s, 3, s), CFrame = cf * CF(rng:NextNumber(-1, 1), -2 - i * 3 + 1.5, rng:NextNumber(-1, 1)) * CFrame.Angles(0, rng:NextNumber(-0.2, 0.2), 0), Color = (i % 2 == 0) and RGB(150, 110, 75) or RGB(130, 95, 65) })
+	end
+end
+
+-- Пруд с водой
+local function pond(cf, r)
+	part({ Shape = CYL, Size = V3(0.6, r * 2 + 2, r * 2 + 2), CFrame = cf * CF(0, 0.2, 0) * ROT_UP, Color = RGB(160, 160, 170), Material = M.Slate })
+	part({ Shape = CYL, Size = V3(0.5, r * 2, r * 2), CFrame = cf * CF(0, 0.35, 0) * ROT_UP, Color = RGB(70, 170, 255), Material = M.Glass, Transparency = 0.15, CanCollide = false })
+end
+
+-- Водопад со скалы в пруд
+local function waterfallFx(top, bottom, width)
+	local h = (top - bottom).Magnitude
+	local fall = part({ Size = V3(width, h, 1), CFrame = CF((top + bottom) / 2) * CFrame.Angles(0, 0, 0), Color = RGB(120, 205, 255), Material = M.Neon, Transparency = 0.3, CanCollide = false, CanQuery = false })
+	local holder = part({ Size = V3(width, 1, 1), CFrame = CF(bottom + V3(0, 1, -1)), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+	local mist = Instance.new("ParticleEmitter")
+	mist.Color = ColorSequence.new(Color3.new(1, 1, 1))
+	mist.Transparency = NumberSequence.new(0.3, 1)
+	mist.Size = NumberSequence.new(1.5, 4)
+	mist.Speed = NumberRange.new(2, 4)
+	mist.Lifetime = NumberRange.new(1, 2)
+	mist.Rate = 20
+	mist.SpreadAngle = Vector2.new(70, 70)
+	mist.Parent = holder
+	return fall
+end
+
+-- ============ ЛОББИ (как на картинке: площадь с фонтаном и зданиями) ============
 local function buildLobby(ctx)
 	local top = 12
-	local floor = part({ Name = "LobbyFloor", Size = V3(80, 2, 80), CFrame = L(ctx, 0, top - 1, 0), Color = RGB(250, 242, 230) })
+	local R = 70 -- половина размера острова
+	local rng = Random.new(Config.MAP_SEED + 5)
+	local center = L(ctx, 0, top, 0)
+	local cpos = center.Position
+
+	-- остров: трава + скалы снизу
+	local floor = part({ Name = "LobbyFloor", Size = V3(R * 2, 2, R * 2), CFrame = L(ctx, 0, top - 1, 0), Color = RGB(110, 205, 80) })
 	floor:SetAttribute("Stage", 1)
 	info.checkpoints[1] = floor
-	-- цветная плитка
-	local tiles = { RGB(255, 190, 80), RGB(255, 140, 200), RGB(130, 190, 255), RGB(140, 225, 140) }
-	for ix = 0, 3 do
-		for iz = 0, 3 do
-			if (ix + iz) % 2 == 0 then
-				part({ Size = V3(19.6, 0.1, 19.6), CFrame = L(ctx, -30 + ix * 20, top + 0.03, -30 + iz * 20), Color = tiles[((ix + iz * 2) % #tiles) + 1], CanCollide = false })
-			end
-		end
+	local s = R * 2
+	for i = 1, 4 do
+		s = s * 0.86
+		part({ Size = V3(s, 4, s), CFrame = L(ctx, rng:NextNumber(-2, 2), top - 2 - i * 4 + 2, rng:NextNumber(-2, 2)), Color = (i % 2 == 0) and RGB(150, 110, 75) or RGB(125, 92, 62) })
+	end
+	column(ctx, 0, 0, LAVA_BOTTOM, top - 18, 30, 30, RGB(110, 85, 60), M.Slate)
+	-- травяная кайма-«глазурь» по краю
+	for _, e in ipairs({ { 0, R, s }, { 0, -R, s } }) do
+		part({ Size = V3(R * 2 + 0.4, 1.2, 1.2), CFrame = L(ctx, 0, top - 2.2, e[2]), Color = RGB(90, 180, 70), CanCollide = false })
+		part({ Size = V3(1.2, 1.2, R * 2 + 0.4), CFrame = L(ctx, e[2], top - 2.2, 0), Color = RGB(90, 180, 70), CanCollide = false })
+	end
+
+	-- 🪨 площадь и дорожки из брусчатки
+	local stone = RGB(175, 175, 185)
+	part({ Shape = CYL, Size = V3(0.3, 52, 52), CFrame = L(ctx, 0, top + 0.12, 0) * ROT_UP, Color = stone, Material = M.Cobblestone, CanCollide = false })
+	part({ Shape = CYL, Size = V3(0.32, 40, 40), CFrame = L(ctx, 0, top + 0.13, 0) * ROT_UP, Color = RGB(195, 195, 205), Material = M.Cobblestone, CanCollide = false })
+	local paths = { { 0, -46, 10, 42 }, { 0, 46, 12, 46 }, { -44, 4, 40, 10 }, { 44, 4, 40, 10 }, { -30, -24, 10, 30 }, { 30, -24, 10, 30 } }
+	for _, pth in ipairs(paths) do
+		part({ Size = V3(pth[3], 0.25, pth[4]), CFrame = L(ctx, pth[1], top + 0.1, pth[2]), Color = stone, Material = M.Cobblestone, CanCollide = false })
+	end
+
+	-- 💦 фонтан в центре
+	part({ Shape = CYL, Size = V3(1.8, 18, 18), CFrame = L(ctx, 0, top + 0.9, 0) * ROT_UP, Color = RGB(150, 150, 165), Material = M.Cobblestone })
+	part({ Shape = CYL, Size = V3(0.4, 16, 16), CFrame = L(ctx, 0, top + 1.6, 0) * ROT_UP, Color = RGB(70, 170, 255), Material = M.Glass, Transparency = 0.15 })
+	part({ Shape = CYL, Size = V3(4, 2.4, 2.4), CFrame = L(ctx, 0, top + 3.5, 0) * ROT_UP, Color = RGB(150, 150, 165), Material = M.Cobblestone })
+	part({ Shape = CYL, Size = V3(1, 8, 8), CFrame = L(ctx, 0, top + 5.6, 0) * ROT_UP, Color = RGB(150, 150, 165), Material = M.Cobblestone })
+	part({ Shape = CYL, Size = V3(0.3, 7, 7), CFrame = L(ctx, 0, top + 6.1, 0) * ROT_UP, Color = RGB(70, 170, 255), Material = M.Glass, Transparency = 0.15 })
+	part({ Shape = CYL, Size = V3(3, 1.2, 1.2), CFrame = L(ctx, 0, top + 7.6, 0) * ROT_UP, Color = RGB(150, 150, 165), Material = M.Cobblestone })
+	local spray = part({ Shape = BALL, Size = V3(1.6, 1.6, 1.6), CFrame = L(ctx, 0, top + 9.3, 0), Color = RGB(120, 200, 255), Material = M.Neon })
+	local water = Instance.new("ParticleEmitter")
+	water.Color = ColorSequence.new(RGB(220, 245, 255), RGB(90, 180, 255))
+	water.Size = NumberSequence.new(0.6, 0.2)
+	water.Transparency = NumberSequence.new(0.1, 0.8)
+	water.Speed = NumberRange.new(12, 16)
+	water.SpreadAngle = Vector2.new(30, 30)
+	water.Acceleration = V3(0, -35, 0)
+	water.Lifetime = NumberRange.new(0.9, 1.3)
+	water.Rate = 80
+	water.EmissionDirection = Enum.NormalId.Top
+	water.Parent = spray
+
+	-- 🧍 точка появления: каменная площадка со ступенями (вид на площадь)
+	part({ Size = V3(24, 3, 18), CFrame = L(ctx, 0, top + 1.5, -58), Color = RGB(160, 160, 172), Material = M.Cobblestone })
+	for i = 1, 3 do
+		local sh = 3 - i * 0.75
+		part({ Size = V3(12, sh, 1.6), CFrame = L(ctx, 0, top + sh / 2, -49 + 0.8 + (i - 1) * 1.6), Color = RGB(170, 170, 182), Material = M.Cobblestone })
 	end
 	for sx = -1, 1, 2 do
-		for sz = -1, 1, 2 do
-			stripedColumn(ctx, sx * 34, sz * 34, LAVA_BOTTOM, top - 2, 7, RGB(230, 45, 55), RGB(255, 255, 255), 3)
-		end
+		part({ Size = V3(1.2, 1.4, 18), CFrame = L(ctx, sx * 11.4, top + 3.7, -58), Color = RGB(140, 140, 152), Material = M.Cobblestone })
 	end
-	-- ограждение по краю (спереди проход к порталу)
-	for i = -4, 4 do
-		local c = PARTY[((i + 4) % #PARTY) + 1]
-		for _, side in ipairs({ { 40, 0 }, { -40, 0 } }) do
-			part({ Size = V3(0.8, 3, 0.8), CFrame = L(ctx, side[1], top + 1.5, i * 9), Color = c })
-		end
-		part({ Size = V3(0.8, 3, 0.8), CFrame = L(ctx, i * 9, top + 1.5, -40), Color = c })
-		if math.abs(i) >= 2 then
-			part({ Size = V3(0.8, 3, 0.8), CFrame = L(ctx, i * 9, top + 1.5, 40), Color = c })
-		end
-	end
-	part({ Size = V3(0.5, 0.5, 80), CFrame = L(ctx, 40, top + 3, 0), Color = RGB(255, 255, 255) })
-	part({ Size = V3(0.5, 0.5, 80), CFrame = L(ctx, -40, top + 3, 0), Color = RGB(255, 255, 255) })
-	part({ Size = V3(80, 0.5, 0.5), CFrame = L(ctx, 0, top + 3, -40), Color = RGB(255, 255, 255) })
-
-	-- точка появления
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "LavaSpawn"
 	spawn.Anchored = true
-	spawn.Size = V3(8, 1, 8)
-	spawn.CFrame = L(ctx, 0, top + 0.5, -26)
+	spawn.Size = V3(8, 0.4, 8)
+	spawn.CFrame = L(ctx, 0, top + 3.2, -60)
 	spawn.Duration = 0
 	spawn.Neutral = true
-	spawn.Color = RGB(255, 170, 60)
-	spawn.Material = M.Neon
-	spawn.TopSurface = Enum.SurfaceType.Smooth
+	spawn.Transparency = 1
+	spawn.CanCollide = false
 	spawn.Parent = currentFolder
-	info.spawnCF[1] = L(ctx, 0, top + 4, -26)
+	info.spawnCF[1] = L(ctx, 0, top + 6.5, -60)
 
-	-- 💦 фонтан и лавочки — место, где общаются игроки
-	part({ Shape = CYL, Size = V3(1.6, 16, 16), CFrame = L(ctx, 0, top + 0.8, 0) * ROT_UP, Color = RGB(200, 200, 215), Material = M.Marble })
-	part({ Shape = CYL, Size = V3(0.3, 14.5, 14.5), CFrame = L(ctx, 0, top + 1.5, 0) * ROT_UP, Color = RGB(90, 180, 255), Material = M.Glass, Transparency = 0.25 })
-	part({ Shape = CYL, Size = V3(5, 2, 2), CFrame = L(ctx, 0, top + 3.5, 0) * ROT_UP, Color = RGB(200, 200, 215), Material = M.Marble })
-	local bowl = part({ Shape = CYL, Size = V3(0.8, 6, 6), CFrame = L(ctx, 0, top + 6.2, 0) * ROT_UP, Color = RGB(255, 200, 80), Material = M.Foil })
-	local water = Instance.new("ParticleEmitter")
-	water.Color = ColorSequence.new(RGB(200, 240, 255), RGB(90, 180, 255))
-	water.Size = NumberSequence.new(0.5, 0.2)
-	water.Transparency = NumberSequence.new(0.1, 0.8)
-	water.Speed = NumberRange.new(10, 14)
-	water.SpreadAngle = Vector2.new(25, 25)
-	water.Acceleration = V3(0, -30, 0)
-	water.Lifetime = NumberRange.new(0.8, 1.2)
-	water.Rate = 60
-	water.EmissionDirection = Enum.NormalId.Top
-	water.Parent = bowl
-	for i = 0, 3 do
-		local a = i / 4 * 2 * PI + PI / 4
-		local bx, bz = math.cos(a) * 13, math.sin(a) * 13
-		local bcf = L(ctx, bx, top, bz) * CFrame.Angles(0, -a + PI / 2, 0)
-		part({ Size = V3(6, 0.6, 2), CFrame = bcf * CF(0, 1.4, 0), Color = WOOD, Material = M.WoodPlanks })
-		part({ Size = V3(6, 1.8, 0.4), CFrame = bcf * CF(0, 2.4, 1), Color = WOOD, Material = M.WoodPlanks })
-		for sx = -1, 1, 2 do
-			part({ Size = V3(0.4, 1.1, 1.8), CFrame = bcf * CF(sx * 2.6, 0.55, 0), Color = RGB(60, 60, 70), Material = M.Metal })
-		end
+	-- 🏆 таблицы лидеров по бокам от точки появления (смотрят на площадь)
+	info.leaderboardRows = makeBoard(L(ctx, -22, top + 9, -60), V3(16, 13, 1), Enum.NormalId.Front, "sign_top")
+	info.timeRows = makeBoard(L(ctx, 22, top + 9, -60), V3(16, 13, 1), Enum.NormalId.Front, "sign_top_time")
+	for _, bx in ipairs({ -22, 22 }) do
+		part({ Size = V3(1.2, 3, 1.2), CFrame = L(ctx, bx - 6, top + 1.5, -60), Color = RGB(60, 50, 60) })
+		part({ Size = V3(1.2, 3, 1.2), CFrame = L(ctx, bx + 6, top + 1.5, -60), Color = RGB(60, 50, 60) })
 	end
 
-	-- 🌀 ГЛАВНЫЙ ПОРТАЛ: 50 этапов
-	local pz, pR, pcy = 38, 9, top + 10.6
+	local function facing(x, z, y)
+		local p = L(ctx, x, y or top, z).Position
+		return CFrame.lookAt(p, V3(cpos.X, p.Y, cpos.Z))
+	end
+
+	-- 🐾 PETS (слева): фиолетовый домик с лапкой
+	local petsCf = facing(-50, 6)
+	house(petsCf, 16, 12, 10, RGB(150, 90, 230), RGB(90, 50, 160))
+	local petsSign = makeSign(petsCf * CF(0, 14.5, -6.6), V3(13, 4.5, 0.8), "sign_petshop", RGB(80, 160, 255), Color3.new(1, 1, 1), Enum.NormalId.Front)
+	local petsDoor = part({ Size = V3(5, 6, 0.4), CFrame = petsCf * CF(0, 3, -6.3), Color = RGB(200, 120, 255), Material = M.Neon, Transparency = 0.2, CanCollide = false })
+	prompt(petsDoor, "prompt_open", "prompt_petshop", "OpenShop", "pets")
+	for i = -1, 1 do
+		part({ Shape = CYL, Size = V3(1.6, 2.4, 2.4), CFrame = petsCf * CF(i * 4.5, 0.8, -10) * ROT_UP, Color = PARTY[i + 3] })
+		part({ Shape = BALL, Size = V3(1.6, 1.6, 1.6), CFrame = petsCf * CF(i * 4.5, 2.4, -10), Color = PARTY[i + 4], Material = M.Neon })
+	end
+	local _ = petsSign
+
+	-- 🛒 SHOP (справа): лавка с полосатым навесом
+	local shopCf = facing(50, 6)
+	house(shopCf, 18, 12, 9, RGB(255, 235, 200), RGB(220, 60, 60))
+	for i = 0, 6 do
+		local w = Instance.new("WedgePart")
+		w.Anchored = true
+		w.Size = V3(2.6, 2.2, 5)
+		w.CFrame = shopCf * CF(-7.8 + i * 2.6, 8, -8.4)
+		w.Color = (i % 2 == 0) and RGB(230, 50, 60) or Color3.new(1, 1, 1)
+		w.Parent = currentFolder
+	end
+	local counter = part({ Size = V3(14, 3, 2.5), CFrame = shopCf * CF(0, 1.5, -8), Color = RGB(170, 115, 70), Material = M.WoodPlanks })
+	prompt(counter, "prompt_open", "prompt_shop", "OpenShop", "trails")
+	makeSign(shopCf * CF(0, 13, -6.6), V3(13, 4.5, 0.8), "sign_shop", RGB(230, 50, 60), Color3.new(1, 1, 1), Enum.NormalId.Front)
+	for i = 1, 3 do
+		part({ Size = V3(2.4, 2.4, 2.4), CFrame = shopCf * CF(-9 - i * 0.2, 1.2 + (i - 1) * 2.4, -4 + i * 0.3) * CFrame.Angles(0, i * 0.3, 0), Color = RGB(230, 180, 60), Material = M.WoodPlanks })
+	end
+
+	-- 👑 VIP на скале с водопадом (сзади слева)
+	local vx, vz = -40, -34
+	local plateauH = 10
+	part({ Size = V3(28, plateauH, 26), CFrame = L(ctx, vx, top + plateauH / 2, vz), Color = RGB(140, 135, 125), Material = M.Slate })
+	part({ Size = V3(28.4, 1.2, 26.4), CFrame = L(ctx, vx, top + plateauH + 0.6, vz), Color = RGB(110, 205, 80) })
+	for i = 1, 5 do
+		part({ Size = V3(6, i * 2, 2), CFrame = L(ctx, vx + 10, top + i, vz + 13 + (6 - i) * 2 - 1), Color = RGB(160, 160, 172), Material = M.Cobblestone })
+	end
+	local vipCf = CFrame.lookAt(L(ctx, vx - 2, top + plateauH + 1.2, vz - 2).Position, L(ctx, vx - 2, top + plateauH + 1.2, vz + 20).Position)
+	-- золотой домик VIP, дверь — VIP-дверь
+	local hw, hd, hh = 14, 12, 9
+	part({ Size = V3(hw, hh, 1), CFrame = vipCf * CF(0, hh / 2, hd / 2), Color = GOLD, Material = M.Foil })
+	part({ Size = V3(1, hh, hd), CFrame = vipCf * CF(-hw / 2, hh / 2, 0), Color = GOLD, Material = M.Foil })
+	part({ Size = V3(1, hh, hd), CFrame = vipCf * CF(hw / 2, hh / 2, 0), Color = GOLD, Material = M.Foil })
+	part({ Size = V3(5, hh, 1), CFrame = vipCf * CF(-4.5, hh / 2, -hd / 2), Color = GOLD, Material = M.Foil })
+	part({ Size = V3(5, hh, 1), CFrame = vipCf * CF(4.5, hh / 2, -hd / 2), Color = GOLD, Material = M.Foil })
+	part({ Size = V3(4, 2, 1), CFrame = vipCf * CF(0, hh - 1, -hd / 2), Color = GOLD, Material = M.Foil })
+	part({ Size = V3(hw + 2, 1, hd + 2), CFrame = vipCf * CF(0, hh + 0.5, 0), Color = RGB(150, 60, 200) })
+	local door = part({ Name = "VipDoor", Size = V3(4, hh - 2, 0.6), CFrame = vipCf * CF(0, (hh - 2) / 2, -hd / 2), Color = GOLD, Material = M.Neon, Transparency = 0.35 })
+	tag(door, "VipDoor")
+	prompt(door, "prompt_buyvip", "sign_vip", "BuyVip", true)
+	-- корона над домиком
+	local crownCf = vipCf * CF(0, hh + 2.6, 0)
+	part({ Shape = CYL, Size = V3(1.6, 6, 6), CFrame = crownCf * ROT_UP, Color = GOLD, Material = M.Foil })
+	for i = 0, 4 do
+		local a = i / 5 * 2 * PI
+		part({ Shape = BALL, Size = V3(1.2, 1.2, 1.2), CFrame = crownCf * CF(math.cos(a) * 2.6, 1.6, math.sin(a) * 2.6), Color = (i % 2 == 0) and RGB(255, 60, 80) or RGB(80, 160, 255), Material = M.Neon })
+	end
+	makeSign(vipCf * CF(0, hh + 7, -1), V3(10, 4, 0.8), "sign_vip", RGB(150, 60, 200), GOLD, Enum.NormalId.Front)
+	makeChest(vipCf * CF(3.5, 0, 3) * CFrame.Angles(0, PI, 0), "vip", "VipChest")
+	makeSign(vipCf * CF(-hw / 2 + 0.6, 5, 0), V3(0.4, 3, 8), "sign_vipchest", RGB(70, 25, 100), GOLD, Enum.NormalId.Right)
+	local vl = Instance.new("PointLight")
+	vl.Range = 18
+	vl.Color = GOLD
+	vl.Parent = part({ Size = V3(2, 0.4, 2), CFrame = vipCf * CF(0, hh - 0.3, 0), Color = GOLD, Material = M.Neon, CanCollide = false })
+	-- водопад со скалы в пруд + секретная уточка за водой
+	local fallTop = L(ctx, vx - 6, top + plateauH, vz + 15).Position
+	local fallBot = L(ctx, vx - 6, top, vz + 15).Position
+	waterfallFx(fallTop, fallBot, 6)
+	pond(L(ctx, vx - 6, top, vz + 21), 6)
+	makeDuck(L(ctx, vx - 6, top + 1.5, vz + 13.6), 1) -- уточка спряталась за водопадом
+
+	-- 🌀 PORTALS (сзади справа): храм с фиолетовым порталом — секретные испытания
+	local ptCf = facing(44, -30)
+	part({ Size = V3(22, 2, 16), CFrame = ptCf * CF(0, 1, 2), Color = RGB(170, 170, 185), Material = M.Cobblestone })
+	part({ Size = V3(16, 1, 2), CFrame = ptCf * CF(0, 0.5, -7), Color = RGB(180, 180, 195), Material = M.Cobblestone })
+	for sx = -1, 1, 2 do
+		part({ Size = V3(2.4, 14, 2.4), CFrame = ptCf * CF(sx * 7, 9, 2), Color = RGB(200, 200, 215), Material = M.Marble })
+	end
+	part({ Size = V3(18, 2, 3), CFrame = ptCf * CF(0, 16.5, 2), Color = RGB(200, 200, 215), Material = M.Marble })
+	local pdisc = part({ Shape = CYL, Size = V3(0.6, 11, 11), CFrame = ptCf * CF(0, 8.5, 2) * CFrame.Angles(0, PI / 2, 0), Color = RGB(200, 80, 255), Material = M.Neon, Transparency = 0.25 })
+	part({ Shape = CYL, Size = V3(0.7, 6, 6), CFrame = ptCf * CF(0, 8.5, 2) * CFrame.Angles(0, PI / 2, 0), Color = RGB(255, 160, 255), Material = M.Neon, Transparency = 0.2, CanCollide = false })
+	local pl2 = Instance.new("PointLight")
+	pl2.Color = RGB(200, 80, 255)
+	pl2.Range = 26
+	pl2.Brightness = 2
+	pl2.Parent = pdisc
+	makeSign(ptCf * CF(0, 20, 1), V3(16, 4, 0.8), "sign_portals", RGB(170, 70, 230), Color3.new(1, 1, 1), Enum.NormalId.Front)
+	makeSign(ptCf * CF(0, 3.2, -0.2), V3(10, 2.2, 0.4), "sign_secret_portal", RGB(60, 25, 90), RGB(220, 190, 255), Enum.NormalId.Front)
+
+	-- 🔁 REBIRTH (впереди слева): красный круг
+	local rbCf = facing(-24, 34)
+	part({ Shape = CYL, Size = V3(0.6, 14, 14), CFrame = rbCf * CF(0, 0.3, 0) * ROT_UP, Color = RGB(200, 40, 50) })
+	local rbPad = part({ Shape = CYL, Size = V3(0.8, 9, 9), CFrame = rbCf * CF(0, 0.5, 0) * ROT_UP, Color = RGB(255, 80, 90), Material = M.Neon })
+	part({ Shape = CYL, Size = V3(5, 2, 2), CFrame = rbCf * CF(0, 3, 3) * ROT_UP, Color = RGB(80, 80, 95), Material = M.Metal })
+	makeSign(rbCf * CF(0, 7.5, 3), V3(11, 3.5, 0.6), "sign_rebirth", RGB(200, 40, 50), Color3.new(1, 1, 1), Enum.NormalId.Front)
+	prompt(rbPad, "prompt_open", "prompt_rebirth", "OpenRebirth", true)
+
+	-- 📋 DAILY (впереди справа): доска заданий + сундук
+	local dCf = facing(24, 34)
+	local dailyChest = makeChest(dCf * CF(0, 0, -2) * CFrame.Angles(0, PI, 0), "dailystand", "DailyStand")
+	prompt(dailyChest.PrimaryPart, "prompt_open", "prompt_tasks", "OpenTasks", true)
+	local dboard = part({ Name = "ChallengeBoard", Size = V3(14, 9, 0.6), CFrame = dCf * CF(0, 7, 2), Color = RGB(30, 40, 70) })
+	part({ Size = V3(1, 7, 1), CFrame = dCf * CF(-6, 3.5, 2), Color = RGB(120, 80, 45), Material = M.Wood })
+	part({ Size = V3(1, 7, 1), CFrame = dCf * CF(6, 3.5, 2), Color = RGB(120, 80, 45), Material = M.Wood })
+	local sg = Instance.new("SurfaceGui")
+	sg.Face = Enum.NormalId.Front
+	sg.LightInfluence = 0
+	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = 30
+	local lst = Instance.new("Frame")
+	lst.Size = UDim2.fromScale(1, 1)
+	lst.BackgroundTransparency = 1
+	lst.Parent = sg
+	local lay = Instance.new("UIListLayout")
+	lay.SortOrder = Enum.SortOrder.LayoutOrder
+	lay.Parent = lst
+	for i = 0, 3 do
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.fromScale(1, 0.25)
+		lbl.BackgroundTransparency = 1
+		lbl.TextScaled = true
+		lbl.Font = i == 0 and Enum.Font.GothamBlack or Enum.Font.GothamBold
+		lbl.TextColor3 = i == 0 and GOLD or Color3.new(1, 1, 1)
+		lbl.AutoLocalize = false
+		lbl.LayoutOrder = i
+		if i == 0 then
+			lbl.Text = Text.Get("en", "sign_daily")
+			lbl:SetAttribute("TextKey", "sign_daily")
+			tag(lbl, "LocText")
+		else
+			lbl.Name = "Row" .. i
+			lbl.Text = "..."
+			tag(lbl, "ChallengeRow")
+		end
+		lbl.Parent = lst
+	end
+	sg.Parent = dboard
+
+	-- 🌀 ГЛАВНЫЙ ПОРТАЛ «50 ЭТАПОВ» (впереди, по центру)
+	local pz, pR, pcy = 64, 9, top + 10.6
+	part({ Size = V3(30, 1, 10), CFrame = L(ctx, 0, top + 0.5, pz), Color = RGB(170, 170, 185), Material = M.Cobblestone })
 	portalRing(ctx, 0, pcy, pz, pR, "xy", RGB(255, 200, 50), RGB(255, 110, 30), true)
 	for sx = -1, 1, 2 do
-		part({ Size = V3(2.4, 4, 2.4), CFrame = L(ctx, sx * 7.6, top + 2, pz), Color = RGB(255, 140, 30) })
+		part({ Size = V3(3, 5, 3), CFrame = L(ctx, sx * 7.8, top + 2.5, pz), Color = RGB(255, 140, 30) })
+		part({ Size = V3(3, 22, 3), CFrame = L(ctx, sx * 13, top + 11, pz), Color = RGB(200, 200, 215), Material = M.Marble })
+		part({ Size = V3(4, 1.4, 4), CFrame = L(ctx, sx * 13, top + 22.7, pz), Color = GOLD, Material = M.Foil })
 	end
 	local swirl = part({ Shape = CYL, Size = V3(0.4, 2 * pR - 1, 2 * pR - 1), CFrame = L(ctx, 0, pcy, pz) * CFrame.Angles(0, PI / 2, 0), Color = RGB(255, 120, 30), Material = M.Neon, Transparency = 0.35, CanCollide = false, CanTouch = false, CanQuery = false })
 	part({ Shape = CYL, Size = V3(0.5, pR, pR), CFrame = L(ctx, 0, pcy, pz) * CFrame.Angles(0, PI / 2, 0), Color = RGB(255, 230, 120), Material = M.Neon, Transparency = 0.3, CanCollide = false, CanTouch = false, CanQuery = false })
@@ -1169,133 +1434,85 @@ local function buildLobby(ctx)
 	pl.Parent = swirl
 	local startLine = part({ Name = "StartLine", Size = V3(16, 14, 2), CFrame = L(ctx, 0, top + 7, pz), Transparency = 1, CanCollide = false })
 	tag(startLine, "StartLine")
-	makeSign(L(ctx, 0, top + 22.5, pz), V3(22, 4, 1.5), "sign_portal", RGB(255, 110, 30), Color3.new(1, 1, 1), Enum.NormalId.Back)
+	makeSign(L(ctx, 0, top + 23, pz), V3(22, 4, 1.5), "sign_portal", RGB(255, 110, 30), Color3.new(1, 1, 1), Enum.NormalId.Back)
+	makeSign(L(ctx, 0, top + 28.5, pz), V3(30, 6, 1.5), "welcome", RGB(60, 20, 10), RGB(255, 210, 90), Enum.NormalId.Back)
 
-	-- 🔒 секретный портал (часть 2)
-	portalRing(ctx, -34, top + 7.2, 24, 6, "zy", RGB(170, 90, 255), RGB(90, 230, 255), true)
-	part({ Shape = CYL, Size = V3(0.4, 11, 11), CFrame = L(ctx, -34, top + 7.2, 24), Color = RGB(150, 70, 255), Material = M.Neon, Transparency = 0.4, CanCollide = true })
-	makeSign(L(ctx, -33.4, top + 15.5, 24), V3(0.5, 3.5, 12), "sign_secret_portal", RGB(60, 25, 90), RGB(220, 190, 255), Enum.NormalId.Right)
-
-	-- 🏆 таблицы лидеров (левая стена)
-	info.leaderboardRows = makeBoard(L(ctx, -38.5, top + 9, -12), V3(1, 13, 17), Enum.NormalId.Right, "sign_top")
-	info.timeRows = makeBoard(L(ctx, -38.5, top + 9, 7), V3(1, 13, 17), Enum.NormalId.Right, "sign_top_time")
-
-	-- 🔥 приветственная табличка + уточка №1 на ней (лестница сзади)
-	local post = RGB(80, 50, 30)
-	part({ Size = V3(1.5, 4, 1.5), CFrame = L(ctx, -30, top + 2, -37), Color = post })
-	part({ Size = V3(1.5, 4, 1.5), CFrame = L(ctx, -14, top + 2, -37), Color = post })
-	makeSign(L(ctx, -22, top + 9, -37), V3(18, 12, 1), "sign_welcome", RGB(60, 20, 10), RGB(255, 210, 90), Enum.NormalId.Front)
-	local truss = Instance.new("TrussPart")
-	truss.Anchored = true
-	truss.Size = V3(2, 16, 2)
-	truss.CFrame = L(ctx, -16, top + 8, -39.5)
-	truss.Color = RGB(255, 200, 40)
-	truss.Parent = currentFolder
-	part({ Size = V3(6, 1, 4), CFrame = L(ctx, -16, top + 15.5, -36.4), Color = post })
-	makeDuck(L(ctx, -17, top + 17.5, -36.4), 1)
-
-	-- 🐾 магазин питомцев (справа спереди)
-	local kx, kz = 32, 22
-	local counter = part({ Size = V3(3, 3, 12), CFrame = L(ctx, kx - 2, top + 1.5, kz), Color = RGB(255, 140, 200) })
-	part({ Size = V3(3.4, 0.4, 12.4), CFrame = L(ctx, kx - 2, top + 3.2, kz), Color = Color3.new(1, 1, 1) })
-	for _, c in ipairs({ { -3.5, -6 }, { -3.5, 6 }, { 3.5, -6 }, { 3.5, 6 } }) do
-		part({ Size = V3(0.6, 8, 0.6), CFrame = L(ctx, kx + c[1], top + 4, kz + c[2]), Color = Color3.new(1, 1, 1) })
-	end
-	for i = 0, 5 do
-		local w = Instance.new("WedgePart")
-		w.Anchored = true
-		w.Size = V3(2, 1.6, 8.6)
-		w.CFrame = L(ctx, kx, top + 8.6, kz - 5 + i * 2) * CFrame.Angles(0, PI / 2, 0)
-		w.Color = (i % 2 == 0) and RGB(255, 90, 150) or Color3.new(1, 1, 1)
-		w.Parent = currentFolder
-	end
-	makeSign(L(ctx, kx - 4.4, top + 10.8, kz), V3(0.4, 2.6, 12), "sign_petshop", RGB(255, 90, 150), Color3.new(1, 1, 1), Enum.NormalId.Left)
-	prompt(counter, "prompt_open", "prompt_petshop", "OpenShop", "pets")
-	-- витрина: три цветных постамента
-	for i = -1, 1 do
-		part({ Shape = CYL, Size = V3(2, 2.2, 2.2), CFrame = L(ctx, kx + 1.5, top + 1, kz + i * 3.5) * ROT_UP, Color = PARTY[i + 2] })
-		part({ Shape = BALL, Size = V3(1.6, 1.6, 1.6), CFrame = L(ctx, kx + 1.5, top + 2.8, kz + i * 3.5), Color = PARTY[i + 4], Material = M.Neon })
-	end
-
-	-- 📋 стойка заданий дня (справа посередине)
-	local dx, dz = 34, -2
-	local dailyChest = makeChest(L(ctx, dx - 4, top, dz) * CFrame.Angles(0, PI / 2, 0), "dailystand", "DailyStand")
-	prompt(dailyChest.PrimaryPart or dailyChest:FindFirstChild("Base"), "prompt_open", "prompt_tasks", "OpenTasks", true)
-	local dboard = part({ Name = "ChallengeBoard", Size = V3(0.6, 9, 14), CFrame = L(ctx, dx + 3, top + 6, dz), Color = RGB(30, 40, 70) })
-	local sg = Instance.new("SurfaceGui")
-	sg.Face = Enum.NormalId.Left
-	sg.LightInfluence = 0
-	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	sg.PixelsPerStud = 30
-	local lst = Instance.new("Frame")
-	lst.Size = UDim2.fromScale(1, 1)
-	lst.BackgroundTransparency = 1
-	lst.Parent = sg
-	local lay = Instance.new("UIListLayout")
-	lay.SortOrder = Enum.SortOrder.LayoutOrder
-	lay.Parent = lst
-	for i = 0, 3 do
-		local lbl = Instance.new("TextLabel")
-		lbl.Size = UDim2.fromScale(1, i == 0 and 0.25 or 0.25)
-		lbl.BackgroundTransparency = 1
-		lbl.TextScaled = true
-		lbl.Font = i == 0 and Enum.Font.GothamBlack or Enum.Font.GothamBold
-		lbl.TextColor3 = i == 0 and GOLD or Color3.new(1, 1, 1)
-		lbl.AutoLocalize = false
-		lbl.LayoutOrder = i
-		if i == 0 then
-			lbl.Text = Text.Get("en", "sign_daily")
-			lbl:SetAttribute("TextKey", "sign_daily")
-			tag(lbl, "LocText")
-		else
-			lbl.Name = "Row" .. i
-			lbl.Text = "..."
-			tag(lbl, "ChallengeRow")
+	-- 🌳 природа: деревья по краю острова, кусты, цветы, фонари, заборы
+	local function freeSpot(x, z)
+		-- не ставим деревья на дорожки, площадь и здания
+		if math.abs(x) < 8 and (z < -36 or z > 26) then
+			return false
 		end
-		lbl.Parent = lst
+		if x * x + z * z < 32 * 32 then
+			return false
+		end
+		if math.abs(z - 4) < 8 and math.abs(x) > 20 then
+			return false
+		end
+		local zones = { { -46, -13, 9 }, { -30, -16, 7 }, { -50, 6, 14 }, { 50, 6, 14 }, { -40, -34, 18 }, { 44, -30, 16 }, { -24, 34, 10 }, { 24, 34, 10 }, { 0, -58, 16 }, { 0, 64, 16 }, { -22, -60, 10 }, { 22, -60, 10 } }
+		for _, zz in ipairs(zones) do
+			if (x - zz[1]) ^ 2 + (z - zz[2]) ^ 2 < zz[3] ^ 2 then
+				return false
+			end
+		end
+		return true
 	end
-	sg.Parent = dboard
-	part({ Size = V3(0.8, 9.6, 14.6), CFrame = L(ctx, dx + 3.2, top + 6, dz), Color = RGB(90, 200, 255), Material = M.Neon, Transparency = 0.6, CanCollide = false })
+	local placed = 0
+	for _ = 1, 400 do
+		if placed >= 70 then
+			break
+		end
+		local x, z = rng:NextNumber(-R + 4, R - 4), rng:NextNumber(-R + 4, R - 4)
+		if freeSpot(x, z) then
+			placed += 1
+			local cf = L(ctx, x, top, z)
+			local roll = rng:NextNumber()
+			if roll < 0.45 then
+				blockyTree(cf, rng, rng:NextNumber(0.9, 1.4))
+			elseif roll < 0.75 then
+				bush(cf, rng)
+			else
+				for _ = 1, 3 do
+					flower(cf * CF(rng:NextNumber(-2, 2), 0, rng:NextNumber(-2, 2)), rng)
+				end
+			end
+		end
+	end
+	for _, p in ipairs({ { -8, -30 }, { 8, -30 }, { -8, 30 }, { 8, 30 }, { -28, -2 }, { -28, 10 }, { 28, -2 }, { 28, 10 }, { -8, 50 }, { 8, 50 } }) do
+		lamp(L(ctx, p[1], top, p[2]))
+	end
+	fence(L(ctx, -R + 1, top, -R + 1).Position, L(ctx, -12, top, -R + 1).Position)
+	fence(L(ctx, 12, top, -R + 1).Position, L(ctx, R - 1, top, -R + 1).Position)
+	fence(L(ctx, -R + 1, top, -R + 1).Position, L(ctx, -R + 1, top, R - 1).Position)
+	fence(L(ctx, R - 1, top, -R + 1).Position, L(ctx, R - 1, top, R - 1).Position)
+	fence(L(ctx, -R + 1, top, R - 1).Position, L(ctx, -16, top, R - 1).Position)
+	fence(L(ctx, 16, top, R - 1).Position, L(ctx, R - 1, top, R - 1).Position)
 
-	-- 👑 VIP-комната (сзади справа)
-	local wallC = RGB(110, 50, 150)
-	local h = 10
-	local cx, cz = 29, -29
-	part({ Size = V3(18, h, 1), CFrame = L(ctx, cx, top + h / 2, cz - 9), Color = wallC })
-	part({ Size = V3(1, h, 18), CFrame = L(ctx, cx + 9, top + h / 2, cz), Color = wallC })
-	part({ Size = V3(18, h, 1), CFrame = L(ctx, cx, top + h / 2, cz + 9), Color = wallC })
-	part({ Size = V3(1, h, 6), CFrame = L(ctx, cx - 9, top + h / 2, cz - 6), Color = wallC })
-	part({ Size = V3(1, h, 6), CFrame = L(ctx, cx - 9, top + h / 2, cz + 6), Color = wallC })
-	part({ Size = V3(1, 1, 6), CFrame = L(ctx, cx - 9, top + h - 0.5, cz), Color = wallC })
-	part({ Size = V3(19, 1, 19), CFrame = L(ctx, cx, top + h + 0.5, cz), Color = GOLD, Material = M.Foil })
-	local door = part({ Name = "VipDoor", Size = V3(1, h - 1, 6), CFrame = L(ctx, cx - 9, top + (h - 1) / 2, cz), Color = GOLD, Material = M.Neon, Transparency = 0.35 })
-	tag(door, "VipDoor")
-	makeSign(L(ctx, cx - 9.7, top + h + 2.5, cz), V3(0.5, 3, 8), "sign_vip", RGB(110, 50, 150), GOLD, Enum.NormalId.Left)
-	makeChest(L(ctx, cx + 5, top, cz - 5) * CFrame.Angles(0, -PI / 2, 0), "vip", "VipChest")
-	makeSign(L(ctx, cx + 8.4, top + 6, cz), V3(0.4, 4, 12), "sign_vipchest", RGB(70, 25, 100), GOLD, Enum.NormalId.Left)
-	local vipLight = part({ Size = V3(2, 0.4, 2), CFrame = L(ctx, cx, top + h - 0.2, cz), Color = GOLD, Material = M.Neon, CanCollide = false })
-	local vl = Instance.new("PointLight")
-	vl.Range = 18
-	vl.Color = GOLD
-	vl.Parent = vipLight
-
-	-- фонари
-	for _, p in ipairs({ { -20, 20 }, { 20, 30 }, { -20, -20 }, { 20, -14 }, { 0, 20 } }) do
-		part({ Shape = CYL, Size = V3(9, 0.8, 0.8), CFrame = L(ctx, p[1], top + 4.5, p[2]) * ROT_UP, Color = RGB(50, 50, 60), Material = M.Metal })
-		local bulb = part({ Shape = BALL, Size = V3(2, 2, 2), CFrame = L(ctx, p[1], top + 9.5, p[2]), Color = RGB(255, 230, 160), Material = M.Neon })
-		local l = Instance.new("PointLight")
-		l.Range = 24
-		l.Color = RGB(255, 210, 150)
-		l.Parent = bulb
+	-- ☁️ парящие острова вокруг лобби (с деревьями и водопадами)
+	local skyRng = Random.new(Config.MAP_SEED + 77)
+	for i = 0, 7 do
+		local a = i / 8 * 2 * PI + 0.4
+		if math.sin(a) > 0.35 then
+			continue -- впереди идёт трасса, там острова не ставим
+		end
+		local dist = skyRng:NextNumber(95, 130)
+		local y = top + skyRng:NextNumber(25, 60)
+		local icf = L(ctx, math.cos(a) * dist, y, math.sin(a) * dist)
+		local size = skyRng:NextNumber(16, 26)
+		floatingIsland(icf, skyRng, size)
+		blockyTree(icf * CF(skyRng:NextNumber(-3, 3), 0, skyRng:NextNumber(-3, 3)), skyRng, 1.2)
+		if i % 2 == 0 then
+			waterfallFx(icf.Position + V3(size / 2 - 2, -1, 0), icf.Position + V3(size / 2 - 2, -40, 0), 3)
+		end
 	end
 
 	addPath(L(ctx, 0, top, 0).Position)
 	for sx = -1, 1, 2 do
 		for sz = -1, 1, 2 do
-			addPath(L(ctx, sx * 36, top, sz * 36).Position)
+			addPath(L(ctx, sx * (R - 4), top, sz * (R - 4)).Position)
 		end
 	end
-	ctx.x, ctx.y, ctx.z = 0, top, 40
+	ctx.x, ctx.y, ctx.z = 0, top, R
 end
 
 -- ============ ОСОБЫЕ МЕСТА (ПАСХАЛКИ) ============

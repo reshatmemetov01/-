@@ -593,11 +593,12 @@ local noBtn = button({ text = tr("later"), size = UDim2.new(0.5, -24, 0, 48), po
 yesBtn.ZIndex = 9
 noBtn.ZIndex = 9
 
-rebirthBtn.Activated:Connect(function()
+local function openRebirthWin()
 	local reb = (player:GetAttribute("Rebirths") or 0) + 1
 	rebirthText.Text = tr("rebirth_text", reb, string.format("%.1f", 1 + reb * Config.REBIRTH_BONUS), Config.REBIRTH_COINS * reb)
 	rebirthWin.Visible = true
-end)
+end
+rebirthBtn.Activated:Connect(openRebirthWin)
 yesBtn.Activated:Connect(function()
 	rebirthWin.Visible = false
 	ActionRE:FireServer("Rebirth")
@@ -1125,7 +1126,7 @@ RunService.Heartbeat:Connect(function(dt)
 		if not rising.active then
 			local moved = Vector3.new(pos.X - rising.startPos.X, 0, pos.Z - rising.startPos.Z).Magnitude
 			local lc = lobbyCenter()
-			local inLobby = st == 1 and lc ~= nil and Vector3.new(pos.X - lc.X, 0, pos.Z - lc.Z).Magnitude < 46
+			local inLobby = st == 1 and lc ~= nil and Vector3.new(pos.X - lc.X, 0, pos.Z - lc.Z).Magnitude < 74
 			local erupting = workspace:GetAttribute("Event") == "eruption"
 			if (moved > 14 or erupting) and not inLobby then
 				rising.active = true
@@ -1482,6 +1483,18 @@ ProximityPromptService.PromptTriggered:Connect(function(pp)
 		openShop(shopTab)
 	elseif pp:GetAttribute("OpenTasks") then
 		tasksWin.Visible = true
+	elseif pp:GetAttribute("OpenRebirth") then
+		if (player:GetAttribute("MaxStage") or 1) >= FINISH then
+			openRebirthWin()
+		else
+			toast(tr("n_finish_first"))
+		end
+	elseif pp:GetAttribute("BuyVip") then
+		if player:GetAttribute("PassVIP") then
+			openShop("skins")
+		else
+			promptPass("VIP")
+		end
 	end
 end)
 

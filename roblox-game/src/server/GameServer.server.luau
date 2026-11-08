@@ -2165,7 +2165,7 @@ local lobbyPos = map.checkpoints[1].Position
 
 local function inLobby(pos)
 	local dx, dz = pos.X - lobbyPos.X, pos.Z - lobbyPos.Z
-	return dx * dx + dz * dz < 50 * 50
+	return dx * dx + dz * dz < 80 * 80
 end
 
 local function fxPart(props)
