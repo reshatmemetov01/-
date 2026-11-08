@@ -221,6 +221,7 @@ local function teleportToStage(player)
 	local cf = map.spawnCF[s.data.stage] or map.spawnCF[1]
 	root.AssemblyLinearVelocity = Vector3.zero
 	char:PivotTo(cf)
+	s.lastSafe = cf
 end
 
 local function applyTrail(player)
@@ -532,16 +533,62 @@ local function playerFromHit(hit)
 	return Players:GetPlayerFromCharacter(model), hum
 end
 
+-- 🛡 Щит: вместо смерти возвращаем игрока на последнюю платформу, где он стоял
+local function rescue(player)
+	local s = sessions[player]
+	if not s or os.clock() - (s.lastRescue or 0) < 1 then
+		return
+	end
+	s.lastRescue = os.clock()
+	local char, _, root = getCharacterParts(player)
+	if not char or not root then
+		return
+	end
+	root.AssemblyLinearVelocity = Vector3.zero
+	char:PivotTo(s.lastSafe or map.spawnCF[s.data.stage] or map.spawnCF[1])
+	notify(player, "🛡 Щит спас тебя!", Color3.fromRGB(120, 220, 255))
+end
+
 local function kill(hum)
 	if not hum or hum.Health <= 0 then
 		return
 	end
 	local owner = Players:GetPlayerFromCharacter(hum.Parent)
 	if owner and (owner:GetAttribute("ShieldUntil") or 0) > os.time() then
-		return -- 🛡 щит от лавы
+		rescue(owner)
+		return
 	end
 	hum.Health = 0
 end
+
+-- Запоминаем последнюю безопасную точку (неподвижная платформа, не лава)
+local safeParams = RaycastParams.new()
+safeParams.FilterType = Enum.RaycastFilterType.Exclude
+task.spawn(function()
+	while true do
+		task.wait(0.25)
+		for _, p in ipairs(Players:GetPlayers()) do
+			local s = sessions[p]
+			local char, hum, root = getCharacterParts(p)
+			if s and char and hum and root and hum.Health > 0 then
+				safeParams.FilterDescendantsInstances = { char, petFolder }
+				local res = workspace:Raycast(root.Position, Vector3.new(0, -5, 0), safeParams)
+				local hit = res and res.Instance
+				if
+					hit
+					and hit.Anchored
+					and not CollectionService:HasTag(hit, "Lava")
+					and not CollectionService:HasTag(hit, "Kill")
+					and not CollectionService:HasTag(hit, "Vanish")
+					and hit.AssemblyLinearVelocity.Magnitude < 0.1
+					and hit.AssemblyAngularVelocity.Magnitude < 0.1
+				then
+					s.lastSafe = CFrame.new(res.Position + Vector3.new(0, 3.2, 0)) * root.CFrame.Rotation
+				end
+			end
+		end
+	end
+end)
 
 for _, cp in ipairs(CollectionService:GetTagged("Checkpoint")) do
 	cp.Touched:Connect(function(hit)
