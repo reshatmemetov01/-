@@ -6,18 +6,20 @@ local Config = {}
 -- Ключи сохранений. Если поменять — у всех игроков начнётся новый прогресс.
 Config.DATA_KEY = "LavaObby_v1"
 Config.LEADERBOARD_KEY = "LavaObby_Top_v1"
+Config.TIME_LEADERBOARD_KEY = "LavaObby_Time_v1" -- лучшее время прохождения
 
 -- Карта
 Config.TOTAL_STAGES = 50 -- игровых этапов; чекпоинт 51 = финиш
 Config.STAGES_PER_ZONE = 10
 Config.MAP_SEED = 2026 -- поменяй число — получишь другую карту
 
+-- 🌋 МИР ПЛАВИТСЯ! Пять миров по 10 этапов. Названия — в LavaText (zone_1 … zone_5).
 Config.Zones = {
-	{ name = "Гостиная", emoji = "🛋", color = Color3.fromRGB(255, 190, 110) },
-	{ name = "Кухня", emoji = "🍳", color = Color3.fromRGB(120, 220, 255) },
-	{ name = "Лавовые пещеры", emoji = "⛰️", color = Color3.fromRGB(190, 140, 255) },
-	{ name = "Жерло вулкана", emoji = "🌋", color = Color3.fromRGB(255, 90, 40) },
-	{ name = "Небо над вулканом", emoji = "☁️", color = Color3.fromRGB(255, 240, 140) },
+	{ emoji = "🎡", color = Color3.fromRGB(255, 170, 40) }, -- Заброшенный парк развлечений
+	{ emoji = "🍭", color = Color3.fromRGB(255, 110, 200) }, -- Фабрика сладостей
+	{ emoji = "💎", color = Color3.fromRGB(130, 140, 255) }, -- Подземный мир
+	{ emoji = "🌋", color = Color3.fromRGB(255, 80, 30) }, -- Остров вулкана
+	{ emoji = "🏰", color = Color3.fromRGB(255, 230, 110) }, -- Небесное королевство
 }
 
 -- ============ МОНЕТИЗАЦИЯ ============
@@ -57,6 +59,43 @@ Config.ShopPasses = { "VIP", "Speed", "SuperJump", "DoubleCoins", "SkinPack", "D
 Config.ShopProducts = { "SkipStage", "SkipZone", "LavaShield", "Coins500", "Coins2500", "Coins10000", "LavaToWater" }
 
 Config.CoinPacks = { Coins500 = 500, Coins2500 = 2500, Coins10000 = 10000 }
+
+-- ============ ГЛОБАЛЬНЫЕ СОБЫТИЯ СЕРВЕРА ============
+-- Раз в несколько минут для всех игроков начинается событие.
+Config.EVENTS_ENABLED = true
+Config.EVENT_FIRST_DELAY = 150 -- первое событие через 2.5 минуты после запуска сервера
+Config.EVENT_INTERVAL_MIN = 240 -- потом каждые 4–6 минут
+Config.EVENT_INTERVAL_MAX = 360
+Config.Events = {
+	eruption = { duration = 45 }, -- ⚠️ извержение: лава поднимается в 3 раза быстрее
+	night = { duration = 60 }, -- 🌑 ночь: темно, светят только фонари
+	meteors = { duration = 40 }, -- ☄️ метеоритный дождь
+	icestorm = { duration = 45 }, -- 🧊 ледяной шторм: ветер сдувает
+	golden = { duration = 60 }, -- 💰 золотой час: монеты x2
+}
+Config.ERUPTION_LAVA_MULT = 3
+Config.ZONE4_METEOR_INTERVAL = 6 -- в зоне вулкана метеориты падают всегда (раз в N сек)
+
+-- ============ ЕЖЕДНЕВНЫЕ ИСПЫТАНИЯ И СУНДУКИ ============
+Config.CHALLENGES_PER_DAY = 3
+-- kind: stages (новые этапы), coins (собрать монеты), nodeath (этапы подряд без смерти),
+-- secret (уточка/сундук), gift (забрать подарки), zone (открыть новый мир), event (пережить событие)
+Config.Challenges = {
+	{ id = "stages5", kind = "stages", goal = 5, reward = 150 },
+	{ id = "stages10", kind = "stages", goal = 10, reward = 300 },
+	{ id = "coins100", kind = "coins", goal = 100, reward = 150 },
+	{ id = "coins300", kind = "coins", goal = 300, reward = 350 },
+	{ id = "nodeath5", kind = "nodeath", goal = 5, reward = 250 },
+	{ id = "nodeath10", kind = "nodeath", goal = 10, reward = 500 },
+	{ id = "secret1", kind = "secret", goal = 1, reward = 200 },
+	{ id = "gift3", kind = "gift", goal = 3, reward = 200 },
+	{ id = "zone1", kind = "zone", goal = 1, reward = 300 },
+	{ id = "event1", kind = "event", goal = 1, reward = 200 },
+}
+Config.DAILY_CHESTS = 3 -- столько сундуков каждый день прячется на карте
+Config.DAILY_CHEST_MIN = 150
+Config.DAILY_CHEST_MAX = 300
+Config.DAILY_CHEST_TRAIL_CHANCE = 0.15 -- шанс найти в сундуке редкий след
 
 -- ============ НАГРАДЫ ============
 Config.NORMAL_WALKSPEED = 16
