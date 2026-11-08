@@ -66,12 +66,13 @@ local function defaultData()
 	}
 end
 
-local function notify(player, text, color)
-	NotifyRE:FireClient(player, text, color)
+-- Сообщения отправляются «ключом» из LavaText, клиент переводит на язык игрока.
+local function notify(player, key, color, ...)
+	NotifyRE:FireClient(player, key, color, { ... })
 end
 
-local function notifyAll(text, color)
-	NotifyRE:FireAllClients(text, color)
+local function notifyAll(key, color, ...)
+	NotifyRE:FireAllClients(key, color, { ... })
 end
 
 local function countKeys(t)
@@ -130,9 +131,9 @@ local function syncAttributes(player)
 	player:SetAttribute("Multiplier", multiplier(player, s))
 	local ls = player:FindFirstChild("leaderstats")
 	if ls then
-		ls["Этап"].Value = math.min(d.stage, Config.TOTAL_STAGES)
-		ls["Монеты"].Value = d.coins
-		ls["Перерожд."].Value = d.rebirths
+		ls["Stage"].Value = math.min(d.stage, Config.TOTAL_STAGES)
+		ls["Coins"].Value = d.coins
+		ls["Rebirths"].Value = d.rebirths
 	end
 end
 
@@ -507,7 +508,7 @@ local function setStage(player, n)
 		if (n - 1) % Config.STAGES_PER_ZONE == 0 and n < FINISH then
 			local zone = Config.Zones[Config.ZoneOfStage(n)]
 			EffectRE:FireClient(player, "zone", Config.ZoneOfStage(n))
-			notify(player, "Новая зона: " .. zone.emoji .. " " .. zone.name, zone.color)
+			notify(player, "n_new_zone", zone.color, zone.emoji, "@zone_" .. Config.ZoneOfStage(n))
 		end
 	end
 	if n == FINISH and not d.finishedRun then
@@ -515,8 +516,8 @@ local function setStage(player, n)
 		local gained = addCoins(player, Config.FINISH_REWARD, true)
 		awardBadge(player, Config.Badges.Finish)
 		EffectRE:FireClient(player, "finish")
-		notify(player, "🏆 ТЫ ПРОШЁЛ ИГРУ! +" .. gained .. " 🪙", Color3.fromRGB(255, 215, 80))
-		notifyAll("🏆 " .. player.DisplayName .. " прошёл всю лаву!", Color3.fromRGB(255, 215, 80))
+		notify(player, "n_finish", Color3.fromRGB(255, 215, 80), gained)
+		notifyAll("n_all_finish", Color3.fromRGB(255, 215, 80), player.DisplayName)
 		task.spawn(saveData, player)
 	elseif isNewMax then
 		EffectRE:FireClient(player, "checkpoint")
@@ -546,7 +547,6 @@ local function rescue(player)
 	end
 	root.AssemblyLinearVelocity = Vector3.zero
 	char:PivotTo(s.lastSafe or map.spawnCF[s.data.stage] or map.spawnCF[1])
-	notify(player, "🛡 Щит спас тебя!", Color3.fromRGB(120, 220, 255))
 end
 
 local function kill(hum)
@@ -811,7 +811,7 @@ local function setWater(seconds, byName)
 	local wasWater = isWater()
 	waterUntil = math.max(waterUntil, now) + seconds
 	workspace:SetAttribute("WaterUntil", os.time() + math.ceil(waterUntil - now))
-	notifyAll("🌊 " .. byName .. " превратил лаву в воду на " .. seconds .. " сек!", Color3.fromRGB(90, 190, 255))
+	notifyAll("n_water", Color3.fromRGB(90, 190, 255), byName, seconds)
 	if wasWater then
 		return
 	end
@@ -831,7 +831,7 @@ local function setWater(seconds, byName)
 			lava.Transparency = lava:GetAttribute("Off") and 0.85 or o.transparency
 		end
 		workspace:SetAttribute("LavaIsWater", false)
-		notifyAll("🔥 Лава вернулась!", Color3.fromRGB(255, 120, 40))
+		notifyAll("n_lava_back", Color3.fromRGB(255, 120, 40))
 		killPlayersStandingOnLava()
 	end)
 end
@@ -847,7 +847,7 @@ for _, btn in ipairs(CollectionService:GetTagged("LavaButton")) do
 			local s = sessions[player]
 			if s and now - (s.lastButtonMsg or 0) > 3 then
 				s.lastButtonMsg = now
-				notify(player, "⏳ Кнопка перезаряжается: " .. math.ceil(buttonReadyAt - now) .. " сек")
+				notify(player, "n_button_cd", nil, math.ceil(buttonReadyAt - now))
 			end
 			return
 		end
@@ -887,12 +887,12 @@ for _, duck in ipairs(CollectionService:GetTagged("Duck")) do
 		local found = countKeys(s.data.ducks)
 		local gained = addCoins(player, Config.DUCK_REWARD, true)
 		EffectRE:FireClient(player, "duck")
-		notify(player, "🦆 Уточка найдена! " .. found .. "/" .. Config.DUCK_COUNT .. "  +" .. gained .. " 🪙", Color3.fromRGB(255, 225, 60))
+		notify(player, "n_duck", Color3.fromRGB(255, 225, 60), found, Config.DUCK_COUNT, gained)
 		if found >= Config.DUCK_COUNT then
 			addCoins(player, Config.ALL_DUCKS_REWARD, false)
 			awardBadge(player, Config.Badges.AllDucks)
-			notify(player, "👑 ВСЕ УТОЧКИ! +" .. Config.ALL_DUCKS_REWARD .. " 🪙 и след «Золотая утка»!", Color3.fromRGB(255, 200, 40))
-			notifyAll("🦆 " .. player.DisplayName .. " нашёл всех уточек!", Color3.fromRGB(255, 225, 60))
+			notify(player, "n_all_ducks", Color3.fromRGB(255, 200, 40), Config.ALL_DUCKS_REWARD)
+			notifyAll("n_all_ducks_all", Color3.fromRGB(255, 225, 60), player.DisplayName)
 			applyOverhead(player)
 		end
 		syncAttributes(player)
@@ -913,7 +913,7 @@ for _, chest in ipairs(CollectionService:GetTagged("Secret")) do
 		local gained = addCoins(player, Config.SECRET_REWARD, true)
 		awardBadge(player, Config.Badges[SECRET_BADGES[id] or ""])
 		EffectRE:FireClient(player, "duck")
-		notify(player, "🎁 Секретный сундук! +" .. gained .. " 🪙", Color3.fromRGB(255, 200, 80))
+		notify(player, "n_secret", Color3.fromRGB(255, 200, 80), gained)
 	end)
 end
 
@@ -930,18 +930,18 @@ for _, chest in ipairs(CollectionService:GetTagged("VipChest")) do
 		end
 		s.lastChestMsg = now
 		if not player:GetAttribute("PassVIP") then
-			notify(player, "👑 Сундук только для VIP")
+			notify(player, "n_vip_only")
 			return
 		end
 		local left = s.data.vipChest + Config.VIP_CHEST_COOLDOWN - os.time()
 		if left > 0 then
-			notify(player, "⏳ VIP-сундук откроется через " .. math.ceil(left / 60) .. " мин")
+			notify(player, "n_vip_chest_wait", nil, math.ceil(left / 60))
 			return
 		end
 		s.data.vipChest = os.time()
 		local gained = addCoins(player, Config.VIP_CHEST_REWARD, true)
 		EffectRE:FireClient(player, "duck")
-		notify(player, "👑 VIP-сундук: +" .. gained .. " 🪙", Color3.fromRGB(255, 215, 80))
+		notify(player, "n_vip_chest", Color3.fromRGB(255, 215, 80), gained)
 	end)
 end
 
@@ -978,14 +978,8 @@ MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passI
 	for key, id in pairs(Config.GamePasses) do
 		if id == passId then
 			player:SetAttribute("Pass" .. key, true)
-			notify(player, "Спасибо за покупку! ❤️", Color3.fromRGB(120, 255, 140))
-			local nice = key
-			for _, sp in ipairs(Config.ShopPasses) do
-				if sp.key == key then
-					nice = sp.name
-				end
-			end
-			notifyAll("💎 " .. player.DisplayName .. " купил " .. nice .. "!", Color3.fromRGB(190, 140, 255))
+			notify(player, "n_thanks", Color3.fromRGB(120, 255, 140))
+			notifyAll("n_bought_pass", Color3.fromRGB(190, 140, 255), player.DisplayName, "@pass_" .. key)
 		end
 	end
 	applyCharacter(player)
@@ -1017,12 +1011,12 @@ MarketplaceService.ProcessReceipt = function(receipt)
 		local n = math.min(d.stage + 1, FINISH)
 		setStage(player, n)
 		teleportToStage(player)
-		notify(player, "⏭ Этап пропущен!", Color3.fromRGB(120, 255, 140))
+		notify(player, "n_skipped_stage", Color3.fromRGB(120, 255, 140))
 	elseif id == P.SkipZone then
 		local n = math.min(math.max(Config.ZoneOfStage(math.min(d.stage, Config.TOTAL_STAGES)) * Config.STAGES_PER_ZONE + 1, d.stage + 1), FINISH)
 		setStage(player, n)
 		teleportToStage(player)
-		notify(player, "⏩ Зона пропущена!", Color3.fromRGB(120, 255, 140))
+		notify(player, "n_skipped_zone", Color3.fromRGB(120, 255, 140))
 	elseif id == P.LavaShield then
 		local untilT = math.max(player:GetAttribute("ShieldUntil") or 0, os.time()) + Config.SHIELD_DURATION
 		player:SetAttribute("ShieldUntil", untilT)
@@ -1040,11 +1034,11 @@ MarketplaceService.ProcessReceipt = function(receipt)
 				end
 			end
 		end)
-		notify(player, "🛡 Щит от лавы на " .. Config.SHIELD_DURATION .. " сек!", Color3.fromRGB(120, 220, 255))
+		notify(player, "n_shield", Color3.fromRGB(120, 220, 255), Config.SHIELD_DURATION)
 	elseif id == P.Coins500 or id == P.Coins2500 or id == P.Coins10000 then
 		local amount = (id == P.Coins500 and 500) or (id == P.Coins2500 and 2500) or 10000
 		addCoins(player, amount, false)
-		notify(player, "💰 +" .. amount .. " монет!", Color3.fromRGB(255, 215, 80))
+		notify(player, "n_coins", Color3.fromRGB(255, 215, 80), amount)
 	elseif id == P.LavaToWater then
 		setWater(Config.WATER_PRODUCT_DURATION, player.DisplayName)
 	else
@@ -1095,7 +1089,7 @@ end
 local function doRebirth(player, s)
 	local d = s.data
 	if d.maxStage < FINISH then
-		notify(player, "Сначала дойди до финиша 🏆")
+		notify(player, "n_finish_first")
 		return
 	end
 	d.rebirths += 1
@@ -1109,8 +1103,8 @@ local function doRebirth(player, s)
 	teleportToStage(player)
 	applyOverhead(player)
 	EffectRE:FireClient(player, "finish")
-	notify(player, "🔁 Перерождение " .. d.rebirths .. "! Монеты x" .. string.format("%.1f", 1 + d.rebirths * Config.REBIRTH_BONUS) .. "  +" .. bonus .. " 🪙", Color3.fromRGB(200, 130, 255))
-	notifyAll("🔁 " .. player.DisplayName .. " переродился (" .. d.rebirths .. ")!", Color3.fromRGB(200, 130, 255))
+	notify(player, "n_rebirth", Color3.fromRGB(200, 130, 255), d.rebirths, string.format("%.1f", 1 + d.rebirths * Config.REBIRTH_BONUS), bonus)
+	notifyAll("n_rebirth_all", Color3.fromRGB(200, 130, 255), player.DisplayName, d.rebirths)
 	task.spawn(saveData, player)
 end
 
@@ -1161,12 +1155,12 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 				return
 			end
 			if d.coins < item.price then
-				notify(player, "Не хватает монет 🪙 Собирай монетки на этапах или купи набор 💰")
+				notify(player, "n_no_coins")
 				return
 			end
 			d.coins -= item.price
 			d[cat.owned][item.id] = true
-			notify(player, "✨ Куплено: «" .. item.name .. "»!", Color3.fromRGB(120, 255, 140))
+			notify(player, "n_bought_item", Color3.fromRGB(120, 255, 140), "@item_" .. category .. "_" .. item.id)
 			task.spawn(saveData, player)
 		elseif not ownsItem(player, s, category, item) then
 			return
@@ -1184,7 +1178,7 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 		s.nextGift = os.time() + Config.GIFT_INTERVAL
 		syncAttributes(player)
 		EffectRE:FireClient(player, "duck")
-		notify(player, "🎁 Подарок: +" .. gained .. " 🪙  Следующий через 5 минут!", Color3.fromRGB(255, 215, 80))
+		notify(player, "n_gift", Color3.fromRGB(255, 215, 80), gained)
 	elseif action == "Rebirth" then
 		doRebirth(player, s)
 	elseif action == "Respawn" then
@@ -1209,7 +1203,7 @@ local function giveDaily(player, s)
 	local gained = addCoins(player, amount, true)
 	task.delay(3, function()
 		if player.Parent then
-			notify(player, "📅 Ежедневная награда (день " .. d.streak .. "): +" .. gained .. " 🪙  Заходи завтра!", Color3.fromRGB(255, 215, 80))
+			notify(player, "n_daily", Color3.fromRGB(255, 215, 80), d.streak, gained)
 		end
 	end)
 end
@@ -1217,7 +1211,7 @@ end
 local function onPlayerAdded(player)
 	local ls = Instance.new("Folder")
 	ls.Name = "leaderstats"
-	for _, name in ipairs({ "Этап", "Монеты", "Перерожд." }) do
+	for _, name in ipairs({ "Stage", "Coins", "Rebirths" }) do
 		local v = Instance.new("IntValue")
 		v.Name = name
 		v.Parent = ls
@@ -1246,7 +1240,7 @@ local function onPlayerAdded(player)
 	s.noSave = not ok
 	s.loaded = true
 	if not ok then
-		notify(player, "⚠️ Не удалось загрузить прогресс. Сохранение в этой сессии отключено.", Color3.fromRGB(255, 120, 80))
+		notify(player, "n_load_fail", Color3.fromRGB(255, 120, 80))
 	end
 	giveDaily(player, s)
 	syncAttributes(player)
@@ -1317,13 +1311,13 @@ task.spawn(function()
 								local okName, res = pcall(function()
 									return Players:GetNameFromUserIdAsync(uid)
 								end)
-								name = okName and res or "Игрок"
+								name = okName and res or "Player"
 								nameCache[uid] = name
 							end
 							local reb = math.floor(e.value / 1000)
 							local st = e.value % 1000
-							local stText = st >= FINISH and "🏆" or ("этап " .. st)
-							row.Text = string.format("%d. %s — 🔁%d · %s", i, name or "Игрок", reb, stText)
+							local stText = st >= FINISH and "🏆" or tostring(st)
+							row.Text = string.format("%d. %s — 🔁%d · 🏁 %s", i, name or "Player", reb, stText)
 						else
 							row.Text = i .. ". ---"
 						end

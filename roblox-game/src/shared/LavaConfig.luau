@@ -15,7 +15,7 @@ Config.MAP_SEED = 2026 -- поменяй число — получишь дру�
 Config.Zones = {
 	{ name = "Гостиная", emoji = "🛋", color = Color3.fromRGB(255, 190, 110) },
 	{ name = "Кухня", emoji = "🍳", color = Color3.fromRGB(120, 220, 255) },
-	{ name = "Лавовые пещеры", emoji = "🪨", color = Color3.fromRGB(190, 140, 255) },
+	{ name = "Лавовые пещеры", emoji = "⛰️", color = Color3.fromRGB(190, 140, 255) },
 	{ name = "Жерло вулкана", emoji = "🌋", color = Color3.fromRGB(255, 90, 40) },
 	{ name = "Небо над вулканом", emoji = "☁️", color = Color3.fromRGB(255, 240, 140) },
 }
@@ -27,8 +27,8 @@ Config.Zones = {
 Config.GamePasses = {
 	VIP = 1464490994, -- 👑 VIP (самый важный!)
 	Speed = 0, -- ⚡ Скорость x1.5
-	SuperJump = 0, -- 🦘 Супер-прыжок
-	DoubleCoins = 0, -- 🪙 x2 монеты
+	SuperJump = 0, -- 🚀 Супер-прыжок
+	DoubleCoins = 0, -- 💰 x2 монеты
 	SkinPack = 0, -- 🌈 Эксклюзивные скины
 	DragonPet = 0, -- 🐉 Питомец Дракончик
 }
@@ -52,25 +52,9 @@ Config.Badges = {
 	DontJump = 0,
 }
 
--- Тексты для магазина
-Config.ShopPasses = {
-	{ key = "VIP", name = "👑 VIP", desc = "Золотой скин, питомец Феникс, королевский след, VIP-зона с сундуком, тег над головой и +25% монет." },
-	{ key = "Speed", name = "⚡ Скорость", desc = "Бегаешь в 1.5 раза быстрее. Навсегда." },
-	{ key = "SuperJump", name = "🦘 Супер-прыжок", desc = "Прыгаешь выше и дальше. Этапы станут проще!" },
-	{ key = "DoubleCoins", name = "🪙 x2 монеты", desc = "Все монеты удваиваются. Навсегда." },
-	{ key = "SkinPack", name = "🌈 Скины PRO", desc = "Скины «Радуга» и «Галактика», которых нет ни у кого." },
-	{ key = "DragonPet", name = "🐉 Дракончик", desc = "Самый сильный питомец: +75% монет." },
-}
-
-Config.ShopProducts = {
-	{ key = "SkipStage", name = "⏭ Пропуск этапа", desc = "Сразу на следующий этап." },
-	{ key = "SkipZone", name = "⏩ Пропуск зоны", desc = "Сразу в следующую зону." },
-	{ key = "LavaShield", name = "🛡 Щит от лавы", desc = "60 секунд лава и ловушки не убивают." },
-	{ key = "Coins500", name = "💰 500 монет", desc = "На скин или питомца." },
-	{ key = "Coins2500", name = "💰 2 500 монет", desc = "Выгоднее!" },
-	{ key = "Coins10000", name = "💰 10 000 монет", desc = "Самый выгодный набор!" },
-	{ key = "LavaToWater", name = "🌊 Лава → вода", desc = "Для ВСЕХ на сервере на 20 секунд. Все скажут спасибо!" },
-}
+-- Порядок товаров в магазине. Названия и описания — в скрипте LavaText.
+Config.ShopPasses = { "VIP", "Speed", "SuperJump", "DoubleCoins", "SkinPack", "DragonPet" }
+Config.ShopProducts = { "SkipStage", "SkipZone", "LavaShield", "Coins500", "Coins2500", "Coins10000", "LavaToWater" }
 
 Config.CoinPacks = { Coins500 = 500, Coins2500 = 2500, Coins10000 = 10000 }
 
@@ -168,14 +152,6 @@ Config.Pets = {
 	{ id = "goldduck", name = "Золотая утка", unlock = "ducks", bonus = 0.25, color = Color3.fromRGB(255, 200, 40) },
 	{ id = "phoenix", name = "Феникс", unlock = "vip", bonus = 0.5, color = Color3.fromRGB(255, 160, 40) },
 	{ id = "dragon", name = "Дракончик", unlock = "pass:DragonPet", bonus = 0.75, color = Color3.fromRGB(80, 200, 90) },
-}
-
-Config.UnlockText = {
-	ducks = "Найди все 5 уточек 🦆",
-	vip = "Только для 👑 VIP",
-	rebirth3 = "3 перерождения 🔁",
-	["pass:SkinPack"] = "Пропуск 🌈 Скины PRO",
-	["pass:DragonPet"] = "Пропуск 🐉 Дракончик",
 }
 
 -- Категории предметов магазина за монеты

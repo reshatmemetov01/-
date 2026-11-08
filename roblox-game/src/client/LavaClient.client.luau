@@ -8,9 +8,21 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local CollectionService = game:GetService("CollectionService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local LocalizationService = game:GetService("LocalizationService")
 
 local player = Players.LocalPlayer
 local Config = require(ReplicatedStorage:WaitForChild("LavaConfig"))
+local Text = require(ReplicatedStorage:WaitForChild("LavaText"))
+
+-- Язык игрока: берём из настроек его аккаунта Roblox
+local locale = player.LocaleId
+if not locale or locale == "" then
+	locale = LocalizationService.RobloxLocaleId
+end
+local LANG = Text.LangFor(locale)
+local function tr(key, ...)
+	return Text.Format(LANG, key, { ... })
+end
 local remotes = ReplicatedStorage:WaitForChild("LavaRemotes")
 local NotifyRE = remotes:WaitForChild("Notify")
 local CoinRE = remotes:WaitForChild("CoinHidden")
@@ -71,7 +83,7 @@ local function button(props, parent)
 	return b
 end
 
-local gui = new("ScreenGui", { Name = "LavaUI", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
+local gui = new("ScreenGui", { Name = "LavaUI", ResetOnSpawn = false, AutoLocalize = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, player:WaitForChild("PlayerGui"))
 
 -- ============ ВЕРХНЯЯ ПАНЕЛЬ: ЭТАП ============
 local top = scaled(new("Frame", {
@@ -90,7 +102,7 @@ local stageLabel = new("TextLabel", {
 	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
 	TextColor3 = Color3.new(1, 1, 1),
-	Text = "Этап 1 / " .. TOTAL,
+	Text = tr("ui_stage", 1, TOTAL),
 }, top)
 textStroke(stageLabel)
 local zoneLabel = new("TextLabel", {
@@ -118,13 +130,13 @@ local left = scaled(new("Frame", {
 	BackgroundTransparency = 1,
 }, gui))
 new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, left)
-local shopBtn = button({ text = "🛒 Магазин", color = Color3.fromRGB(60, 170, 90), order = 1 }, left)
-local vipBtn = button({ text = "👑 VIP", color = Color3.fromRGB(230, 170, 20), order = 2 }, left)
+local shopBtn = button({ text = tr("ui_shop"), color = Color3.fromRGB(60, 170, 90), order = 1 }, left)
+local vipBtn = button({ text = tr("ui_vip"), color = Color3.fromRGB(230, 170, 20), order = 2 }, left)
 local giftBtn = button({ text = "🎁 5:00", color = Color3.fromRGB(150, 90, 200), order = 3 }, left)
-local skipBtn = button({ text = "⏭ Пропуск", color = Color3.fromRGB(230, 140, 30), order = 4 }, left)
-local shieldBtn = button({ text = "🛡 Щит", color = Color3.fromRGB(40, 130, 230), order = 5 }, left)
-local respawnBtn = button({ text = "↩ К чекпоинту", color = Color3.fromRGB(90, 90, 100), order = 5 }, left)
-local rebirthBtn = button({ text = "🔁 Перерождение", color = Color3.fromRGB(200, 60, 200), order = 6 }, left)
+local skipBtn = button({ text = tr("ui_skip"), color = Color3.fromRGB(230, 140, 30), order = 4 }, left)
+local shieldBtn = button({ text = tr("ui_shield"), color = Color3.fromRGB(40, 130, 230), order = 5 }, left)
+local respawnBtn = button({ text = tr("ui_respawn"), color = Color3.fromRGB(90, 90, 100), order = 6 }, left)
+local rebirthBtn = button({ text = tr("ui_rebirth"), color = Color3.fromRGB(200, 60, 200), order = 7 }, left)
 rebirthBtn.Visible = false
 
 -- ============ ПРАВАЯ КОЛОНКА: СЧЁТЧИКИ ============
@@ -151,16 +163,44 @@ local function counter(text, order)
 	new("UIPadding", { PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5), PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, f)
 	return f
 end
-local coinsLabel = counter("🪙 0", 1)
+local coinsLabel = counter("💰 0", 1)
 local ducksLabel = counter("🦆 0/" .. Config.DUCK_COUNT, 2)
 local multLabel = counter("x1", 3)
-local shieldLabel = counter("🛡 0", 4)
-shieldLabel.Visible = false
+
+-- ============ КРУГЛЫЙ ТАЙМЕР ЩИТА (наверху) ============
+local shieldCircle = scaled(new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 86),
+	Size = UDim2.fromOffset(66, 66),
+	BackgroundColor3 = Color3.fromRGB(20, 40, 70),
+	BackgroundTransparency = 0.1,
+	Visible = false,
+}, gui))
+new("UICorner", { CornerRadius = UDim.new(1, 0) }, shieldCircle)
+local shieldRing = new("UIStroke", { Color = Color3.fromRGB(90, 190, 255), Thickness = 4 }, shieldCircle)
+new("TextLabel", {
+	BackgroundTransparency = 1,
+	Size = UDim2.new(1, 0, 0, 20),
+	Position = UDim2.fromOffset(0, 5),
+	Font = Enum.Font.GothamBlack,
+	TextScaled = true,
+	Text = "🛡",
+}, shieldCircle)
+local shieldNum = new("TextLabel", {
+	BackgroundTransparency = 1,
+	Size = UDim2.new(1, 0, 0, 30),
+	Position = UDim2.fromOffset(0, 26),
+	Font = Enum.Font.GothamBlack,
+	TextScaled = true,
+	TextColor3 = Color3.new(1, 1, 1),
+	Text = "60",
+}, shieldCircle)
+textStroke(shieldNum)
 
 -- ============ УВЕДОМЛЕНИЯ ============
 local toastArea = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 90),
+	Position = UDim2.new(0.5, 0, 0, 160),
 	Size = UDim2.new(0.6, 0, 0, 220),
 	BackgroundTransparency = 1,
 }, gui)
@@ -203,7 +243,9 @@ local function toast(text, color)
 	end)
 end
 
-NotifyRE.OnClientEvent:Connect(toast)
+NotifyRE.OnClientEvent:Connect(function(key, color, args)
+	toast(Text.Format(LANG, key, args), color)
+end)
 
 -- ============ БОЛЬШОЙ БАННЕР ============
 local banner = new("TextLabel", {
@@ -266,13 +308,13 @@ local shopTitle = new("TextLabel", {
 	TextScaled = true,
 	TextXAlignment = Enum.TextXAlignment.Left,
 	TextColor3 = GOLD,
-	Text = "🛒 МАГАЗИН",
+	Text = tr("ui_shop_title"),
 	ZIndex = 6,
 }, shop)
 textStroke(shopTitle)
 local closeBtn = button({ text = "✕", size = UDim2.fromOffset(44, 44), position = UDim2.new(1, -56, 0, 10), color = Color3.fromRGB(200, 50, 50) }, shop)
 closeBtn.ZIndex = 6
-local TABS = { { "trails", "✨ Следы" }, { "skins", "🎨 Скины" }, { "pets", "🐾 Питомцы" }, { "robux", "💎 Robux" } }
+local TABS = { { "trails", tr("tab_trails") }, { "skins", tr("tab_skins") }, { "pets", tr("tab_pets") }, { "robux", tr("tab_robux") } }
 local tabButtons = {}
 for i, t in ipairs(TABS) do
 	local b = button({ text = t[2], size = UDim2.fromOffset(128, 38), position = UDim2.fromOffset(16 + (i - 1) * 136, 60), color = Color3.fromRGB(90, 70, 80) }, shop)
@@ -363,7 +405,7 @@ local function clearList()
 end
 
 local function notConfigured()
-	toast("⚙️ Эта покупка ещё не настроена (см. README)", Color3.fromRGB(255, 200, 120))
+	toast(tr("not_configured"), Color3.fromRGB(255, 200, 120))
 end
 
 local function promptProduct(key)
@@ -393,8 +435,7 @@ local function refreshShop()
 		local category = currentTab
 		local cat = Config.ItemCategories[category]
 		local equipped = player:GetAttribute(CAT_ATTR[category][2]) or ""
-		local noneText = { trails = "Без следа", skins = "Обычный вид", pets = "Без питомца" }
-		card(0, noneText[category], "Снять то, что надето.", nil, equipped == "" and "Выбрано ✓" or "Снять", Color3.fromRGB(90, 90, 100), function()
+		card(0, tr("none_" .. category), tr("none_desc"), nil, equipped == "" and tr("selected") or tr("take_off"), Color3.fromRGB(90, 90, 100), function()
 			ActionRE:FireServer("EquipItem", { category = category, id = "" })
 		end)
 		for i, item in ipairs(Config[cat.list]) do
@@ -402,56 +443,56 @@ local function refreshShop()
 			local colors = item.colors or (item.color and { item.color }) or nil
 			local desc
 			if item.price then
-				desc = owned and "Твоё ✨" or ("Цена: " .. item.price .. " 🪙")
+				desc = owned and tr("yours") or tr("price", item.price)
 			else
-				desc = Config.UnlockText[item.unlock] or ""
+				desc = tr("unlock_" .. tostring(item.unlock))
 			end
 			if item.bonus then
-				desc = "+" .. math.floor(item.bonus * 100 + 0.5) .. "% к монетам\n" .. desc
+				desc = tr("bonus", math.floor(item.bonus * 100 + 0.5)) .. "\n" .. desc
 			end
 			local btnText, btnColor, action
 			if equipped == item.id and owned then
-				btnText, btnColor = "Надето ✓", Color3.fromRGB(60, 170, 90)
+				btnText, btnColor = tr("equipped"), Color3.fromRGB(60, 170, 90)
 				action = function() end
 			elseif owned then
-				btnText, btnColor = "Надеть", Color3.fromRGB(60, 140, 230)
+				btnText, btnColor = tr("equip"), Color3.fromRGB(60, 140, 230)
 				action = function()
 					ActionRE:FireServer("EquipItem", { category = category, id = item.id })
 				end
 			elseif item.price then
-				btnText, btnColor = "Купить " .. item.price .. " 🪙", Color3.fromRGB(255, 140, 40)
+				btnText, btnColor = tr("buy_coins", item.price), Color3.fromRGB(255, 140, 40)
 				action = function()
 					ActionRE:FireServer("BuyItem", { category = category, id = item.id })
 				end
 			elseif item.unlock == "vip" or string.sub(item.unlock or "", 1, 5) == "pass:" then
 				local key = item.unlock == "vip" and "VIP" or string.sub(item.unlock, 6)
-				btnText, btnColor = "💎 Получить", Color3.fromRGB(0, 170, 110)
+				btnText, btnColor = tr("get_robux"), Color3.fromRGB(0, 170, 110)
 				action = function()
 					promptPass(key)
 				end
 			else
-				btnText, btnColor = "🔒 Закрыто", Color3.fromRGB(80, 70, 75)
+				btnText, btnColor = tr("locked"), Color3.fromRGB(80, 70, 75)
 				action = function()
-					toast("🔒 " .. (Config.UnlockText[item.unlock] or ""))
+					toast("🔒 " .. desc)
 				end
 			end
-			card(i, item.name, desc, colors, btnText, btnColor, action)
+			card(i, tr("item_" .. category .. "_" .. item.id), desc, colors, btnText, btnColor, action)
 		end
 	else
 		local order = 0
-		for _, p in ipairs(Config.ShopPasses) do
+		for _, key in ipairs(Config.ShopPasses) do
 			order += 1
-			local owned = player:GetAttribute("Pass" .. p.key) == true
-			card(order, p.name, p.desc, nil, owned and "Куплено ✓" or "Купить 💎", owned and Color3.fromRGB(60, 170, 90) or Color3.fromRGB(0, 170, 110), function()
+			local owned = player:GetAttribute("Pass" .. key) == true
+			card(order, tr("pass_" .. key), tr("pass_" .. key .. "_desc"), nil, owned and tr("owned") or tr("buy_robux"), owned and Color3.fromRGB(60, 170, 90) or Color3.fromRGB(0, 170, 110), function()
 				if not owned then
-					promptPass(p.key)
+					promptPass(key)
 				end
 			end)
 		end
-		for _, p in ipairs(Config.ShopProducts) do
+		for _, key in ipairs(Config.ShopProducts) do
 			order += 1
-			card(order, p.name, p.desc, nil, "Купить 💎", Color3.fromRGB(0, 170, 110), function()
-				promptProduct(p.key)
+			card(order, tr("prod_" .. key), tr("prod_" .. key .. "_desc"), nil, tr("buy_robux"), Color3.fromRGB(0, 170, 110), function()
+				promptProduct(key)
 			end)
 		end
 	end
@@ -505,16 +546,14 @@ local rebirthText = new("TextLabel", {
 	Text = "",
 	ZIndex = 9,
 }, rebirthWin)
-local yesBtn = button({ text = "🔁 Да!", size = UDim2.new(0.5, -24, 0, 48), position = UDim2.new(0, 16, 1, -62), color = Color3.fromRGB(200, 60, 200) }, rebirthWin)
-local noBtn = button({ text = "Позже", size = UDim2.new(0.5, -24, 0, 48), position = UDim2.new(0.5, 8, 1, -62), color = Color3.fromRGB(90, 90, 100) }, rebirthWin)
+local yesBtn = button({ text = tr("yes_rebirth"), size = UDim2.new(0.5, -24, 0, 48), position = UDim2.new(0, 16, 1, -62), color = Color3.fromRGB(200, 60, 200) }, rebirthWin)
+local noBtn = button({ text = tr("later"), size = UDim2.new(0.5, -24, 0, 48), position = UDim2.new(0.5, 8, 1, -62), color = Color3.fromRGB(90, 90, 100) }, rebirthWin)
 yesBtn.ZIndex = 9
 noBtn.ZIndex = 9
 
 rebirthBtn.Activated:Connect(function()
 	local reb = (player:GetAttribute("Rebirths") or 0) + 1
-	rebirthText.Text = "Перерождение " .. reb .. "\nТы начнёшь с 1 этапа, но монеты будут x"
-		.. string.format("%.1f", 1 + reb * Config.REBIRTH_BONUS)
-		.. " навсегда и +" .. (Config.REBIRTH_COINS * reb) .. " 🪙 сразу!"
+	rebirthText.Text = tr("rebirth_text", reb, string.format("%.1f", 1 + reb * Config.REBIRTH_BONUS), Config.REBIRTH_COINS * reb)
 	rebirthWin.Visible = true
 end)
 yesBtn.Activated:Connect(function()
@@ -538,7 +577,7 @@ nextBtn.Activated:Connect(function()
 	if st < mx then
 		ActionRE:FireServer("Teleport", st + 1)
 	else
-		toast("Сначала пройди этот этап 💪")
+		toast(tr("beat_stage_first"))
 	end
 end)
 skipBtn.Activated:Connect(function()
@@ -548,7 +587,9 @@ shieldBtn.Activated:Connect(function()
 	promptProduct("LavaShield")
 end)
 vipBtn.Activated:Connect(function()
-	if Config.GamePasses.VIP ~= 0 then
+	if player:GetAttribute("PassVIP") then
+		openShop("skins") -- у VIP уже всё есть: открываем, чтобы надеть золотой скин
+	elseif Config.GamePasses.VIP ~= 0 then
 		promptPass("VIP")
 	else
 		openShop("robux")
@@ -562,7 +603,7 @@ giftBtn.Activated:Connect(function()
 	if os.time() >= nextGift then
 		ActionRE:FireServer("ClaimGift")
 	else
-		toast("🎁 Подарок будет доступен совсем скоро!")
+		toast(tr("gift_soon"))
 	end
 end)
 
@@ -573,14 +614,14 @@ local function refreshHud()
 	local st = player:GetAttribute("Stage") or 1
 	local mx = player:GetAttribute("MaxStage") or 1
 	if st >= FINISH then
-		stageLabel.Text = "🏆 ФИНИШ!"
-		zoneLabel.Text = "Ты прошёл все " .. TOTAL .. " этапов"
+		stageLabel.Text = tr("ui_finish")
+		zoneLabel.Text = tr("ui_finish_sub", TOTAL)
 		barFill.Size = UDim2.fromScale(1, 1)
 	else
-		stageLabel.Text = "Этап " .. st .. " / " .. TOTAL
+		stageLabel.Text = tr("ui_stage", st, TOTAL)
 		local z = Config.ZoneOfStage(st)
 		local zone = Config.Zones[z]
-		zoneLabel.Text = zone.emoji .. " " .. zone.name
+		zoneLabel.Text = zone.emoji .. " " .. tr("zone_" .. z)
 		zoneLabel.TextColor3 = zone.color
 		barFill.Size = UDim2.fromScale((st - 1) / TOTAL, 1)
 		barFill.BackgroundColor3 = zone.color
@@ -588,13 +629,13 @@ local function refreshHud()
 	prevBtn.Visible = st > 1
 	nextBtn.Visible = st < mx
 	rebirthBtn.Visible = mx >= FINISH
-	coinsLabel.Text = "🪙 " .. (player:GetAttribute("Coins") or 0)
+	coinsLabel.Text = "💰 " .. (player:GetAttribute("Coins") or 0)
 	ducksLabel.Text = "🦆 " .. (player:GetAttribute("Ducks") or 0) .. "/" .. Config.DUCK_COUNT
 	local mult = player:GetAttribute("Multiplier") or 1
 	local reb = player:GetAttribute("Rebirths") or 0
-	multLabel.Text = "x" .. string.format("%.2g", mult) .. " 🪙" .. (reb > 0 and ("  🔁" .. reb) or "")
+	multLabel.Text = "x" .. string.format("%.2g", mult) .. " 💰" .. (reb > 0 and ("  🔁" .. reb) or "")
 	skipBtn.Visible = st < FINISH
-	vipBtn.Visible = player:GetAttribute("PassVIP") ~= true
+	vipBtn.Text = player:GetAttribute("PassVIP") and tr("ui_vip_owned") or tr("ui_vip")
 end
 
 for _, attr in ipairs({ "Stage", "MaxStage", "Coins", "Ducks", "Multiplier", "Rebirths", "PassVIP" }) do
@@ -615,7 +656,7 @@ task.spawn(function()
 		if nextGift then
 			local leftSec = nextGift - os.time()
 			if leftSec <= 0 then
-				giftBtn.Text = "🎁 ЗАБРАТЬ!"
+				giftBtn.Text = tr("ui_gift_ready")
 				giftBtn.BackgroundColor3 = Color3.fromRGB(255, 180, 30)
 			else
 				giftBtn.Text = string.format("🎁 %d:%02d", math.floor(leftSec / 60), leftSec % 60)
@@ -665,11 +706,11 @@ EffectRE.OnClientEvent:Connect(function(kind, arg)
 	elseif kind == "zone" then
 		local zone = Config.Zones[arg]
 		if zone then
-			showBanner("ЗОНА " .. arg .. ": " .. zone.emoji .. " " .. zone.name, zone.color)
+			showBanner(tr("zone_banner", arg, zone.emoji, "@zone_" .. arg), zone.color)
 		end
 		burst(60, CONFETTI)
 	elseif kind == "finish" then
-		showBanner("🏆 ПОБЕДА! 🏆", GOLD)
+		showBanner(tr("victory"), GOLD)
 		burst(150, CONFETTI)
 	elseif kind == "duck" then
 		burst(40, { Color3.fromRGB(255, 230, 60), Color3.new(1, 1, 1) })
@@ -688,13 +729,13 @@ local function refreshWarn()
 		local leftSec = (workspace:GetAttribute("WaterUntil") or 0) - os.time()
 		warnLabel.Visible = true
 		warnLabel.TextColor3 = Color3.fromRGB(90, 190, 255)
-		warnLabel.Text = "🌊 ЛАВА — ЭТО ВОДА! " .. math.max(leftSec, 0) .. " сек"
+		warnLabel.Text = tr("water_warn", math.max(leftSec, 0))
 		return
 	end
 	warnLabel.TextColor3 = Color3.fromRGB(255, 80, 40)
 	if inZone4() and (state == "warn" or state == "up") then
 		warnLabel.Visible = true
-		warnLabel.Text = state == "warn" and "⚠️ ЛАВА ПОДНИМАЕТСЯ! НА ОСТРОВОК!" or "🔥 ВОЛНА ЛАВЫ! 🔥"
+		warnLabel.Text = state == "warn" and tr("wave_warn") or tr("wave_up")
 	else
 		warnLabel.Visible = false
 	end
@@ -852,15 +893,24 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 end)
 
--- ============ ЩИТ: ТАЙМЕР ============
+-- ============ ЩИТ: ТАЙМЕР 60 → 0 ============
 task.spawn(function()
+	local lastShown = -1
 	while true do
-		local leftSec = (player:GetAttribute("ShieldUntil") or 0) - os.time()
-		shieldLabel.Visible = leftSec > 0
-		if leftSec > 0 then
-			shieldLabel.Text = "🛡 " .. leftSec .. " сек"
+		local leftSec = math.max((player:GetAttribute("ShieldUntil") or 0) - os.time(), 0)
+		shieldCircle.Visible = leftSec > 0
+		if leftSec > 0 and leftSec ~= lastShown then
+			lastShown = leftSec
+			shieldNum.Text = tostring(leftSec)
+			-- последние 10 секунд — красный
+			local low = leftSec <= 10
+			shieldRing.Color = low and Color3.fromRGB(255, 80, 60) or Color3.fromRGB(90, 190, 255)
+			shieldNum.TextColor3 = low and Color3.fromRGB(255, 120, 100) or Color3.new(1, 1, 1)
+			-- «тук» каждую секунду
+			shieldRing.Thickness = 7
+			TweenService:Create(shieldRing, TweenInfo.new(0.4), { Thickness = 4 }):Play()
 		end
-		task.wait(0.5)
+		task.wait(0.2)
 	end
 end)
 
@@ -882,14 +932,14 @@ local helpTitle = new("TextLabel", {
 	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
 	TextColor3 = Color3.new(1, 1, 1),
-	Text = "Сложный этап? 😅\nМожно пропустить!",
+	Text = tr("help_title"),
 	ZIndex = 9,
 }, helpWin)
 textStroke(helpTitle)
-local helpSkip = button({ text = "⏭ Пропустить этап", size = UDim2.new(1, -24, 0, 44), position = UDim2.fromOffset(12, 78), color = Color3.fromRGB(230, 140, 30) }, helpWin)
-local helpShield = button({ text = "🛡 Щит от лавы", size = UDim2.new(0.5, -18, 0, 44), position = UDim2.fromOffset(12, 130), color = Color3.fromRGB(40, 130, 230) }, helpWin)
-local helpJump = button({ text = "🦘 Супер-прыжок", size = UDim2.new(0.5, -18, 0, 44), position = UDim2.new(0.5, 6, 0, 130), color = Color3.fromRGB(60, 170, 90) }, helpWin)
-local helpClose = button({ text = "Попробую ещё 💪", size = UDim2.new(1, -24, 0, 36), position = UDim2.new(0, 12, 1, -46), color = Color3.fromRGB(90, 90, 100) }, helpWin)
+local helpSkip = button({ text = tr("help_skip"), size = UDim2.new(1, -24, 0, 44), position = UDim2.fromOffset(12, 78), color = Color3.fromRGB(230, 140, 30) }, helpWin)
+local helpShield = button({ text = tr("help_shield"), size = UDim2.new(0.5, -18, 0, 44), position = UDim2.fromOffset(12, 130), color = Color3.fromRGB(40, 130, 230) }, helpWin)
+local helpJump = button({ text = tr("help_jump"), size = UDim2.new(0.5, -18, 0, 44), position = UDim2.new(0.5, 6, 0, 130), color = Color3.fromRGB(60, 170, 90) }, helpWin)
+local helpClose = button({ text = tr("help_close"), size = UDim2.new(1, -24, 0, 36), position = UDim2.new(0, 12, 1, -46), color = Color3.fromRGB(90, 90, 100) }, helpWin)
 for _, b in ipairs({ helpSkip, helpShield, helpJump, helpClose }) do
 	b.ZIndex = 9
 end
@@ -936,7 +986,27 @@ if player.Character then
 end
 player.CharacterAdded:Connect(watchDeaths)
 
+-- ============ ПЕРЕВОД ТАБЛИЧЕК НА КАРТЕ ============
+local function translateLabel(lbl)
+	local key = lbl:GetAttribute("TextKey")
+	if not key then
+		return
+	end
+	local argStr = lbl:GetAttribute("TextArgs")
+	local args = {}
+	if argStr then
+		for a in string.gmatch(argStr, "[^|]+") do
+			table.insert(args, a)
+		end
+	end
+	lbl.Text = Text.Format(LANG, key, args)
+end
+for _, lbl in ipairs(CollectionService:GetTagged("LocText")) do
+	translateLabel(lbl)
+end
+CollectionService:GetInstanceAddedSignal("LocText"):Connect(translateLabel)
+
 -- приветствие
 task.delay(2, function()
-	showBanner("🔥 ПОЛ — ЭТО ЛАВА! 🔥", Color3.fromRGB(255, 140, 50))
+	showBanner(tr("welcome"), Color3.fromRGB(255, 140, 50))
 end)

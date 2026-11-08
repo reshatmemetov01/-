@@ -46,6 +46,7 @@ roblox-game/
 ├── default.project.json              ← для Rojo (по желанию)
 └── src/
     ├── shared/LavaConfig.luau        → ReplicatedStorage   (ModuleScript)
+    ├── shared/LavaText.luau          → ReplicatedStorage   (ModuleScript, тексты EN/RU)
     ├── server/MapBuilder.luau        → ServerScriptService (ModuleScript)
     ├── server/GameServer.server.luau → ServerScriptService (Script)
     └── client/LavaClient.client.luau → StarterPlayer › StarterPlayerScripts (LocalScript)
@@ -56,11 +57,12 @@ roblox-game/
 1. Скачай **Roblox Studio** с сайта roblox.com (кнопка «Create» → «Start Creating») и войди в аккаунт.
 2. Нажми **New** → шаблон **Baseplate**. Серая плита из шаблона удалится сама.
 3. Включи окна: вкладка **View** → **Explorer** и **Properties**.
-4. Создай 4 скрипта. Наведи на папку в Explorer, нажми **⊕** и выбери тип:
+4. Создай 5 скриптов. Наведи на папку в Explorer, нажми **⊕** и выбери тип:
 
    | Где (папка в Explorer) | Тип | Имя (ровно так!) | Скопировать код из файла |
    |---|---|---|---|
    | ReplicatedStorage | ModuleScript | `LavaConfig` | `src/shared/LavaConfig.luau` |
+   | ReplicatedStorage | ModuleScript | `LavaText` | `src/shared/LavaText.luau` |
    | ServerScriptService | ModuleScript | `MapBuilder` | `src/server/MapBuilder.luau` |
    | ServerScriptService | Script | `GameServer` | `src/server/GameServer.server.luau` |
    | StarterPlayer → StarterPlayerScripts | LocalScript | `LavaClient` | `src/client/LavaClient.client.luau` |
@@ -148,6 +150,12 @@ Robux приходят тебе на аккаунт — Roblox оставляе�
 - Сними короткие ролики для TikTok/Shorts: «нашёл секретную комнату», «НЕ ПРЫГАЙ СЮДА».
 - Позже можно запустить рекламу **Sponsored Experiences** (за Robux).
 - Обновляй игру: новые этапы и зоны = игроки возвращаются.
+
+## Языки
+
+Игра сама выбирает язык по настройкам аккаунта Roblox у игрока: **русский** — если аккаунт
+на русском, **английский** — для всех остальных. Все тексты лежат в `LavaText`.
+Проверить русский в Studio: вкладка **Test → Player Emulator** → выбери язык **Russian**.
 
 ## Как менять игру
 

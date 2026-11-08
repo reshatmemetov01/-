@@ -7,6 +7,7 @@ local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("LavaConfig"))
+local Text = require(ReplicatedStorage:WaitForChild("LavaText"))
 
 local MapBuilder = {}
 
@@ -97,7 +98,8 @@ local function column(ctx, x, z, y0, y1, w, d, color, mat, round)
 	return part({ Size = V3(w, h, d), CFrame = L(ctx, x, cy, z), Color = color, Material = mat })
 end
 
-local function makeSign(cf, size, text, bg, fg, face, parent)
+-- key — ключ текста из LavaText; клиент переведёт табличку на язык игрока
+local function makeSign(cf, size, key, bg, fg, face, parent, args)
 	local p = part({ Size = size, CFrame = cf, Color = bg, Material = M.SmoothPlastic }, parent)
 	local sg = Instance.new("SurfaceGui")
 	sg.Face = face or Enum.NormalId.Back
@@ -110,7 +112,13 @@ local function makeSign(cf, size, text, bg, fg, face, parent)
 	lbl.TextScaled = true
 	lbl.Font = Enum.Font.GothamBlack
 	lbl.TextColor3 = fg or Color3.new(1, 1, 1)
-	lbl.Text = text
+	lbl.Text = Text.Format("en", key, args)
+	lbl.AutoLocalize = false
+	lbl:SetAttribute("TextKey", key)
+	if args then
+		lbl:SetAttribute("TextArgs", table.concat(args, "|"))
+	end
+	tag(lbl, "LocText")
 	local pad = Instance.new("UIPadding")
 	pad.PaddingLeft = UDim.new(0.04, 0)
 	pad.PaddingRight = UDim.new(0.04, 0)
@@ -733,7 +741,7 @@ local function zoneGate(ctx, zone)
 	part({ Size = V3(2, 15, 2), CFrame = L(ctx, -8.5, top + 6.5, z), Color = darker(col, 0.6) })
 	part({ Size = V3(2, 15, 2), CFrame = L(ctx, 8.5, top + 6.5, z), Color = darker(col, 0.6) })
 	local zinfo = Config.Zones[zone]
-	makeSign(L(ctx, 0, top + 15, z), V3(20, 5, 1.5), "ЗОНА " .. zone .. "  " .. zinfo.emoji .. " " .. zinfo.name, col, Color3.new(1, 1, 1), Enum.NormalId.Back)
+	makeSign(L(ctx, 0, top + 15, z), V3(20, 5, 1.5), "sign_zone", col, Color3.new(1, 1, 1), Enum.NormalId.Back, nil, { tostring(zone), zinfo.emoji, "@zone_" .. zone })
 end
 
 -- ============ ЛОББИ ============
@@ -771,7 +779,7 @@ local function buildLobby(ctx)
 	makeSign(
 		L(ctx, -18, top + 10, 20),
 		V3(18, 12, 1),
-		"🔥 ПОЛ — ЭТО ЛАВА! 🔥\n50 этапов · 5 зон\nНайди 5 секретных уточек 🦆",
+		"sign_welcome",
 		RGB(60, 20, 10),
 		RGB(255, 210, 90),
 		Enum.NormalId.Back
@@ -807,7 +815,9 @@ local function buildLobby(ctx)
 	title.TextScaled = true
 	title.Font = Enum.Font.GothamBlack
 	title.TextColor3 = GOLD
-	title.Text = "🏆 ЛУЧШИЕ ИГРОКИ"
+	title.Text = Text.Get("en", "sign_top")
+	title:SetAttribute("TextKey", "sign_top")
+	tag(title, "LocText")
 	title.LayoutOrder = 0
 	title.Parent = list
 	info.leaderboardRows = {}
@@ -838,9 +848,9 @@ local function buildLobby(ctx)
 	part({ Size = V3(17, 1, 17), CFrame = L(ctx, 23, top + h + 0.5, -23), Color = GOLD, Material = M.Foil })
 	local door = part({ Name = "VipDoor", Size = V3(1, h - 1, 6), CFrame = L(ctx, 15, top + (h - 1) / 2, -23), Color = GOLD, Material = M.Neon, Transparency = 0.35 })
 	tag(door, "VipDoor")
-	makeSign(L(ctx, 14.3, top + h + 2.5, -23), V3(0.5, 3, 8), "👑 VIP", RGB(90, 40, 120), GOLD, Enum.NormalId.Left)
+	makeSign(L(ctx, 14.3, top + h + 2.5, -23), V3(0.5, 3, 8), "sign_vip", RGB(90, 40, 120), GOLD, Enum.NormalId.Left)
 	makeChest(L(ctx, 26, top, -27) * CFrame.Angles(0, -PI / 2, 0), "vip", "VipChest")
-	makeSign(L(ctx, 30.4, top + 6, -23), V3(0.4, 4, 12), "👑 VIP-сундук\nкаждые 10 минут", RGB(60, 20, 90), GOLD, Enum.NormalId.Left)
+	makeSign(L(ctx, 30.4, top + 6, -23), V3(0.4, 4, 12), "sign_vipchest", RGB(60, 20, 90), GOLD, Enum.NormalId.Left)
 	local vipLight = part({ Size = V3(2, 0.4, 2), CFrame = L(ctx, 23, top + h - 0.2, -23), Color = GOLD, Material = M.Neon, CanCollide = false })
 	local pl = Instance.new("PointLight")
 	pl.Range = 18
@@ -860,7 +870,7 @@ local function buildLobby(ctx)
 	-- арка «СТАРТ»
 	part({ Size = V3(2, 14, 2), CFrame = L(ctx, -9, top + 7, 31), Color = RGB(200, 60, 20) })
 	part({ Size = V3(2, 14, 2), CFrame = L(ctx, 9, top + 7, 31), Color = RGB(200, 60, 20) })
-	makeSign(L(ctx, 0, top + 15, 31), V3(20, 4, 1.5), "СТАРТ ▶", RGB(255, 90, 20), Color3.new(1, 1, 1), Enum.NormalId.Back)
+	makeSign(L(ctx, 0, top + 15, 31), V3(20, 4, 1.5), "sign_start", RGB(255, 90, 20), Color3.new(1, 1, 1), Enum.NormalId.Back)
 
 	addPath(L(ctx, 0, top, 0).Position)
 	for sx = -1, 1, 2 do
@@ -893,7 +903,7 @@ Specials[15] = function(ctx)
 	part({ Size = V3(2, 2, 2), CFrame = L(ctx, 14, top + 1, 0), Color = RGB(60, 60, 65), Material = M.Metal })
 	local button = part({ Name = "LavaButton", Shape = CYL, Size = V3(0.6, 2.4, 2.4), CFrame = L(ctx, 14, top + 2.3, 0) * ROT_UP, Color = RGB(255, 30, 30), Material = M.Neon })
 	tag(button, "LavaButton")
-	makeSign(L(ctx, 16.3, top + 4, 0), V3(0.4, 3, 6), "НЕ НАЖИМАЙ! 😈", RGB(20, 20, 20), RGB(255, 80, 80), Enum.NormalId.Left)
+	makeSign(L(ctx, 16.3, top + 4, 0), V3(0.4, 3, 6), "sign_button", RGB(20, 20, 20), RGB(255, 80, 80), Enum.NormalId.Left)
 	addPath(L(ctx, 13, top, 0).Position)
 end
 
@@ -931,7 +941,7 @@ Specials[23] = function(ctx)
 	pe.Parent = fall
 	makeChest(L(ctx, 19, top, 0) * CFrame.Angles(0, PI / 2, 0), "lavafall")
 	makeDuck(L(ctx, 18, top + 1.5, 4.5) * CFrame.Angles(0, PI / 2, 0), 3)
-	makeSign(L(ctx, 21.9, top + 6, 0), V3(0.4, 3, 9), "🤫 Секретная комната!", RGB(30, 20, 20), GOLD, Enum.NormalId.Left)
+	makeSign(L(ctx, 21.9, top + 6, 0), V3(0.4, 3, 9), "sign_secret", RGB(30, 20, 20), GOLD, Enum.NormalId.Left)
 	local torch = part({ Size = V3(0.6, 2, 0.6), CFrame = L(ctx, 21.5, top + 4, -4.5), Color = WOOD_DARK, CanCollide = false })
 	local fire = Instance.new("Fire")
 	fire.Size = 3
@@ -947,7 +957,7 @@ end
 Specials[28] = function(ctx)
 	local top = ctx.y
 	part({ Size = V3(0.5, 3.5, 0.5), CFrame = L(ctx, -6.5, top + 1.75, -6.5), Color = WOOD_DARK })
-	makeSign(L(ctx, -6.5, top + 4.3, -6.5), V3(6, 2, 0.4), "⬅ НЕ ПРЫГАЙ СЮДА", RGB(250, 220, 40), RGB(20, 20, 20), Enum.NormalId.Back)
+	makeSign(L(ctx, -6.5, top + 4.3, -6.5), V3(6, 2, 0.4), "sign_dontjump", RGB(250, 220, 40), RGB(20, 20, 20), Enum.NormalId.Back)
 	local caveTop = math.max(top - 14, 5)
 	local rock = RGB(50, 44, 44)
 	part({ Size = V3(17, 1, 16), CFrame = L(ctx, -15.5, caveTop - 0.5, 0), Color = rock, Material = M.Slate })
@@ -955,12 +965,12 @@ Specials[28] = function(ctx)
 	part({ Size = V3(1, 10, 16), CFrame = L(ctx, -24.5, caveTop + 5, 0), Color = rock, Material = M.Slate })
 	part({ Size = V3(18, 10, 1), CFrame = L(ctx, -15.5, caveTop + 5, 8.5), Color = rock, Material = M.Slate })
 	part({ Size = V3(18, 10, 1), CFrame = L(ctx, -15.5, caveTop + 5, -8.5), Color = rock, Material = M.Slate })
-	makeSign(L(ctx, -23.9, caveTop + 5, 0), V3(0.4, 4, 12), "Ты всё-таки прыгнул 😏", RGB(30, 25, 25), RGB(255, 220, 90), Enum.NormalId.Right)
+	makeSign(L(ctx, -23.9, caveTop + 5, 0), V3(0.4, 4, 12), "sign_jumped", RGB(30, 25, 25), RGB(255, 220, 90), Enum.NormalId.Right)
 	makeChest(L(ctx, -21, caveTop, -4) * CFrame.Angles(0, -PI / 2, 0), "dontjump")
 	makeDuck(L(ctx, -19, caveTop + 1.5, 3) * CFrame.Angles(0, -PI / 2, 0), 4)
 	local tp = part({ Name = "Teleporter", Size = V3(4, 0.4, 4), CFrame = L(ctx, -12, caveTop + 0.2, 5), Color = RGB(60, 230, 255), Material = M.Neon })
 	tag(tp, "Teleport")
-	makeSign(L(ctx, -12, caveTop + 3.5, 7.9), V3(5, 1.6, 0.3), "↩ Назад", RGB(20, 60, 80), Color3.new(1, 1, 1), Enum.NormalId.Back)
+	makeSign(L(ctx, -12, caveTop + 3.5, 7.9), V3(5, 1.6, 0.3), "sign_back", RGB(20, 60, 80), Color3.new(1, 1, 1), Enum.NormalId.Back)
 	local cl = part({ Size = V3(1, 1, 1), CFrame = L(ctx, -15, caveTop + 8, 0), Transparency = 1, CanCollide = false })
 	local pl = Instance.new("PointLight")
 	pl.Range = 20
@@ -988,7 +998,7 @@ local function buildFinish(ctx)
 	local sp = Instance.new("Sparkles")
 	sp.SparkleColor = GOLD
 	sp.Parent = cup
-	makeSign(L(ctx, 0, top + 16, 14), V3(26, 8, 1), "🏆 ТЫ ПРОШЁЛ «ПОЛ — ЭТО ЛАВА»!\nЖми 🔁 Перерождение", RGB(50, 20, 80), GOLD, Enum.NormalId.Back)
+	makeSign(L(ctx, 0, top + 16, 14), V3(26, 8, 1), "sign_finish", RGB(50, 20, 80), GOLD, Enum.NormalId.Back)
 	local rainbow = { RGB(255, 70, 70), RGB(255, 170, 40), RGB(255, 240, 60), RGB(80, 220, 90), RGB(70, 150, 255), RGB(170, 90, 255) }
 	for i, c in ipairs(rainbow) do
 		local pe = part({ Size = V3(1, 1, 1), CFrame = L(ctx, -14 + (i - 1) * 5.6, top + 0.5, -14), Transparency = 1, CanCollide = false })

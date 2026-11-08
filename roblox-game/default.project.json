@@ -4,7 +4,8 @@
     "$className": "DataModel",
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
-      "LavaConfig": { "$path": "src/shared/LavaConfig.luau" }
+      "LavaConfig": { "$path": "src/shared/LavaConfig.luau" },
+      "LavaText": { "$path": "src/shared/LavaText.luau" }
     },
     "ServerScriptService": {
       "$className": "ServerScriptService",
