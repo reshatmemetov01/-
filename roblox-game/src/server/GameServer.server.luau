@@ -14,7 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("LavaConfig"))
 local MapBuilder = require(script.Parent:WaitForChild("MapBuilder"))
 
-Players.RespawnTime = 1.5
+Players.RespawnTime = 1
 
 -- ============ REMOTES (создаём до постройки карты) ============
 local remotes = Instance.new("Folder")
@@ -54,6 +54,10 @@ local function defaultData()
 		secrets = {},
 		trails = {},
 		trail = "",
+		skins = {},
+		skin = "",
+		pets = {},
+		pet = "",
 		daily = 0,
 		streak = 0,
 		finishedRun = false,
@@ -87,8 +91,14 @@ local function csvKeys(t)
 	return table.concat(list, ",")
 end
 
+local ownsItem -- объявлена ниже
+
 local function multiplier(player, s)
 	local m = 1 + s.data.rebirths * Config.REBIRTH_BONUS
+	local pet = Config.GetItem("pets", s.data.pet)
+	if pet and ownsItem and ownsItem(player, s, "pets", pet) then
+		m *= 1 + pet.bonus
+	end
 	if player:GetAttribute("PassDoubleCoins") then
 		m *= 2
 	end
@@ -112,6 +122,10 @@ local function syncAttributes(player)
 	player:SetAttribute("DucksList", csvKeys(d.ducks))
 	player:SetAttribute("Trails", csvKeys(d.trails))
 	player:SetAttribute("Trail", d.trail)
+	player:SetAttribute("Skins", csvKeys(d.skins))
+	player:SetAttribute("Skin", d.skin)
+	player:SetAttribute("Pets", csvKeys(d.pets))
+	player:SetAttribute("Pet", d.pet)
 	player:SetAttribute("NextGift", s.nextGift)
 	player:SetAttribute("Multiplier", multiplier(player, s))
 	local ls = player:FindFirstChild("leaderstats")
@@ -225,7 +239,7 @@ local function applyTrail(player)
 		end
 	end
 	local t = Config.GetTrail(s.data.trail)
-	if not t then
+	if not t or not ownsItem(player, s, "trails", t) then
 		return
 	end
 	local a0 = Instance.new("Attachment")
@@ -297,12 +311,160 @@ local function applyOverhead(player)
 	bb.Parent = head
 end
 
+-- ============ СКИНЫ ============
+local function applySkin(player)
+	local s = sessions[player]
+	local char = player.Character
+	if not s or not char then
+		return
+	end
+	local skin = Config.GetItem("skins", s.data.skin)
+	if not skin or not ownsItem(player, s, "skins", skin) then
+		return
+	end
+	local material = Enum.Material[skin.material] or Enum.Material.SmoothPlastic
+	local i = 0
+	for _, d in ipairs(char:GetDescendants()) do
+		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors") then
+			d:Destroy()
+		elseif d:IsA("SpecialMesh") then
+			d.TextureId = ""
+		elseif d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
+			i += 1
+			if d:IsA("MeshPart") and d:FindFirstAncestorOfClass("Accessory") then
+				d.TextureID = ""
+			end
+			d.Color = skin.colors and skin.colors[(i % #skin.colors) + 1] or skin.color
+			d.Material = material
+		end
+	end
+end
+
+-- ============ ПИТОМЦЫ ============
+local petFolder = Instance.new("Folder")
+petFolder.Name = "LavaPets"
+petFolder.Parent = workspace
+
+local function petPart(model, props)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanTouch = false
+	p.CanQuery = false
+	p.CastShadow = false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if props.Shape then
+		p.Shape = props.Shape
+	end
+	for k, v in pairs(props) do
+		if k ~= "Shape" then
+			p[k] = v
+		end
+	end
+	p.Parent = model
+	return p
+end
+
+local BALL = Enum.PartType.Ball
+local function eyes(model, at, spread)
+	for sx = -1, 1, 2 do
+		petPart(model, { Shape = BALL, Size = Vector3.new(0.3, 0.3, 0.3), CFrame = at * CFrame.new(sx * spread, 0, 0), Color = Color3.new(0, 0, 0) })
+	end
+end
+
+local function buildPet(pet)
+	local model = Instance.new("Model")
+	model.Name = pet.id
+	local c = pet.color
+	local o = CFrame.new()
+	local root
+	if pet.id == "duckling" or pet.id == "goldduck" then
+		local mat = pet.id == "goldduck" and Enum.Material.Foil or Enum.Material.SmoothPlastic
+		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c, Material = mat })
+		petPart(model, { Shape = BALL, Size = Vector3.new(1.1, 1.1, 1.1), CFrame = o * CFrame.new(0, 0.9, -0.5), Color = c, Material = mat })
+		petPart(model, { Size = Vector3.new(0.5, 0.25, 0.6), CFrame = o * CFrame.new(0, 0.85, -1.15), Color = Color3.fromRGB(255, 130, 20) })
+		eyes(model, o * CFrame.new(0, 1.1, -0.95), 0.25)
+		if pet.id == "goldduck" then
+			Instance.new("Sparkles").Parent = root
+		end
+	elseif pet.id == "flame" then
+		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.4, 1.4, 1.4), CFrame = o, Color = c, Material = Enum.Material.Neon })
+		local f = Instance.new("Fire")
+		f.Size = 2
+		f.Heat = 4
+		f.Parent = root
+		eyes(model, o * CFrame.new(0, 0.15, -0.65), 0.25)
+	elseif pet.id == "cubecat" then
+		root = petPart(model, { Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c })
+		petPart(model, { Size = Vector3.new(0.4, 0.5, 0.3), CFrame = o * CFrame.new(-0.5, 1, 0), Color = c })
+		petPart(model, { Size = Vector3.new(0.4, 0.5, 0.3), CFrame = o * CFrame.new(0.5, 1, 0), Color = c })
+		petPart(model, { Size = Vector3.new(0.3, 0.2, 0.05), CFrame = o * CFrame.new(0, -0.1, -0.81), Color = Color3.fromRGB(255, 130, 160) })
+		eyes(model, o * CFrame.new(0, 0.25, -0.8), 0.35)
+	elseif pet.id == "slime" then
+		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.8, 1.8, 1.8), CFrame = o, Color = c, Material = Enum.Material.CrackedLava })
+		eyes(model, o * CFrame.new(0, 0.3, -0.85), 0.3)
+		local l = Instance.new("PointLight")
+		l.Color = c
+		l.Range = 8
+		l.Parent = root
+	elseif pet.id == "phoenix" then
+		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.4, 1.4, 1.4), CFrame = o, Color = c, Material = Enum.Material.Neon })
+		for sx = -1, 1, 2 do
+			petPart(model, { Size = Vector3.new(1.6, 0.15, 0.9), CFrame = o * CFrame.new(sx * 1.2, 0.2, 0.2) * CFrame.Angles(0, 0, sx * 0.4), Color = Color3.fromRGB(255, 80, 30), Material = Enum.Material.Neon })
+		end
+		local f = Instance.new("Fire")
+		f.Size = 2
+		f.Color = Color3.fromRGB(255, 200, 60)
+		f.Parent = root
+		eyes(model, o * CFrame.new(0, 0.2, -0.65), 0.25)
+	else -- dragon
+		root = petPart(model, { Size = Vector3.new(1.2, 1.1, 1.8), CFrame = o, Color = c })
+		petPart(model, { Size = Vector3.new(0.9, 0.8, 0.9), CFrame = o * CFrame.new(0, 0.6, -1.2), Color = c })
+		petPart(model, { Size = Vector3.new(0.5, 0.4, 0.5), CFrame = o * CFrame.new(0, 0.45, -1.8), Color = Color3.fromRGB(60, 150, 70) })
+		for sx = -1, 1, 2 do
+			petPart(model, { Size = Vector3.new(1.8, 0.12, 1), CFrame = o * CFrame.new(sx * 1.4, 0.5, 0) * CFrame.Angles(0, 0, sx * 0.5), Color = Color3.fromRGB(255, 200, 60) })
+			petPart(model, { Size = Vector3.new(0.15, 0.4, 0.15), CFrame = o * CFrame.new(sx * 0.25, 1.15, -1.1), Color = Color3.fromRGB(255, 240, 200) })
+		end
+		petPart(model, { Size = Vector3.new(0.4, 0.4, 1.4), CFrame = o * CFrame.new(0, -0.1, 1.5), Color = c })
+		eyes(model, o * CFrame.new(0, 0.8, -1.66), 0.25)
+		Instance.new("Sparkles").Parent = root
+	end
+	model.PrimaryPart = root
+	return model
+end
+
+local function applyPet(player)
+	local s = sessions[player]
+	for _, m in ipairs(petFolder:GetChildren()) do
+		if m:GetAttribute("OwnerId") == player.UserId then
+			m:Destroy()
+		end
+	end
+	if not s then
+		return
+	end
+	local pet = Config.GetItem("pets", s.data.pet)
+	local _, _, root = getCharacterParts(player)
+	if not pet or not root or not ownsItem(player, s, "pets", pet) then
+		return
+	end
+	local model = buildPet(pet)
+	model:SetAttribute("OwnerId", player.UserId)
+	model:PivotTo(root.CFrame * CFrame.new(2.5, 1.5, 2))
+	model.Parent = petFolder
+end
+
 local function applyCharacter(player)
 	local _, hum = getCharacterParts(player)
 	if hum then
 		hum.WalkSpeed = player:GetAttribute("PassSpeed") and Config.SPEED_WALKSPEED or Config.NORMAL_WALKSPEED
+		hum.UseJumpPower = false
+		hum.JumpHeight = player:GetAttribute("PassSuperJump") and Config.SUPER_JUMP or Config.NORMAL_JUMP
 	end
 	applyTrail(player)
+	applySkin(player)
+	applyPet(player)
 	applyOverhead(player)
 end
 
@@ -320,6 +482,11 @@ local function onCharacter(player, char)
 	task.wait()
 	teleportToStage(player)
 	applyCharacter(player)
+	task.delay(1.5, function()
+		if player.Character == char then
+			applySkin(player)
+		end
+	end)
 end
 
 -- ============ ЭТАПЫ ============
@@ -366,9 +533,14 @@ local function playerFromHit(hit)
 end
 
 local function kill(hum)
-	if hum and hum.Health > 0 then
-		hum.Health = 0
+	if not hum or hum.Health <= 0 then
+		return
 	end
+	local owner = Players:GetPlayerFromCharacter(hum.Parent)
+	if owner and (owner:GetAttribute("ShieldUntil") or 0) > os.time() then
+		return -- 🛡 щит от лавы
+	end
+	hum.Health = 0
 end
 
 for _, cp in ipairs(CollectionService:GetTagged("Checkpoint")) do
@@ -453,7 +625,7 @@ for _, st in ipairs(map.stalactites) do
 		while true do
 			st.part.Color = Color3.fromRGB(255, 60, 30)
 			st.part.Material = Enum.Material.Neon
-			task.wait(0.7)
+			task.wait(1)
 			st.falling = true
 			local tw = TweenService:Create(st.part, fallInfo, { CFrame = st.low })
 			tw:Play()
@@ -497,7 +669,7 @@ task.spawn(function()
 	local moveInfo = TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 	while true do
 		workspace:SetAttribute("WaveState", "calm")
-		task.wait(8)
+		task.wait(10)
 		workspace:SetAttribute("WaveState", "warn")
 		task.wait(2.5)
 		workspace:SetAttribute("WaveState", "up")
@@ -552,8 +724,8 @@ for _, v in ipairs(CollectionService:GetTagged("Vanish")) do
 			return
 		end
 		v:SetAttribute("Busy", true)
-		TweenService:Create(v, TweenInfo.new(0.6), { Transparency = 0.7 }):Play()
-		task.delay(0.6, function()
+		TweenService:Create(v, TweenInfo.new(1), { Transparency = 0.7 }):Play()
+		task.delay(1, function()
 			v.CanCollide = false
 			v.Transparency = 1
 			task.wait(2.5)
@@ -760,7 +932,13 @@ MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passI
 		if id == passId then
 			player:SetAttribute("Pass" .. key, true)
 			notify(player, "Спасибо за покупку! ❤️", Color3.fromRGB(120, 255, 140))
-			notifyAll("💎 " .. player.DisplayName .. " купил " .. key .. "!", Color3.fromRGB(190, 140, 255))
+			local nice = key
+			for _, sp in ipairs(Config.ShopPasses) do
+				if sp.key == key then
+					nice = sp.name
+				end
+			end
+			notifyAll("💎 " .. player.DisplayName .. " купил " .. nice .. "!", Color3.fromRGB(190, 140, 255))
 		end
 	end
 	applyCharacter(player)
@@ -793,9 +971,33 @@ MarketplaceService.ProcessReceipt = function(receipt)
 		setStage(player, n)
 		teleportToStage(player)
 		notify(player, "⏭ Этап пропущен!", Color3.fromRGB(120, 255, 140))
-	elseif id == P.Coins500 then
-		addCoins(player, 500, false)
-		notify(player, "💰 +500 монет!", Color3.fromRGB(255, 215, 80))
+	elseif id == P.SkipZone then
+		local n = math.min(math.max(Config.ZoneOfStage(math.min(d.stage, Config.TOTAL_STAGES)) * Config.STAGES_PER_ZONE + 1, d.stage + 1), FINISH)
+		setStage(player, n)
+		teleportToStage(player)
+		notify(player, "⏩ Зона пропущена!", Color3.fromRGB(120, 255, 140))
+	elseif id == P.LavaShield then
+		local untilT = math.max(player:GetAttribute("ShieldUntil") or 0, os.time()) + Config.SHIELD_DURATION
+		player:SetAttribute("ShieldUntil", untilT)
+		local char = player.Character
+		if char and not char:FindFirstChild("LavaShieldFF") then
+			local ff = Instance.new("ForceField")
+			ff.Name = "LavaShieldFF"
+			ff.Parent = char
+		end
+		task.delay(untilT - os.time() + 0.5, function()
+			if (player:GetAttribute("ShieldUntil") or 0) <= os.time() and player.Character then
+				local ff = player.Character:FindFirstChild("LavaShieldFF")
+				if ff then
+					ff:Destroy()
+				end
+			end
+		end)
+		notify(player, "🛡 Щит от лавы на " .. Config.SHIELD_DURATION .. " сек!", Color3.fromRGB(120, 220, 255))
+	elseif id == P.Coins500 or id == P.Coins2500 or id == P.Coins10000 then
+		local amount = (id == P.Coins500 and 500) or (id == P.Coins2500 and 2500) or 10000
+		addCoins(player, amount, false)
+		notify(player, "💰 +" .. amount .. " монет!", Color3.fromRGB(255, 215, 80))
 	elseif id == P.LavaToWater then
 		setWater(Config.WATER_PRODUCT_DURATION, player.DisplayName)
 	else
@@ -811,15 +1013,36 @@ MarketplaceService.ProcessReceipt = function(receipt)
 end
 
 -- ============ ДЕЙСТВИЯ ИГРОКА ============
-local function ownsTrail(player, s, t)
-	if t.unlock == "ducks" then
-		return countKeys(s.data.ducks) >= Config.DUCK_COUNT
-	elseif t.unlock == "vip" then
-		return player:GetAttribute("PassVIP") == true
-	elseif t.unlock == "rebirth3" then
-		return s.data.rebirths >= 3
+ownsItem = function(player, s, category, item)
+	if item.unlock then
+		return Config.UnlockMet(item.unlock, function(name)
+			if name == "Ducks" then
+				return countKeys(s.data.ducks)
+			elseif name == "Rebirths" then
+				return s.data.rebirths
+			end
+			return player:GetAttribute(name)
+		end)
 	end
-	return s.data.trails[t.id] == true
+	local cat = Config.ItemCategories[category]
+	return s.data[cat.owned][item.id] == true
+end
+
+local function applyCategory(player, category)
+	if category == "trails" then
+		applyTrail(player)
+	elseif category == "skins" then
+		if sessions[player] and sessions[player].data.skin == "" then
+			-- вернуть обычный вид: перезагружаем персонажа на его чекпоинте
+			task.spawn(function()
+				player:LoadCharacter()
+			end)
+		else
+			applySkin(player)
+		end
+	elseif category == "pets" then
+		applyPet(player)
+	end
 end
 
 local function doRebirth(player, s)
@@ -867,34 +1090,43 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 			syncAttributes(player)
 			teleportToStage(player)
 		end
-	elseif action == "BuyTrail" then
-		local t = Config.GetTrail(arg)
-		if not t or not t.price or ownsTrail(player, s, t) then
+	elseif action == "BuyItem" or action == "EquipItem" then
+		if type(arg) ~= "table" then
 			return
 		end
-		if d.coins < t.price then
-			notify(player, "Не хватает монет 🪙")
+		local category, id = arg.category, arg.id
+		local cat = Config.ItemCategories[category]
+		if not cat or type(id) ~= "string" then
 			return
 		end
-		d.coins -= t.price
-		d.trails[t.id] = true
-		d.trail = t.id
-		syncAttributes(player)
-		applyTrail(player)
-		notify(player, "✨ Куплен след «" .. t.name .. "»!", Color3.fromRGB(120, 255, 140))
-		task.spawn(saveData, player)
-	elseif action == "EquipTrail" then
-		if arg == "" then
-			d.trail = ""
-		else
-			local t = Config.GetTrail(arg)
-			if not t or not ownsTrail(player, s, t) then
+		if action == "EquipItem" and id == "" then
+			d[cat.equipped] = ""
+			syncAttributes(player)
+			applyCategory(player, category)
+			return
+		end
+		local item = Config.GetItem(category, id)
+		if not item then
+			return
+		end
+		if action == "BuyItem" then
+			if not item.price or ownsItem(player, s, category, item) then
 				return
 			end
-			d.trail = t.id
+			if d.coins < item.price then
+				notify(player, "Не хватает монет 🪙 Собирай монетки на этапах или купи набор 💰")
+				return
+			end
+			d.coins -= item.price
+			d[cat.owned][item.id] = true
+			notify(player, "✨ Куплено: «" .. item.name .. "»!", Color3.fromRGB(120, 255, 140))
+			task.spawn(saveData, player)
+		elseif not ownsItem(player, s, category, item) then
+			return
 		end
+		d[cat.equipped] = item.id
 		syncAttributes(player)
-		applyTrail(player)
+		applyCategory(player, category)
 	elseif action == "ClaimGift" then
 		if os.time() < s.nextGift then
 			return
@@ -983,6 +1215,11 @@ for _, p in ipairs(Players:GetPlayers()) do
 end
 
 Players.PlayerRemoving:Connect(function(player)
+	for _, m in ipairs(petFolder:GetChildren()) do
+		if m:GetAttribute("OwnerId") == player.UserId then
+			m:Destroy()
+		end
+	end
 	saveData(player)
 	sessions[player] = nil
 end)

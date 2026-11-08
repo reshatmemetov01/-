@@ -25,14 +25,21 @@ Config.Zones = {
 -- и вставь их ID вместо нулей. Пока стоит 0 — кнопка покупки просто
 -- покажет сообщение «ещё не настроено».
 Config.GamePasses = {
+	VIP = 0, -- 👑 VIP (самый важный!)
 	Speed = 0, -- ⚡ Скорость x1.5
+	SuperJump = 0, -- 🦘 Супер-прыжок
 	DoubleCoins = 0, -- 🪙 x2 монеты
-	VIP = 0, -- 👑 VIP
+	SkinPack = 0, -- 🌈 Эксклюзивные скины
+	DragonPet = 0, -- 🐉 Питомец Дракончик
 }
 
 Config.Products = {
-	SkipStage = 0, -- ⏭ Пропуск этапа
+	SkipStage = 0, -- ⏭ Пропуск этапа (главный заработок в obby)
+	SkipZone = 0, -- ⏩ Пропуск зоны (10 этапов)
+	LavaShield = 0, -- 🛡 Щит от лавы на 60 сек
 	Coins500 = 0, -- 💰 500 монет
+	Coins2500 = 0, -- 💰 2 500 монет
+	Coins10000 = 0, -- 💰 10 000 монет
 	LavaToWater = 0, -- 🌊 Лава → вода для всего сервера
 }
 
@@ -47,20 +54,32 @@ Config.Badges = {
 
 -- Тексты для магазина
 Config.ShopPasses = {
+	{ key = "VIP", name = "👑 VIP", desc = "Золотой скин, питомец Феникс, королевский след, VIP-зона с сундуком, тег над головой и +25% монет." },
 	{ key = "Speed", name = "⚡ Скорость", desc = "Бегаешь в 1.5 раза быстрее. Навсегда." },
+	{ key = "SuperJump", name = "🦘 Супер-прыжок", desc = "Прыгаешь выше и дальше. Этапы станут проще!" },
 	{ key = "DoubleCoins", name = "🪙 x2 монеты", desc = "Все монеты удваиваются. Навсегда." },
-	{ key = "VIP", name = "👑 VIP", desc = "VIP-зона с сундуком, тег над головой, +25% монет и королевский след." },
+	{ key = "SkinPack", name = "🌈 Скины PRO", desc = "Скины «Радуга» и «Галактика», которых нет ни у кого." },
+	{ key = "DragonPet", name = "🐉 Дракончик", desc = "Самый сильный питомец: +75% монет." },
 }
 
 Config.ShopProducts = {
 	{ key = "SkipStage", name = "⏭ Пропуск этапа", desc = "Сразу на следующий этап." },
-	{ key = "Coins500", name = "💰 500 монет", desc = "Купи себе крутой след." },
+	{ key = "SkipZone", name = "⏩ Пропуск зоны", desc = "Сразу в следующую зону." },
+	{ key = "LavaShield", name = "🛡 Щит от лавы", desc = "60 секунд лава и ловушки не убивают." },
+	{ key = "Coins500", name = "💰 500 монет", desc = "На скин или питомца." },
+	{ key = "Coins2500", name = "💰 2 500 монет", desc = "Выгоднее!" },
+	{ key = "Coins10000", name = "💰 10 000 монет", desc = "Самый выгодный набор!" },
 	{ key = "LavaToWater", name = "🌊 Лава → вода", desc = "Для ВСЕХ на сервере на 20 секунд. Все скажут спасибо!" },
 }
+
+Config.CoinPacks = { Coins500 = 500, Coins2500 = 2500, Coins10000 = 10000 }
 
 -- ============ НАГРАДЫ ============
 Config.NORMAL_WALKSPEED = 16
 Config.SPEED_WALKSPEED = 24
+Config.NORMAL_JUMP = 7.2
+Config.SUPER_JUMP = 11
+Config.SHIELD_DURATION = 60
 
 Config.COIN_VALUE = 2 -- за одну монетку на карте
 Config.COIN_RESPAWN = 45 -- через сколько секунд монетка появится снова
@@ -111,11 +130,87 @@ Config.Trails = {
 	{ id = "phoenix", name = "Феникс", unlock = "rebirth3", colors = { Color3.fromRGB(255, 80, 20), Color3.fromRGB(255, 230, 120) } },
 }
 
+-- ============ СКИНЫ ============
+-- Перекрашивают всего персонажа. Одежда снимается, чтобы скин было видно.
+Config.Skins = {
+	{ id = "stone", name = "Каменный", price = 400, color = Color3.fromRGB(110, 105, 100), material = "Slate" },
+	{ id = "lava", name = "Лавовый", price = 600, color = Color3.fromRGB(255, 90, 20), material = "CrackedLava" },
+	{ id = "ice", name = "Ледяной", price = 900, color = Color3.fromRGB(160, 220, 255), material = "Ice" },
+	{ id = "neon", name = "Неоновый", price = 1500, color = Color3.fromRGB(255, 60, 200), material = "Neon" },
+	{ id = "ghost", name = "Призрак", price = 2500, color = Color3.fromRGB(200, 230, 255), material = "ForceField" },
+	{ id = "robot", name = "Робот", price = 3500, color = Color3.fromRGB(150, 155, 165), material = "DiamondPlate" },
+	{ id = "gold", name = "Золотой", unlock = "vip", color = Color3.fromRGB(255, 200, 50), material = "Foil" },
+	{ id = "duckskin", name = "Утиный", unlock = "ducks", color = Color3.fromRGB(255, 225, 40), material = "SmoothPlastic" },
+	{
+		id = "rainbow",
+		name = "Радуга",
+		unlock = "pass:SkinPack",
+		material = "Neon",
+		colors = {
+			Color3.fromRGB(255, 60, 60),
+			Color3.fromRGB(255, 170, 40),
+			Color3.fromRGB(255, 240, 60),
+			Color3.fromRGB(60, 220, 90),
+			Color3.fromRGB(60, 140, 255),
+			Color3.fromRGB(170, 80, 255),
+		},
+	},
+	{ id = "galaxy", name = "Галактика", unlock = "pass:SkinPack", color = Color3.fromRGB(70, 20, 140), material = "Neon" },
+}
+
+-- ============ ПИТОМЦЫ ============
+-- Летают рядом с игроком и дают бонус к монетам.
+Config.Pets = {
+	{ id = "duckling", name = "Утёнок", price = 300, bonus = 0.1, color = Color3.fromRGB(255, 220, 40) },
+	{ id = "flame", name = "Огонёк", price = 1000, bonus = 0.2, color = Color3.fromRGB(255, 120, 30) },
+	{ id = "cubecat", name = "Кубокот", price = 2500, bonus = 0.3, color = Color3.fromRGB(240, 240, 240) },
+	{ id = "slime", name = "Лавовый слайм", price = 5000, bonus = 0.4, color = Color3.fromRGB(255, 80, 20) },
+	{ id = "goldduck", name = "Золотая утка", unlock = "ducks", bonus = 0.25, color = Color3.fromRGB(255, 200, 40) },
+	{ id = "phoenix", name = "Феникс", unlock = "vip", bonus = 0.5, color = Color3.fromRGB(255, 160, 40) },
+	{ id = "dragon", name = "Дракончик", unlock = "pass:DragonPet", bonus = 0.75, color = Color3.fromRGB(80, 200, 90) },
+}
+
 Config.UnlockText = {
 	ducks = "Найди все 5 уточек 🦆",
 	vip = "Только для 👑 VIP",
 	rebirth3 = "3 перерождения 🔁",
+	["pass:SkinPack"] = "Пропуск 🌈 Скины PRO",
+	["pass:DragonPet"] = "Пропуск 🐉 Дракончик",
 }
+
+-- Категории предметов магазина за монеты
+Config.ItemCategories = {
+	trails = { list = "Trails", owned = "trails", equipped = "trail" },
+	skins = { list = "Skins", owned = "skins", equipped = "skin" },
+	pets = { list = "Pets", owned = "pets", equipped = "pet" },
+}
+
+function Config.GetItem(category, id)
+	local cat = Config.ItemCategories[category]
+	if not cat then
+		return nil
+	end
+	for _, item in ipairs(Config[cat.list]) do
+		if item.id == id then
+			return item
+		end
+	end
+	return nil
+end
+
+-- Проверка «открыт ли предмет за достижение». getAttr(name) -> значение атрибута игрока.
+function Config.UnlockMet(unlock, getAttr)
+	if unlock == "ducks" then
+		return (getAttr("Ducks") or 0) >= Config.DUCK_COUNT
+	elseif unlock == "vip" then
+		return getAttr("PassVIP") == true
+	elseif unlock == "rebirth3" then
+		return (getAttr("Rebirths") or 0) >= 3
+	elseif type(unlock) == "string" and string.sub(unlock, 1, 5) == "pass:" then
+		return getAttr("Pass" .. string.sub(unlock, 6)) == true
+	end
+	return false
+end
 
 function Config.ZoneOfStage(stage)
 	return math.clamp(math.ceil(stage / Config.STAGES_PER_ZONE), 1, #Config.Zones)

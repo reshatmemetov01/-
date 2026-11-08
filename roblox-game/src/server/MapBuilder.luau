@@ -330,9 +330,9 @@ function Obstacles.jumps(ctx)
 		if not ctx.flat then
 			rise = r:NextNumber(ctx.y < 14 and 0 or -0.5, 2)
 		end
-		local gap = r:NextNumber(3.5, 4 + 2.5 * ctx.diff) - math.max(rise, 0) * 0.5
-		local size = r:NextNumber(7 - 2.5 * ctx.diff, 8.5 - 2.5 * ctx.diff)
-		local x = math.clamp(ctx.x + r:NextNumber(-6, 6), -10, 10)
+		local gap = r:NextNumber(3, 3.5 + 2 * ctx.diff) - math.max(rise, 0) * 0.4
+		local size = r:NextNumber(8.5 - 2 * ctx.diff, 10 - 2 * ctx.diff)
+		local x = math.clamp(ctx.x + r:NextNumber(-5, 5), -10, 10)
 		local top = ctx.y + rise
 		local zc = ctx.z + gap + size / 2
 		themedPlatform(ctx, x, top, zc, size, size)
@@ -352,12 +352,12 @@ function Obstacles.stripes(ctx)
 	local zz = z0 + 6
 	local group = 0
 	while zz < z0 + len - 6 do
-		local depth = 2 + 1.5 * ctx.diff
+		local depth = 1.6 + 1.2 * ctx.diff
 		local tile = lavaPart({ Size = V3(w, 0.4, depth), CFrame = L(ctx, x, ctx.y + 0.2, zz + depth / 2) })
 		if ctx.zone == 2 then
 			tile.Color = RGB(255, 60, 30) -- конфорки плиты
 		end
-		if ctx.diff > 0.3 and r:NextNumber() < 0.5 then
+		if ctx.diff > 0.45 and r:NextNumber() < 0.5 then
 			group = 1 - group
 			table.insert(info.blinkers, { part = tile, group = group })
 		end
@@ -375,14 +375,14 @@ function Obstacles.movers(ctx)
 	local n = r:NextInteger(2, 3)
 	local x = math.clamp(ctx.x, -6, 6)
 	for _ = 1, n do
-		local size = 6
-		local zc = ctx.z + 3.5 + size / 2
+		local size = 7
+		local zc = ctx.z + 3 + size / 2
 		local base = L(ctx, x, ctx.y - 0.5, zc)
 		local p = part({ Size = V3(size, 1, size), CFrame = base, Color = ACCENT[ctx.zone], Material = M.SmoothPlastic })
 		local glowBase = base * CF(0, -0.55, 0)
 		local glow = part({ Size = V3(size + 0.2, 0.3, size + 0.2), CFrame = glowBase, Color = Color3.new(1, 1, 1), Material = M.Neon, CanCollide = false })
-		local amp = 6 + 4 * ctx.diff
-		local speed = 1 + 0.8 * ctx.diff
+		local amp = 4 + 4 * ctx.diff
+		local speed = 0.8 + 0.6 * ctx.diff
 		local phase = r:NextNumber(0, 2 * PI)
 		table.insert(info.movers, { part = p, base = base, axis = ctx.F.RightVector, amp = amp, speed = speed, phase = phase })
 		table.insert(info.movers, { part = glow, base = glowBase, axis = ctx.F.RightVector, amp = amp, speed = speed, phase = phase })
@@ -408,8 +408,8 @@ function Obstacles.vanish(ctx)
 		RGB(235, 245, 255), -- облачка
 	}
 	for _ = 1, n do
-		local size = 5
-		local gap = 3 + 1.5 * ctx.diff
+		local size = 6
+		local gap = 2.5 + 1.5 * ctx.diff
 		local x = math.clamp(ctx.x + r:NextNumber(-4, 4), -10, 10)
 		local zc = ctx.z + gap + size / 2
 		local p = part({
@@ -435,8 +435,8 @@ function Obstacles.spinner(ctx)
 	end
 	part({ Shape = CYL, Size = V3(3.4, 3, 3), CFrame = L(ctx, x, top + 1.7, zc) * ROT_UP, Color = RGB(80, 80, 90), Material = M.Metal })
 	local center = L(ctx, x, top + 1.3, zc)
-	local speed = 0.9 + 0.9 * ctx.diff
-	local bars = ctx.diff > 0.5 and 2 or 1
+	local speed = 0.7 + 0.8 * ctx.diff
+	local bars = ctx.diff > 0.6 and 2 or 1
 	for i = 1, bars do
 		local offset = CFrame.Angles(0, (i - 1) * PI / 2, 0)
 		local bar = killPart({ Size = V3(dia - 1, 0.9, 0.9), CFrame = center * offset, Color = RGB(255, 40, 40), Material = M.Neon })
@@ -521,7 +521,7 @@ end
 function Obstacles.rope(ctx)
 	local r = ctx.rng
 	local segs = r:NextInteger(3, 4)
-	local width = math.max(1.2, 1.8 - 0.6 * ctx.diff)
+	local width = math.max(1.4, 2.4 - 0.9 * ctx.diff)
 	local rainbow = { RGB(255, 70, 70), RGB(255, 170, 40), RGB(255, 240, 60), RGB(80, 220, 90), RGB(70, 150, 255), RGB(170, 90, 255) }
 	local beamColors = { RGB(200, 160, 60), RGB(240, 210, 120), RGB(95, 85, 80), RGB(60, 55, 55) }
 	local top = ctx.y
@@ -533,8 +533,8 @@ function Obstacles.rope(ctx)
 	joint(jx, jz)
 	local side = r:NextNumber() < 0.5 and -1 or 1
 	for i = 1, segs do
-		local nx = math.clamp(jx + side * r:NextNumber(5, 9), -12, 12)
-		local nz = jz + r:NextNumber(8, 12)
+		local nx = math.clamp(jx + side * r:NextNumber(4, 7), -12, 12)
+		local nz = jz + r:NextNumber(7, 10)
 		local a = L(ctx, jx, top - 0.5, jz).Position
 		local b = L(ctx, nx, top - 0.5, nz).Position
 		local len = (b - a).Magnitude
@@ -557,7 +557,7 @@ end
 
 function Obstacles.posts(ctx)
 	local r = ctx.rng
-	local n = r:NextInteger(5, 7)
+	local n = r:NextInteger(4, 6)
 	local colors = {
 		RGB(240, 235, 220), -- свечи
 		pick(r, PLATE_RIMS), -- банки
@@ -566,8 +566,8 @@ function Obstacles.posts(ctx)
 		RGB(250, 250, 255), -- облачные столбы
 	}
 	for _ = 1, n do
-		local dia = 3.4 - 0.8 * ctx.diff
-		local gap = 3 + 1.5 * ctx.diff
+		local dia = 4.4 - 1.2 * ctx.diff
+		local gap = 2.5 + 1.5 * ctx.diff
 		local x = math.clamp(ctx.x + r:NextNumber(-3, 3), -10, 10)
 		local top = ctx.y + (ctx.flat and 0 or r:NextNumber(ctx.y < 14 and 0 or -0.5, 1.5))
 		local zc = ctx.z + gap + dia / 2
@@ -596,9 +596,9 @@ function Obstacles.conveyor(ctx)
 	local sideways = r:NextNumber() < 0.5
 	local dir
 	if sideways then
-		dir = ctx.F.RightVector * (r:NextNumber() < 0.5 and -1 or 1) * (4 + 4 * ctx.diff)
+		dir = ctx.F.RightVector * (r:NextNumber() < 0.5 and -1 or 1) * (3 + 3 * ctx.diff)
 	else
-		dir = -ctx.F.LookVector * (6 + 6 * ctx.diff)
+		dir = -ctx.F.LookVector * (4 + 6 * ctx.diff)
 	end
 	belt.AssemblyLinearVelocity = dir
 	for i = 0, math.floor(len / 4) - 1 do
@@ -648,13 +648,13 @@ function Obstacles.disks(ctx)
 	local n = r:NextInteger(2, 3)
 	local x = ctx.x
 	for i = 1, n do
-		local dia = 12 - 2 * ctx.diff
-		local zc = ctx.z + 3.5 + dia / 2
+		local dia = 13 - 2 * ctx.diff
+		local zc = ctx.z + 3 + dia / 2
 		local center = L(ctx, x, ctx.y - 0.5, zc)
 		local disk = part({ Shape = CYL, Size = V3(1, dia, dia), CFrame = center * ROT_UP, Color = ACCENT[ctx.zone] })
 		local stripeOffset = CF(0, 0.55, 0)
 		local stripe = part({ Size = V3(dia - 1, 0.2, 1.4), CFrame = center * stripeOffset, Color = Color3.new(1, 1, 1), Material = M.Neon, CanCollide = false })
-		local speed = (0.5 + 0.7 * ctx.diff) * ((i % 2 == 0) and -1 or 1)
+		local speed = (0.4 + 0.6 * ctx.diff) * ((i % 2 == 0) and -1 or 1)
 		table.insert(info.spinners, { part = disk, base = center, speed = speed, offset = ROT_UP })
 		table.insert(info.spinners, { part = stripe, base = center, speed = speed, offset = stripeOffset })
 		addPath(center.Position)
@@ -1304,7 +1304,7 @@ function MapBuilder.Build()
 
 		ctx.stage = s
 		ctx.zone = Config.ZoneOfStage(s)
-		ctx.diff = (s - 1) / (TOTAL - 1)
+		ctx.diff = ((s - 1) / (TOTAL - 1)) ^ 1.6 -- плавный рост: начало лёгкое
 		ctx.sky = ctx.zone == 5
 		ctx.flat = ctx.zone == 4
 		ctx.rng = Random.new(Config.MAP_SEED + s * 7919)
