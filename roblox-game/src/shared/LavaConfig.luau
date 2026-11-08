@@ -89,76 +89,118 @@ Config.WATER_PRODUCT_DURATION = 20
 Config.VIP_CHEST_REWARD = 150
 Config.VIP_CHEST_COOLDOWN = 600
 
--- ============ СЛЕДЫ ============
--- price > 0 — покупается за монеты; unlock — открывается за достижение.
+-- ============ МАГАЗИН ЗА МОНЕТЫ ============
+-- price — цена в монетах; unlock — открывается за достижение или пропуск.
+-- rarity: common / rare / epic / legendary / exclusive (цвет рамки в магазине).
+-- Названия и описания — в скрипте LavaText (item_<категория>_<id>).
+local C = Color3.fromRGB
+
+Config.Rarities = {
+	common = C(170, 170, 180),
+	rare = C(70, 150, 255),
+	epic = C(180, 90, 255),
+	legendary = C(255, 190, 40),
+	exclusive = C(255, 70, 120),
+}
+
+-- ✨ СЛЕДЫ (16)
 Config.Trails = {
-	{ id = "spark", name = "Искра", price = 150, colors = { Color3.fromRGB(255, 240, 150), Color3.fromRGB(255, 150, 40) } },
-	{ id = "ocean", name = "Океан", price = 400, colors = { Color3.fromRGB(80, 200, 255), Color3.fromRGB(20, 60, 200) } },
-	{ id = "toxic", name = "Токсик", price = 700, colors = { Color3.fromRGB(180, 255, 60), Color3.fromRGB(30, 140, 30) } },
-	{ id = "candy", name = "Конфета", price = 1200, colors = { Color3.fromRGB(255, 120, 200), Color3.fromRGB(140, 220, 255) } },
-	{ id = "galaxy", name = "Галактика", price = 2500, colors = { Color3.fromRGB(140, 60, 255), Color3.fromRGB(20, 10, 60) } },
-	{
-		id = "rainbow",
-		name = "Радуга",
-		price = 5000,
-		colors = {
-			Color3.fromRGB(255, 60, 60),
-			Color3.fromRGB(255, 200, 40),
-			Color3.fromRGB(60, 220, 90),
-			Color3.fromRGB(60, 140, 255),
-			Color3.fromRGB(190, 80, 255),
-		},
-	},
-	{ id = "duck", name = "Золотая утка", unlock = "ducks", colors = { Color3.fromRGB(255, 230, 60), Color3.fromRGB(255, 170, 0) } },
-	{ id = "vip", name = "Королевский", unlock = "vip", colors = { Color3.fromRGB(255, 215, 80), Color3.fromRGB(160, 60, 255) } },
-	{ id = "phoenix", name = "Феникс", unlock = "rebirth3", colors = { Color3.fromRGB(255, 80, 20), Color3.fromRGB(255, 230, 120) } },
+	{ id = "spark", price = 150, rarity = "common", colors = { C(255, 240, 150), C(255, 150, 40) } },
+	{ id = "mint", price = 250, rarity = "common", colors = { C(180, 255, 220), C(40, 200, 150) } },
+	{ id = "ocean", price = 400, rarity = "rare", colors = { C(80, 200, 255), C(20, 60, 200) } },
+	{ id = "sunset", price = 500, rarity = "rare", colors = { C(255, 120, 60), C(160, 60, 200) } },
+	{ id = "toxic", price = 700, rarity = "rare", colors = { C(180, 255, 60), C(30, 140, 30) } },
+	{ id = "love", price = 900, rarity = "rare", colors = { C(255, 100, 160), C(220, 20, 60) } },
+	{ id = "candy", price = 1200, rarity = "epic", colors = { C(255, 120, 200), C(140, 220, 255) } },
+	{ id = "ice", price = 1500, rarity = "epic", colors = { C(230, 250, 255), C(100, 190, 255) } },
+	{ id = "lava", price = 1800, rarity = "epic", colors = { C(255, 230, 80), C(255, 60, 0) } },
+	{ id = "shadow", price = 2200, rarity = "epic", colors = { C(90, 90, 110), C(10, 10, 15) } },
+	{ id = "galaxy", price = 2500, rarity = "legendary", colors = { C(140, 60, 255), C(20, 10, 60) } },
+	{ id = "sun", price = 3500, rarity = "legendary", colors = { C(255, 255, 200), C(255, 190, 0) } },
+	{ id = "rainbow", price = 5000, rarity = "legendary", colors = { C(255, 60, 60), C(255, 200, 40), C(60, 220, 90), C(60, 140, 255), C(190, 80, 255) } },
+	{ id = "phoenix", unlock = "rebirth3", rarity = "legendary", colors = { C(255, 80, 20), C(255, 230, 120) } },
+	{ id = "duck", unlock = "ducks", rarity = "legendary", colors = { C(255, 230, 60), C(255, 170, 0) } },
+	{ id = "vip", unlock = "vip", rarity = "exclusive", colors = { C(255, 215, 80), C(160, 60, 255) } },
 }
 
--- ============ СКИНЫ ============
--- Перекрашивают всего персонажа. Одежда снимается, чтобы скин было видно.
+-- 🎨 СКИНЫ (20) — перекрашивают всего персонажа, одежда снимается
 Config.Skins = {
-	{ id = "stone", name = "Каменный", price = 400, color = Color3.fromRGB(110, 105, 100), material = "Slate" },
-	{ id = "lava", name = "Лавовый", price = 600, color = Color3.fromRGB(255, 90, 20), material = "CrackedLava" },
-	{ id = "ice", name = "Ледяной", price = 900, color = Color3.fromRGB(160, 220, 255), material = "Ice" },
-	{ id = "neon", name = "Неоновый", price = 1500, color = Color3.fromRGB(255, 60, 200), material = "Neon" },
-	{ id = "ghost", name = "Призрак", price = 2500, color = Color3.fromRGB(200, 230, 255), material = "ForceField" },
-	{ id = "robot", name = "Робот", price = 3500, color = Color3.fromRGB(150, 155, 165), material = "DiamondPlate" },
-	{ id = "gold", name = "Золотой", unlock = "vip", color = Color3.fromRGB(255, 200, 50), material = "Foil" },
-	{ id = "duckskin", name = "Утиный", unlock = "ducks", color = Color3.fromRGB(255, 225, 40), material = "SmoothPlastic" },
-	{
-		id = "rainbow",
-		name = "Радуга",
-		unlock = "pass:SkinPack",
-		material = "Neon",
-		colors = {
-			Color3.fromRGB(255, 60, 60),
-			Color3.fromRGB(255, 170, 40),
-			Color3.fromRGB(255, 240, 60),
-			Color3.fromRGB(60, 220, 90),
-			Color3.fromRGB(60, 140, 255),
-			Color3.fromRGB(170, 80, 255),
-		},
-	},
-	{ id = "galaxy", name = "Галактика", unlock = "pass:SkinPack", color = Color3.fromRGB(70, 20, 140), material = "Neon" },
+	{ id = "stone", price = 400, rarity = "common", color = C(110, 105, 100), material = "Slate" },
+	{ id = "wood", price = 450, rarity = "common", color = C(160, 110, 65), material = "WoodPlanks" },
+	{ id = "grass", price = 500, rarity = "common", color = C(80, 170, 70), material = "Grass" },
+	{ id = "sand", price = 550, rarity = "common", color = C(225, 200, 140), material = "Sand" },
+	{ id = "lava", price = 600, rarity = "rare", color = C(255, 90, 20), material = "CrackedLava" },
+	{ id = "brick", price = 700, rarity = "rare", color = C(170, 70, 50), material = "Brick" },
+	{ id = "chocolate", price = 800, rarity = "rare", color = C(100, 60, 35), material = "SmoothPlastic" },
+	{ id = "ice", price = 900, rarity = "rare", color = C(160, 220, 255), material = "Ice" },
+	{ id = "marble", price = 1100, rarity = "epic", color = C(235, 235, 240), material = "Marble" },
+	{ id = "metal", price = 1300, rarity = "epic", color = C(180, 185, 195), material = "Metal" },
+	{ id = "neon", price = 1500, rarity = "epic", color = C(255, 60, 200), material = "Neon" },
+	{ id = "toxicneon", price = 1700, rarity = "epic", color = C(120, 255, 60), material = "Neon" },
+	{ id = "shadow", price = 2000, rarity = "legendary", color = C(20, 20, 25), material = "SmoothPlastic" },
+	{ id = "ghost", price = 2500, rarity = "legendary", color = C(200, 230, 255), material = "ForceField" },
+	{ id = "robot", price = 3500, rarity = "legendary", color = C(150, 155, 165), material = "DiamondPlate" },
+	{ id = "diamond", price = 5000, rarity = "legendary", color = C(170, 240, 255), material = "Glass" },
+	{ id = "duckskin", unlock = "ducks", rarity = "legendary", color = C(255, 225, 40), material = "SmoothPlastic" },
+	{ id = "gold", unlock = "vip", rarity = "exclusive", color = C(255, 200, 50), material = "Foil" },
+	{ id = "rainbow", unlock = "pass:SkinPack", rarity = "exclusive", material = "Neon", colors = { C(255, 60, 60), C(255, 170, 40), C(255, 240, 60), C(60, 220, 90), C(60, 140, 255), C(170, 80, 255) } },
+	{ id = "galaxy", unlock = "pass:SkinPack", rarity = "exclusive", color = C(70, 20, 140), material = "Neon" },
 }
 
--- ============ ПИТОМЦЫ ============
--- Летают рядом с игроком и дают бонус к монетам.
+-- 🐾 ПИТОМЦЫ (14) — летают рядом и дают бонус к монетам
 Config.Pets = {
-	{ id = "duckling", name = "Утёнок", price = 300, bonus = 0.1, color = Color3.fromRGB(255, 220, 40) },
-	{ id = "flame", name = "Огонёк", price = 1000, bonus = 0.2, color = Color3.fromRGB(255, 120, 30) },
-	{ id = "cubecat", name = "Кубокот", price = 2500, bonus = 0.3, color = Color3.fromRGB(240, 240, 240) },
-	{ id = "slime", name = "Лавовый слайм", price = 5000, bonus = 0.4, color = Color3.fromRGB(255, 80, 20) },
-	{ id = "goldduck", name = "Золотая утка", unlock = "ducks", bonus = 0.25, color = Color3.fromRGB(255, 200, 40) },
-	{ id = "phoenix", name = "Феникс", unlock = "vip", bonus = 0.5, color = Color3.fromRGB(255, 160, 40) },
-	{ id = "dragon", name = "Дракончик", unlock = "pass:DragonPet", bonus = 0.75, color = Color3.fromRGB(80, 200, 90) },
+	{ id = "duckling", price = 300, rarity = "common", bonus = 0.1, color = C(255, 220, 40) },
+	{ id = "frog", price = 500, rarity = "common", bonus = 0.12, color = C(90, 200, 70) },
+	{ id = "penguin", price = 800, rarity = "rare", bonus = 0.15, color = C(30, 30, 40) },
+	{ id = "flame", price = 1000, rarity = "rare", bonus = 0.2, color = C(255, 120, 30) },
+	{ id = "bee", price = 1500, rarity = "rare", bonus = 0.22, color = C(255, 200, 30) },
+	{ id = "snowman", price = 2000, rarity = "epic", bonus = 0.25, color = C(245, 250, 255) },
+	{ id = "cubecat", price = 2500, rarity = "epic", bonus = 0.3, color = C(240, 240, 240) },
+	{ id = "ghostpet", price = 3500, rarity = "epic", bonus = 0.33, color = C(220, 235, 255) },
+	{ id = "slime", price = 5000, rarity = "legendary", bonus = 0.4, color = C(255, 80, 20) },
+	{ id = "robocube", price = 7500, rarity = "legendary", bonus = 0.5, color = C(160, 165, 175) },
+	{ id = "minivolcano", price = 10000, rarity = "legendary", bonus = 0.6, color = C(70, 55, 50) },
+	{ id = "goldduck", unlock = "ducks", rarity = "legendary", bonus = 0.25, color = C(255, 200, 40) },
+	{ id = "phoenix", unlock = "vip", rarity = "exclusive", bonus = 0.5, color = C(255, 160, 40) },
+	{ id = "dragon", unlock = "pass:DragonPet", rarity = "exclusive", bonus = 0.75, color = C(80, 200, 90) },
 }
 
--- Категории предметов магазина за монеты
+-- 🌟 АУРЫ (9) — эффекты вокруг персонажа
+-- kind: sparkles / fire / smoke / particles
+Config.Auras = {
+	{ id = "sparkle", price = 800, rarity = "rare", kind = "sparkles", colors = { C(255, 255, 255) } },
+	{ id = "hearts", price = 1200, rarity = "rare", kind = "particles", colors = { C(255, 120, 180), C(255, 40, 90) } },
+	{ id = "fire", price = 2000, rarity = "epic", kind = "fire", colors = { C(255, 140, 30), C(255, 40, 0) } },
+	{ id = "frost", price = 2000, rarity = "epic", kind = "particles", colors = { C(220, 245, 255), C(80, 180, 255) } },
+	{ id = "stars", price = 3000, rarity = "epic", kind = "particles", colors = { C(255, 250, 180), C(255, 200, 40) } },
+	{ id = "electric", price = 4500, rarity = "legendary", kind = "particles", fast = true, colors = { C(200, 255, 255), C(40, 160, 255) } },
+	{ id = "shadow", price = 4500, rarity = "legendary", kind = "smoke", colors = { C(30, 30, 40) } },
+	{ id = "rainbow", price = 8000, rarity = "legendary", kind = "particles", colors = { C(255, 60, 60), C(255, 200, 40), C(60, 220, 90), C(60, 140, 255), C(190, 80, 255) } },
+	{ id = "golden", unlock = "vip", rarity = "exclusive", kind = "particles", colors = { C(255, 240, 150), C(255, 180, 0) } },
+}
+
+-- ⭐ ПРИВИЛЕГИИ (6) — покупаются навсегда и работают сами
+Config.Perks = {
+	{ id = "swift", price = 1500, rarity = "rare" }, -- +3 к скорости бега
+	{ id = "fastgift", price = 2500, rarity = "rare" }, -- подарок каждые 3 минуты вместо 5
+	{ id = "lucky", price = 3000, rarity = "epic" }, -- +15% монет
+	{ id = "shieldplus", price = 3500, rarity = "epic" }, -- щит от лавы длится на 30 сек дольше
+	{ id = "magnet", price = 4000, rarity = "legendary" }, -- монетки сами летят к тебе
+	{ id = "doublejump", price = 8000, rarity = "legendary" }, -- двойной прыжок
+}
+Config.PERK_SWIFT_BONUS = 3
+Config.PERK_LUCKY_BONUS = 1.15
+Config.PERK_FASTGIFT_INTERVAL = 180
+Config.PERK_SHIELD_BONUS = 30
+Config.PERK_MAGNET_RADIUS = 14
+
+-- Категории магазина за монеты (equipped = nil — предмет не надевается, а работает сам)
 Config.ItemCategories = {
 	trails = { list = "Trails", owned = "trails", equipped = "trail" },
 	skins = { list = "Skins", owned = "skins", equipped = "skin" },
 	pets = { list = "Pets", owned = "pets", equipped = "pet" },
+	auras = { list = "Auras", owned = "auras", equipped = "aura" },
+	perks = { list = "Perks", owned = "perks" },
 }
 
 function Config.GetItem(category, id)

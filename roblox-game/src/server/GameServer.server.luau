@@ -57,6 +57,9 @@ local function defaultData()
 		skins = {},
 		skin = "",
 		pets = {},
+		auras = {},
+		aura = "",
+		perks = {},
 		pet = "",
 		daily = 0,
 		streak = 0,
@@ -101,6 +104,9 @@ local function multiplier(player, s)
 	if pet and ownsItem and ownsItem(player, s, "pets", pet) then
 		m *= 1 + pet.bonus
 	end
+	if s.data.perks.lucky then
+		m *= Config.PERK_LUCKY_BONUS
+	end
 	if player:GetAttribute("PassDoubleCoins") then
 		m *= 2
 	end
@@ -128,6 +134,9 @@ local function syncAttributes(player)
 	player:SetAttribute("Skin", d.skin)
 	player:SetAttribute("Pets", csvKeys(d.pets))
 	player:SetAttribute("Pet", d.pet)
+	player:SetAttribute("Auras", csvKeys(d.auras))
+	player:SetAttribute("Aura", d.aura)
+	player:SetAttribute("Perks", csvKeys(d.perks))
 	player:SetAttribute("NextGift", s.nextGift)
 	player:SetAttribute("Multiplier", multiplier(player, s))
 	local ls = player:FindFirstChild("leaderstats")
@@ -421,6 +430,54 @@ local function buildPet(pet)
 		f.Color = Color3.fromRGB(255, 200, 60)
 		f.Parent = root
 		eyes(model, o * CFrame.new(0, 0.2, -0.65), 0.25)
+	elseif pet.id == "frog" then
+		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c })
+		for sx = -1, 1, 2 do
+			petPart(model, { Shape = BALL, Size = Vector3.new(0.6, 0.6, 0.6), CFrame = o * CFrame.new(sx * 0.4, 0.75, -0.4), Color = Color3.new(1, 1, 1) })
+			petPart(model, { Shape = BALL, Size = Vector3.new(0.3, 0.3, 0.3), CFrame = o * CFrame.new(sx * 0.4, 0.8, -0.65), Color = Color3.new(0, 0, 0) })
+		end
+		petPart(model, { Size = Vector3.new(0.8, 0.08, 0.05), CFrame = o * CFrame.new(0, 0.05, -0.8), Color = Color3.fromRGB(200, 60, 80) })
+	elseif pet.id == "penguin" then
+		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c })
+		petPart(model, { Shape = BALL, Size = Vector3.new(1.2, 1.2, 1.2), CFrame = o * CFrame.new(0, -0.1, -0.3), Color = Color3.new(1, 1, 1) })
+		petPart(model, { Size = Vector3.new(0.35, 0.2, 0.4), CFrame = o * CFrame.new(0, 0.2, -0.95), Color = Color3.fromRGB(255, 160, 30) })
+		eyes(model, o * CFrame.new(0, 0.45, -0.75), 0.25)
+	elseif pet.id == "bee" then
+		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.5, 1.5, 1.5), CFrame = o, Color = c })
+		for i = -1, 1, 2 do
+			petPart(model, { Size = Vector3.new(1.52, 0.25, 1.52), CFrame = o * CFrame.new(0, i * 0.3, 0), Color = Color3.fromRGB(30, 25, 20) })
+			petPart(model, { Size = Vector3.new(0.9, 0.08, 0.6), CFrame = o * CFrame.new(i * 0.7, 0.75, 0.2) * CFrame.Angles(0, 0, i * 0.4), Color = Color3.fromRGB(220, 240, 255), Transparency = 0.3 })
+		end
+		eyes(model, o * CFrame.new(0, 0.15, -0.72), 0.25)
+	elseif pet.id == "snowman" then
+		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.5, 1.5, 1.5), CFrame = o, Color = c })
+		petPart(model, { Shape = BALL, Size = Vector3.new(1.05, 1.05, 1.05), CFrame = o * CFrame.new(0, 1.1, 0), Color = c })
+		petPart(model, { Size = Vector3.new(0.15, 0.15, 0.5), CFrame = o * CFrame.new(0, 1.1, -0.65), Color = Color3.fromRGB(255, 130, 30) })
+		petPart(model, { Size = Vector3.new(0.9, 0.5, 0.9), CFrame = o * CFrame.new(0, 1.75, 0), Color = Color3.fromRGB(30, 30, 35) })
+		eyes(model, o * CFrame.new(0, 1.3, -0.47), 0.18)
+	elseif pet.id == "ghostpet" then
+		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c, Material = Enum.Material.Neon, Transparency = 0.35 })
+		eyes(model, o * CFrame.new(0, 0.2, -0.75), 0.28)
+		local l = Instance.new("PointLight")
+		l.Color = c
+		l.Range = 8
+		l.Parent = root
+	elseif pet.id == "robocube" then
+		root = petPart(model, { Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c, Material = Enum.Material.DiamondPlate })
+		for sx = -1, 1, 2 do
+			petPart(model, { Size = Vector3.new(0.35, 0.2, 0.05), CFrame = o * CFrame.new(sx * 0.35, 0.25, -0.81), Color = Color3.fromRGB(60, 220, 255), Material = Enum.Material.Neon })
+		end
+		petPart(model, { Size = Vector3.new(0.1, 0.6, 0.1), CFrame = o * CFrame.new(0, 1.1, 0), Color = Color3.fromRGB(120, 120, 130) })
+		petPart(model, { Shape = BALL, Size = Vector3.new(0.3, 0.3, 0.3), CFrame = o * CFrame.new(0, 1.45, 0), Color = Color3.fromRGB(255, 60, 60), Material = Enum.Material.Neon })
+	elseif pet.id == "minivolcano" then
+		root = petPart(model, { Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.8, 2, 2), CFrame = o * CFrame.Angles(0, 0, math.pi / 2), Color = c, Material = Enum.Material.Basalt })
+		petPart(model, { Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.7, 1.4, 1.4), CFrame = o * CFrame.new(0, 0.7, 0) * CFrame.Angles(0, 0, math.pi / 2), Color = c, Material = Enum.Material.Basalt })
+		local top = petPart(model, { Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 0.9, 0.9), CFrame = o * CFrame.new(0, 1.1, 0) * CFrame.Angles(0, 0, math.pi / 2), Color = Color3.fromRGB(255, 90, 0), Material = Enum.Material.Neon })
+		local f = Instance.new("Fire")
+		f.Size = 2
+		f.Heat = 6
+		f.Parent = top
+		eyes(model, o * CFrame.new(0, 0.3, -1.0), 0.3)
 	else -- dragon
 		root = petPart(model, { Size = Vector3.new(1.2, 1.1, 1.8), CFrame = o, Color = c })
 		petPart(model, { Size = Vector3.new(0.9, 0.8, 0.9), CFrame = o * CFrame.new(0, 0.6, -1.2), Color = c })
@@ -458,16 +515,86 @@ local function applyPet(player)
 	model.Parent = petFolder
 end
 
+-- ============ АУРЫ ============
+local function colorSeq(colors)
+	local kps = {}
+	local n = #colors
+	for i, c in ipairs(colors) do
+		table.insert(kps, ColorSequenceKeypoint.new(n == 1 and 0 or (i - 1) / (n - 1), c))
+	end
+	if n == 1 then
+		table.insert(kps, ColorSequenceKeypoint.new(1, colors[1]))
+	end
+	return ColorSequence.new(kps)
+end
+
+local function applyAura(player)
+	local s = sessions[player]
+	local _, _, root = getCharacterParts(player)
+	if not s or not root then
+		return
+	end
+	for _, c in ipairs(root:GetChildren()) do
+		if c.Name == "LavaAura" then
+			c:Destroy()
+		end
+	end
+	local aura = Config.GetItem("auras", s.data.aura)
+	if not aura or not ownsItem(player, s, "auras", aura) then
+		return
+	end
+	local fx
+	if aura.kind == "sparkles" then
+		fx = Instance.new("Sparkles")
+		fx.SparkleColor = aura.colors[1]
+	elseif aura.kind == "fire" then
+		fx = Instance.new("Fire")
+		fx.Color = aura.colors[1]
+		fx.SecondaryColor = aura.colors[2] or aura.colors[1]
+		fx.Size = 4
+		fx.Heat = 6
+	elseif aura.kind == "smoke" then
+		fx = Instance.new("Smoke")
+		fx.Color = aura.colors[1]
+		fx.Size = 2
+		fx.Opacity = 0.25
+		fx.RiseVelocity = 2
+	else
+		fx = Instance.new("ParticleEmitter")
+		fx.Color = colorSeq(aura.colors)
+		fx.LightEmission = 0.8
+		fx.Size = NumberSequence.new(0.35, 0)
+		fx.Transparency = NumberSequence.new(0, 1)
+		fx.Lifetime = NumberRange.new(0.8, 1.4)
+		fx.Rate = aura.fast and 40 or 18
+		fx.Speed = NumberRange.new(aura.fast and 6 or 2, aura.fast and 10 or 4)
+		fx.SpreadAngle = Vector2.new(180, 180)
+		fx.Acceleration = Vector3.new(0, 2, 0)
+	end
+	fx.Name = "LavaAura"
+	fx.Parent = root
+end
+
+local function hasPerk(player, id)
+	local s = sessions[player]
+	return s ~= nil and s.data.perks[id] == true
+end
+
 local function applyCharacter(player)
 	local _, hum = getCharacterParts(player)
 	if hum then
-		hum.WalkSpeed = player:GetAttribute("PassSpeed") and Config.SPEED_WALKSPEED or Config.NORMAL_WALKSPEED
+		local speed = player:GetAttribute("PassSpeed") and Config.SPEED_WALKSPEED or Config.NORMAL_WALKSPEED
+		if hasPerk(player, "swift") then
+			speed += Config.PERK_SWIFT_BONUS
+		end
+		hum.WalkSpeed = speed
 		hum.UseJumpPower = false
 		hum.JumpHeight = player:GetAttribute("PassSuperJump") and Config.SUPER_JUMP or Config.NORMAL_JUMP
 	end
 	applyTrail(player)
 	applySkin(player)
 	applyPet(player)
+	applyAura(player)
 	applyOverhead(player)
 end
 
@@ -858,23 +985,53 @@ for _, btn in ipairs(CollectionService:GetTagged("LavaButton")) do
 end
 
 -- ============ МОНЕТЫ, УТКИ, СЕКРЕТЫ ============
-for _, coin in ipairs(CollectionService:GetTagged("Coin")) do
+local allCoins = CollectionService:GetTagged("Coin")
+
+local function collectCoin(player, coin)
+	local s = sessions[player]
+	if not s or not s.loaded then
+		return
+	end
 	local id = coin:GetAttribute("CoinId")
+	local last = s.collected[id]
+	if last and os.clock() - last < Config.COIN_RESPAWN then
+		return
+	end
+	s.collected[id] = os.clock()
+	addCoins(player, Config.COIN_VALUE, true)
+	CoinRE:FireClient(player, id)
+end
+
+for _, coin in ipairs(allCoins) do
 	coin.Touched:Connect(function(hit)
 		local player = playerFromHit(hit)
-		local s = player and sessions[player]
-		if not s or not s.loaded then
-			return
+		if player then
+			collectCoin(player, coin)
 		end
-		local last = s.collected[id]
-		if last and os.clock() - last < Config.COIN_RESPAWN then
-			return
-		end
-		s.collected[id] = os.clock()
-		addCoins(player, Config.COIN_VALUE, true)
-		CoinRE:FireClient(player, id)
 	end)
 end
+
+-- 🧲 Привилегия «Магнит»: монетки рядом собираются сами
+task.spawn(function()
+	local r2 = Config.PERK_MAGNET_RADIUS * Config.PERK_MAGNET_RADIUS
+	while true do
+		task.wait(0.3)
+		for _, p in ipairs(Players:GetPlayers()) do
+			if hasPerk(p, "magnet") then
+				local _, hum, root = getCharacterParts(p)
+				if root and hum and hum.Health > 0 then
+					local pos = root.Position
+					for _, coin in ipairs(allCoins) do
+						local d = coin.Position - pos
+						if d.X * d.X + d.Y * d.Y + d.Z * d.Z < r2 then
+							collectCoin(p, coin)
+						end
+					end
+				end
+			end
+		end
+	end
+end)
 
 for _, duck in ipairs(CollectionService:GetTagged("Duck")) do
 	local id = duck:GetAttribute("DuckId")
@@ -974,7 +1131,7 @@ end
 
 -- После покупки пропуска сразу надеваем его вещи (один раз), чтобы игрок увидел, за что платил
 local AUTO_EQUIP = {
-	VIP = { skins = "gold", pets = "phoenix", trails = "vip" },
+	VIP = { skins = "gold", pets = "phoenix", trails = "vip", auras = "golden" },
 	SkinPack = { skins = "rainbow" },
 	DragonPet = { pets = "dragon" },
 }
@@ -1043,7 +1200,8 @@ MarketplaceService.ProcessReceipt = function(receipt)
 		teleportToStage(player)
 		notify(player, "n_skipped_zone", Color3.fromRGB(120, 255, 140))
 	elseif id == P.LavaShield then
-		local untilT = math.max(player:GetAttribute("ShieldUntil") or 0, os.time()) + Config.SHIELD_DURATION
+		local duration = Config.SHIELD_DURATION + (hasPerk(player, "shieldplus") and Config.PERK_SHIELD_BONUS or 0)
+		local untilT = math.max(player:GetAttribute("ShieldUntil") or 0, os.time()) + duration
 		player:SetAttribute("ShieldUntil", untilT)
 		local char = player.Character
 		if char and not char:FindFirstChild("LavaShieldFF") then
@@ -1059,7 +1217,7 @@ MarketplaceService.ProcessReceipt = function(receipt)
 				end
 			end
 		end)
-		notify(player, "n_shield", Color3.fromRGB(120, 220, 255), Config.SHIELD_DURATION)
+		notify(player, "n_shield", Color3.fromRGB(120, 220, 255), duration)
 	elseif id == P.Coins500 or id == P.Coins2500 or id == P.Coins10000 then
 		local amount = (id == P.Coins500 and 500) or (id == P.Coins2500 and 2500) or 10000
 		addCoins(player, amount, false)
@@ -1108,6 +1266,10 @@ local function applyCategory(player, category)
 		end
 	elseif category == "pets" then
 		applyPet(player)
+	elseif category == "auras" then
+		applyAura(player)
+	elseif category == "perks" then
+		applyCharacter(player)
 	end
 end
 
@@ -1165,7 +1327,10 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 		if not cat or type(id) ~= "string" then
 			return
 		end
-		if action == "EquipItem" and id == "" then
+		if action == "EquipItem" and (id == "" or not cat.equipped) then
+			if not cat.equipped then
+				return
+			end
 			d[cat.equipped] = ""
 			syncAttributes(player)
 			applyCategory(player, category)
@@ -1190,7 +1355,9 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 		elseif not ownsItem(player, s, category, item) then
 			return
 		end
-		d[cat.equipped] = item.id
+		if cat.equipped then
+			d[cat.equipped] = item.id
+		end
 		syncAttributes(player)
 		applyCategory(player, category)
 	elseif action == "ClaimGift" then
@@ -1200,7 +1367,7 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 		s.giftCount += 1
 		local amount = Config.GIFT_REWARDS[math.min(s.giftCount, #Config.GIFT_REWARDS)]
 		local gained = addCoins(player, amount, true)
-		s.nextGift = os.time() + Config.GIFT_INTERVAL
+		s.nextGift = os.time() + (hasPerk(player, "fastgift") and Config.PERK_FASTGIFT_INTERVAL or Config.GIFT_INTERVAL)
 		syncAttributes(player)
 		EffectRE:FireClient(player, "duck")
 		notify(player, "n_gift", Color3.fromRGB(255, 215, 80), gained)

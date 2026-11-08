@@ -293,7 +293,7 @@ textStroke(warnLabel)
 local shop = scaled(new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5),
 	Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromOffset(580, 420),
+	Size = UDim2.fromOffset(780, 470),
 	BackgroundColor3 = Color3.fromRGB(40, 28, 34),
 	Visible = false,
 	ZIndex = 5,
@@ -314,10 +314,17 @@ local shopTitle = new("TextLabel", {
 textStroke(shopTitle)
 local closeBtn = button({ text = "✕", size = UDim2.fromOffset(44, 44), position = UDim2.new(1, -56, 0, 10), color = Color3.fromRGB(200, 50, 50) }, shop)
 closeBtn.ZIndex = 6
-local TABS = { { "trails", tr("tab_trails") }, { "skins", tr("tab_skins") }, { "pets", tr("tab_pets") }, { "robux", tr("tab_robux") } }
+local TABS = {
+	{ "trails", tr("tab_trails") },
+	{ "skins", tr("tab_skins") },
+	{ "pets", tr("tab_pets") },
+	{ "auras", tr("tab_auras") },
+	{ "perks", tr("tab_perks") },
+	{ "robux", tr("tab_robux") },
+}
 local tabButtons = {}
 for i, t in ipairs(TABS) do
-	local b = button({ text = t[2], size = UDim2.fromOffset(128, 38), position = UDim2.fromOffset(16 + (i - 1) * 136, 60), color = Color3.fromRGB(90, 70, 80) }, shop)
+	local b = button({ text = t[2], size = UDim2.fromOffset(118, 38), position = UDim2.fromOffset(16 + (i - 1) * 124, 60), color = Color3.fromRGB(90, 70, 80) }, shop)
 	b.ZIndex = 6
 	tabButtons[t[1]] = b
 end
@@ -330,7 +337,7 @@ local list = new("ScrollingFrame", {
 	AutomaticCanvasSize = Enum.AutomaticSize.Y,
 	ZIndex = 6,
 }, shop)
-new("UIGridLayout", { CellSize = UDim2.fromOffset(170, 160), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, list)
+new("UIGridLayout", { CellSize = UDim2.fromOffset(172, 180), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, list)
 
 local currentTab = "trails"
 
@@ -345,7 +352,13 @@ end
 local function attrGetter(name)
 	return player:GetAttribute(name)
 end
-local CAT_ATTR = { trails = { "Trails", "Trail" }, skins = { "Skins", "Skin" }, pets = { "Pets", "Pet" } }
+local CAT_ATTR = {
+	trails = { "Trails", "Trail" },
+	skins = { "Skins", "Skin" },
+	pets = { "Pets", "Pet" },
+	auras = { "Auras", "Aura" },
+	perks = { "Perks", nil },
+}
 
 local function ownsItem(category, item)
 	if item.unlock then
@@ -354,11 +367,31 @@ local function ownsItem(category, item)
 	return csvSet(player:GetAttribute(CAT_ATTR[category][1]))[item.id] == true
 end
 
-local function card(order, title, desc, colors, btnText, btnColor, onClick)
+local function card(order, title, desc, colors, btnText, btnColor, onClick, rarity)
 	local c = new("Frame", { BackgroundColor3 = Color3.fromRGB(60, 45, 52), LayoutOrder = order, ZIndex = 6 }, list)
 	corner(c, 12)
+	local rarityColor = rarity and Config.Rarities[rarity]
+	if rarityColor then
+		new("UIStroke", { Color = rarityColor, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, c)
+		new("UIGradient", {
+			Rotation = 90,
+			Color = ColorSequence.new(rarityColor:Lerp(Color3.new(1, 1, 1), 0.2), Color3.new(0.35, 0.3, 0.33)),
+			Transparency = NumberSequence.new(0.55, 0),
+		}, c)
+		local rl = new("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(8, 24),
+			Size = UDim2.new(1, -16, 0, 14),
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			TextColor3 = rarityColor,
+			Text = tr("rarity_" .. rarity),
+			ZIndex = 7,
+		}, c)
+		textStroke(rl)
+	end
 	if colors then
-		local strip = new("Frame", { Size = UDim2.new(1, -16, 0, 14), Position = UDim2.fromOffset(8, 8), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 7 }, c)
+		local strip = new("Frame", { Size = UDim2.new(1, -16, 0, 12), Position = UDim2.fromOffset(8, 8), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 7 }, c)
 		corner(strip, 7)
 		local kps = {}
 		for i, col in ipairs(colors) do
@@ -371,8 +404,8 @@ local function card(order, title, desc, colors, btnText, btnColor, onClick)
 	end
 	local t = new("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(8, 26),
-		Size = UDim2.new(1, -16, 0, 28),
+		Position = UDim2.fromOffset(8, 40),
+		Size = UDim2.new(1, -16, 0, 26),
 		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
 		TextColor3 = Color3.new(1, 1, 1),
@@ -382,8 +415,8 @@ local function card(order, title, desc, colors, btnText, btnColor, onClick)
 	textStroke(t)
 	new("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(8, 56),
-		Size = UDim2.new(1, -16, 0, 50),
+		Position = UDim2.fromOffset(8, 68),
+		Size = UDim2.new(1, -16, 0, 58),
 		Font = Enum.Font.Gotham,
 		TextWrapped = true,
 		TextSize = 13,
@@ -434,10 +467,13 @@ local function refreshShop()
 	if currentTab ~= "robux" then
 		local category = currentTab
 		local cat = Config.ItemCategories[category]
-		local equipped = player:GetAttribute(CAT_ATTR[category][2]) or ""
-		card(0, tr("none_" .. category), tr("none_desc"), nil, equipped == "" and tr("selected") or tr("take_off"), Color3.fromRGB(90, 90, 100), function()
-			ActionRE:FireServer("EquipItem", { category = category, id = "" })
-		end)
+		local isPerk = category == "perks"
+		local equipped = (not isPerk and player:GetAttribute(CAT_ATTR[category][2])) or ""
+		if not isPerk then
+			card(0, tr("none_" .. category), tr("none_desc"), nil, equipped == "" and tr("selected") or tr("take_off"), Color3.fromRGB(90, 90, 100), function()
+				ActionRE:FireServer("EquipItem", { category = category, id = "" })
+			end)
+		end
 		for i, item in ipairs(Config[cat.list]) do
 			local owned = ownsItem(category, item)
 			local colors = item.colors or (item.color and { item.color }) or nil
@@ -450,8 +486,14 @@ local function refreshShop()
 			if item.bonus then
 				desc = tr("bonus", math.floor(item.bonus * 100 + 0.5)) .. "\n" .. desc
 			end
+			if isPerk then
+				desc = tr("perk_" .. item.id) .. "\n" .. desc
+			end
 			local btnText, btnColor, action
-			if equipped == item.id and owned then
+			if isPerk and owned then
+				btnText, btnColor = tr("active"), Color3.fromRGB(60, 170, 90)
+				action = function() end
+			elseif equipped == item.id and owned then
 				btnText, btnColor = tr("equipped"), Color3.fromRGB(60, 170, 90)
 				action = function() end
 			elseif owned then
@@ -476,7 +518,7 @@ local function refreshShop()
 					toast("🔒 " .. desc)
 				end
 			end
-			card(i, tr("item_" .. category .. "_" .. item.id), desc, colors, btnText, btnColor, action)
+			card(i, tr("item_" .. category .. "_" .. item.id), desc, colors, btnText, btnColor, action, item.rarity)
 		end
 	else
 		local order = 0
@@ -642,7 +684,7 @@ for _, attr in ipairs({ "Stage", "MaxStage", "Coins", "Ducks", "Multiplier", "Re
 	player:GetAttributeChangedSignal(attr):Connect(refreshHud)
 end
 for _, attr in ipairs({
-	"Coins", "Trails", "Trail", "Skins", "Skin", "Pets", "Pet", "Ducks", "Rebirths",
+	"Coins", "Trails", "Trail", "Skins", "Skin", "Pets", "Pet", "Auras", "Aura", "Perks", "Ducks", "Rebirths",
 	"PassVIP", "PassSpeed", "PassSuperJump", "PassDoubleCoins", "PassSkinPack", "PassDragonPet",
 }) do
 	player:GetAttributeChangedSignal(attr):Connect(refreshShop)
@@ -985,6 +1027,47 @@ if player.Character then
 	task.spawn(watchDeaths, player.Character)
 end
 player.CharacterAdded:Connect(watchDeaths)
+
+-- ============ ПРИВИЛЕГИЯ «ДВОЙНОЙ ПРЫЖОК» ============
+local UserInputService = game:GetService("UserInputService")
+local doubleUsed = false
+local function hasDoubleJump()
+	return csvSet(player:GetAttribute("Perks")).doublejump == true
+end
+UserInputService.JumpRequest:Connect(function()
+	if not hasDoubleJump() then
+		return
+	end
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not hum or not root or hum.Health <= 0 then
+		return
+	end
+	local state = hum:GetState()
+	local inAir = state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping
+	if inAir and not doubleUsed then
+		doubleUsed = true
+		local v = root.AssemblyLinearVelocity
+		root.AssemblyLinearVelocity = Vector3.new(v.X, 50, v.Z)
+		hum:ChangeState(Enum.HumanoidStateType.Jumping)
+		burst(12, { Color3.new(1, 1, 1), Color3.fromRGB(150, 220, 255) })
+	end
+end)
+local function watchLanding(char)
+	local hum = char:WaitForChild("Humanoid", 10)
+	if hum then
+		hum.StateChanged:Connect(function(_, new)
+			if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
+				doubleUsed = false
+			end
+		end)
+	end
+end
+if player.Character then
+	task.spawn(watchLanding, player.Character)
+end
+player.CharacterAdded:Connect(watchLanding)
 
 -- ============ ПЕРЕВОД ТАБЛИЧЕК НА КАРТЕ ============
 local function translateLabel(lbl)
