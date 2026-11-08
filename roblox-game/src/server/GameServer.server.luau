@@ -324,6 +324,211 @@ local function applyOverhead(player)
 end
 
 -- ============ СКИНЫ ============
+-- ============ ДЕТАЛИ ДЛЯ ПИТОМЦЕВ И СКИНОВ ============
+local BALL = Enum.PartType.Ball
+local CYL = Enum.PartType.Cylinder
+local MAT = Enum.Material
+local RGB = Color3.fromRGB
+local V = Vector3.new
+local CF = CFrame.new
+local ANG = CFrame.Angles
+local UPR = CFrame.Angles(0, 0, math.pi / 2) -- цилиндр «стоя»
+
+-- kind: "block" | "ball" | "egg" (овал) | "cyl" | "wedge"
+local function shape(parent, kind, size, cf, color, material, extra)
+	local p = kind == "wedge" and Instance.new("WedgePart") or Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanTouch = false
+	p.CanQuery = false
+	p.CastShadow = false
+	p.Massless = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Material = material or MAT.SmoothPlastic
+	p.Color = color
+	if kind == "ball" then
+		p.Shape = BALL
+	elseif kind == "cyl" then
+		p.Shape = CYL
+	end
+	p.Size = size
+	p.CFrame = cf
+	if kind == "egg" then
+		local m = Instance.new("SpecialMesh")
+		m.MeshType = Enum.MeshType.Sphere
+		m.Parent = p
+	end
+	if extra then
+		for k, v in pairs(extra) do
+			p[k] = v
+		end
+	end
+	p.Parent = parent
+	return p
+end
+
+-- Мультяшный глаз с бликом
+local function cuteEye(model, cf, r)
+	shape(model, "ball", V(r, r, r), cf, RGB(20, 20, 28))
+	shape(model, "ball", V(r * 0.4, r * 0.4, r * 0.4), cf * CF(r * 0.18, r * 0.2, -r * 0.36), RGB(255, 255, 255), MAT.Neon)
+end
+
+-- Деталь, которая машет (крылья, хвост). Клиент её анимирует.
+local function flap(part, hinge, amp, speed, axis)
+	part:SetAttribute("Hinge", hinge)
+	part:SetAttribute("FromHinge", hinge:Inverse() * part.CFrame)
+	part:SetAttribute("Flap", amp)
+	part:SetAttribute("FlapSpeed", speed or 8)
+	part:SetAttribute("FlapAxis", axis or "z")
+	return part
+end
+
+local function addLight(part, color, range)
+	local l = Instance.new("PointLight")
+	l.Color = color
+	l.Range = range or 8
+	l.Brightness = 1.2
+	l.Parent = part
+end
+
+-- ============ СКИНЫ ============
+local function torsoOf(char)
+	return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+end
+
+local function clearSkinExtras(char)
+	for _, d in ipairs(char:GetDescendants()) do
+		if d.Name == "LavaSkinExtra" then
+			d:Destroy()
+		end
+	end
+end
+
+-- Деталь, приваренная к голове: offset — относительно центра головы
+local function headExtra(head, kind, size, offset, color, material, extra)
+	local p = shape(head.Parent, kind, size, head.CFrame * offset, color, material, extra)
+	p.Anchored = false
+	p.Name = "LavaSkinExtra"
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = head
+	w.Part1 = p
+	w.Parent = p
+	return p
+end
+
+local function skinFx(parent, className, props)
+	local fx = Instance.new(className)
+	fx.Name = "LavaSkinExtra"
+	for k, v in pairs(props) do
+		fx[k] = v
+	end
+	fx.Parent = parent
+	return fx
+end
+
+local function particles(parent, colors, rate, size)
+	local kps = {}
+	for i, c in ipairs(colors) do
+		table.insert(kps, ColorSequenceKeypoint.new(#colors == 1 and 0 or (i - 1) / (#colors - 1), c))
+	end
+	if #colors == 1 then
+		table.insert(kps, ColorSequenceKeypoint.new(1, colors[1]))
+	end
+	return skinFx(parent, "ParticleEmitter", {
+		Color = ColorSequence.new(kps),
+		LightEmission = 0.8,
+		Size = NumberSequence.new(size or 0.3, 0),
+		Lifetime = NumberRange.new(0.8, 1.5),
+		Rate = rate or 10,
+		Speed = NumberRange.new(1, 3),
+		SpreadAngle = Vector2.new(180, 180),
+	})
+end
+
+local function addSkinExtras(char, skin)
+	local head = char:FindFirstChild("Head")
+	local torso = torsoOf(char)
+	if not head or not torso then
+		return
+	end
+	local hy, hx, hz = head.Size.Y, head.Size.X, head.Size.Z
+	local k = hy / 1.2
+	local topY = hy / 2
+	local front = -hz / 2
+	local id = skin.id
+	if id == "gold" then -- корона
+		headExtra(head, "cyl", V(0.35 * k, 1.15 * k, 1.15 * k), CF(0, topY + 0.12 * k, 0) * UPR, RGB(255, 200, 50), MAT.Foil)
+		for i = 0, 4 do
+			local a = i / 5 * math.pi * 2
+			headExtra(head, "wedge", V(0.22 * k, 0.4 * k, 0.12 * k), CF(math.sin(a) * 0.5 * k, topY + 0.48 * k, math.cos(a) * 0.5 * k) * ANG(0, a, 0), RGB(255, 210, 60), MAT.Foil)
+		end
+		local gems = { RGB(255, 40, 60), RGB(40, 150, 255), RGB(60, 230, 90) }
+		for i, c in ipairs(gems) do
+			headExtra(head, "ball", V(0.16 * k, 0.16 * k, 0.16 * k), CF((i - 2) * 0.3 * k, topY + 0.14 * k, -0.56 * k), c, MAT.Neon)
+		end
+		skinFx(head, "Sparkles", { SparkleColor = RGB(255, 220, 90) })
+	elseif id == "ice" then -- ледяная корона
+		for i = 0, 6 do
+			local a = i / 7 * math.pi * 2
+			local h = (i % 2 == 0) and 0.7 or 0.45
+			headExtra(head, "block", V(0.16 * k, h * k, 0.16 * k), CF(math.sin(a) * 0.45 * k, topY + h * 0.4 * k, math.cos(a) * 0.45 * k) * ANG(math.cos(a) * 0.25, 0, -math.sin(a) * 0.25), RGB(190, 235, 255), MAT.Glass, { Transparency = 0.2 })
+		end
+		particles(torso, { RGB(255, 255, 255), RGB(160, 220, 255) }, 8, 0.25)
+	elseif id == "robot" then -- визор и антенна
+		headExtra(head, "block", V(hx * 1.04, 0.26 * k, 0.12), CF(0, 0.08 * k, front - 0.03), RGB(60, 230, 255), MAT.Neon)
+		headExtra(head, "block", V(0.08, 0.5 * k, 0.08), CF(0.25 * k, topY + 0.25 * k, 0), RGB(120, 125, 135), MAT.Metal)
+		local tip = headExtra(head, "ball", V(0.22, 0.22, 0.22), CF(0.25 * k, topY + 0.55 * k, 0), RGB(255, 50, 50), MAT.Neon)
+		addLight(tip, RGB(255, 60, 60), 6)
+	elseif id == "shadow" then -- красные глаза и дым
+		for sx = -1, 1, 2 do
+			local e = headExtra(head, "ball", V(0.2 * k, 0.2 * k, 0.2 * k), CF(sx * 0.2 * k, 0.12 * k, front - 0.02), RGB(255, 30, 30), MAT.Neon)
+			if sx == 1 then
+				addLight(e, RGB(255, 40, 40), 6)
+			end
+		end
+		skinFx(torso, "Smoke", { Color = RGB(20, 20, 25), Size = 1.5, Opacity = 0.2, RiseVelocity = 1 })
+	elseif id == "duckskin" then -- утиный клюв и хохолок
+		headExtra(head, "egg", V(0.7 * k, 0.2 * k, 0.5 * k), CF(0, -0.08 * k, front - 0.15 * k), RGB(255, 140, 20))
+		headExtra(head, "egg", V(0.1 * k, 0.45 * k, 0.25 * k), CF(0, topY + 0.15 * k, 0) * ANG(-0.3, 0, 0), RGB(255, 225, 40))
+	elseif id == "marble" then -- лавровый венок
+		for i = 0, 9 do
+			local a = i / 10 * math.pi * 2
+			headExtra(head, "egg", V(0.12 * k, 0.12 * k, 0.32 * k), CF(math.sin(a) * 0.58 * k, 0.32 * k, math.cos(a) * 0.58 * k) * ANG(0, a + 0.6, 0.4), RGB(90, 160, 70))
+		end
+	elseif id == "grass" then -- цветок на голове
+		headExtra(head, "block", V(0.06, 0.45 * k, 0.06), CF(0, topY + 0.22 * k, 0), RGB(60, 150, 50))
+		for i = 0, 4 do
+			local a = i / 5 * math.pi * 2
+			headExtra(head, "ball", V(0.2 * k, 0.2 * k, 0.2 * k), CF(math.sin(a) * 0.15 * k, topY + 0.5 * k, math.cos(a) * 0.15 * k), RGB(255, 120, 180))
+		end
+		headExtra(head, "ball", V(0.16 * k, 0.16 * k, 0.16 * k), CF(0, topY + 0.52 * k, 0), RGB(255, 220, 50))
+	elseif id == "wood" then -- росток
+		headExtra(head, "block", V(0.06, 0.35 * k, 0.06), CF(0, topY + 0.17 * k, 0), RGB(80, 140, 50))
+		headExtra(head, "egg", V(0.4 * k, 0.06, 0.2 * k), CF(0.18 * k, topY + 0.35 * k, 0) * ANG(0, 0, 0.4), RGB(90, 190, 70))
+		headExtra(head, "egg", V(0.4 * k, 0.06, 0.2 * k), CF(-0.18 * k, topY + 0.32 * k, 0) * ANG(0, 0, -0.4), RGB(90, 190, 70))
+	elseif id == "metal" then -- шлем рыцаря с пером
+		headExtra(head, "block", V(hx * 1.08, 0.08 * k, 0.1), CF(0, 0.12 * k, front - 0.02), RGB(40, 40, 45))
+		headExtra(head, "egg", V(0.15 * k, 0.8 * k, 0.5 * k), CF(0, topY + 0.3 * k, 0.1 * k) * ANG(-0.3, 0, 0), RGB(210, 30, 40))
+	elseif id == "lava" then
+		skinFx(torso, "Fire", { Size = 3, Heat = 4, Color = RGB(255, 120, 20), SecondaryColor = RGB(255, 40, 0) })
+		particles(torso, { RGB(255, 220, 80), RGB(255, 60, 0) }, 10, 0.3)
+	elseif id == "neon" or id == "toxicneon" then
+		addLight(torso, skin.color, 12)
+		torso:FindFirstChildOfClass("PointLight").Name = "LavaSkinExtra"
+	elseif id == "ghost" then
+		addLight(torso, RGB(180, 220, 255), 10)
+		torso:FindFirstChildOfClass("PointLight").Name = "LavaSkinExtra"
+		particles(torso, { RGB(220, 240, 255) }, 6, 0.4)
+	elseif id == "diamond" then
+		skinFx(torso, "Sparkles", { SparkleColor = RGB(200, 245, 255) })
+	elseif id == "galaxy" then
+		particles(torso, { RGB(255, 255, 255), RGB(180, 120, 255), RGB(80, 60, 200) }, 14, 0.25)
+	elseif id == "rainbow" then
+		particles(torso, { RGB(255, 60, 60), RGB(255, 200, 40), RGB(60, 220, 90), RGB(60, 140, 255), RGB(190, 80, 255) }, 14, 0.3)
+	end
+end
+
 local function applySkin(player)
 	local s = sessions[player]
 	local char = player.Character
@@ -334,6 +539,7 @@ local function applySkin(player)
 	if not skin or not ownsItem(player, s, "skins", skin) then
 		return
 	end
+	clearSkinExtras(char)
 	local material = Enum.Material[skin.material] or Enum.Material.SmoothPlastic
 	local i = 0
 	for _, d in ipairs(char:GetDescendants()) do
@@ -350,6 +556,7 @@ local function applySkin(player)
 			d.Material = material
 		end
 	end
+	addSkinExtras(char, skin)
 end
 
 -- ============ ПИТОМЦЫ ============
@@ -357,139 +564,354 @@ local petFolder = Instance.new("Folder")
 petFolder.Name = "LavaPets"
 petFolder.Parent = workspace
 
-local function petPart(model, props)
-	local p = Instance.new("Part")
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanTouch = false
-	p.CanQuery = false
-	p.CastShadow = false
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	if props.Shape then
-		p.Shape = props.Shape
+local PetBuilders = {}
+
+local function duckBase(m, gold)
+	local mat = gold and MAT.Foil or MAT.SmoothPlastic
+	local yellow = gold and RGB(255, 200, 40) or RGB(255, 222, 50)
+	local root = shape(m, "egg", V(1.5, 1.25, 1.8), CF(), yellow, mat)
+	shape(m, "egg", V(1.15, 0.8, 1.3), CF(0, -0.2, -0.1), yellow:Lerp(Color3.new(1, 1, 1), 0.25), mat)
+	shape(m, "ball", V(1.05, 1.05, 1.05), CF(0, 0.85, -0.6), yellow, mat)
+	shape(m, "egg", V(0.62, 0.2, 0.55), CF(0, 0.72, -1.15), RGB(255, 140, 20))
+	shape(m, "egg", V(0.5, 0.12, 0.42), CF(0, 0.6, -1.1), RGB(235, 110, 10))
+	for sx = -1, 1, 2 do
+		cuteEye(m, CF(sx * 0.26, 0.95, -1.02), 0.2)
+		shape(m, "egg", V(0.22, 0.12, 0.06), CF(sx * 0.38, 0.75, -1.0), RGB(255, 150, 160))
+		local hinge = CF(sx * 0.62, 0.3, 0)
+		flap(shape(m, "egg", V(0.25, 0.75, 1.05), CF(sx * 0.78, 0.02, 0.05) * ANG(0, 0, sx * 0.15), yellow:Lerp(RGB(255, 170, 0), 0.3), mat), hinge, sx * 0.35, 9)
+		shape(m, "egg", V(0.42, 0.12, 0.5), CF(sx * 0.3, -0.66, -0.2), RGB(255, 140, 20))
 	end
-	for k, v in pairs(props) do
-		if k ~= "Shape" then
-			p[k] = v
-		end
-	end
-	p.Parent = model
-	return p
+	shape(m, "wedge", V(0.5, 0.45, 0.45), CF(0, 0.25, 0.95) * ANG(0, math.pi, 0), yellow, mat)
+	return root
 end
 
-local BALL = Enum.PartType.Ball
-local function eyes(model, at, spread)
-	for sx = -1, 1, 2 do
-		petPart(model, { Shape = BALL, Size = Vector3.new(0.3, 0.3, 0.3), CFrame = at * CFrame.new(sx * spread, 0, 0), Color = Color3.new(0, 0, 0) })
+PetBuilders.duckling = function(m)
+	local root = duckBase(m, false)
+	shape(m, "egg", V(0.1, 0.38, 0.22), CF(0, 1.45, -0.55) * ANG(-0.3, 0, 0), RGB(255, 222, 50))
+	return root
+end
+
+PetBuilders.goldduck = function(m)
+	local root = duckBase(m, true)
+	shape(m, "cyl", V(0.25, 0.7, 0.7), CF(0, 1.42, -0.6) * UPR, RGB(255, 200, 40), MAT.Foil)
+	for i = -1, 1 do
+		shape(m, "ball", V(0.16, 0.16, 0.16), CF(i * 0.2, 1.62, -0.6), i == 0 and RGB(255, 40, 60) or RGB(60, 160, 255), MAT.Neon)
 	end
+	Instance.new("Sparkles").Parent = root
+	return root
+end
+
+PetBuilders.frog = function(m)
+	local green, light = RGB(90, 200, 70), RGB(190, 240, 150)
+	local root = shape(m, "egg", V(1.8, 1.1, 1.6), CF(), green)
+	shape(m, "egg", V(1.3, 0.7, 1.1), CF(0, -0.15, -0.35), light)
+	for sx = -1, 1, 2 do
+		shape(m, "ball", V(0.65, 0.65, 0.65), CF(sx * 0.45, 0.6, -0.35), green)
+		shape(m, "ball", V(0.5, 0.5, 0.5), CF(sx * 0.45, 0.66, -0.48), RGB(255, 255, 255))
+		cuteEye(m, CF(sx * 0.45, 0.68, -0.68), 0.26)
+		shape(m, "egg", V(0.26, 0.12, 0.05), CF(sx * 0.58, 0.08, -0.74), RGB(255, 140, 150))
+		shape(m, "egg", V(0.5, 0.4, 0.95), CF(sx * 0.82, -0.35, 0.3), green:Lerp(Color3.new(0, 0, 0), 0.1))
+		shape(m, "egg", V(0.26, 0.45, 0.26), CF(sx * 0.5, -0.45, -0.55), green)
+		shape(m, "egg", V(0.4, 0.08, 0.35), CF(sx * 0.55, -0.68, -0.65), light)
+	end
+	shape(m, "egg", V(0.9, 0.06, 0.12), CF(0, 0.02, -0.78), RGB(160, 40, 60))
+	return root
+end
+
+PetBuilders.penguin = function(m)
+	local black, white = RGB(30, 32, 42), RGB(250, 250, 250)
+	local root = shape(m, "egg", V(1.4, 1.8, 1.3), CF(), black)
+	shape(m, "egg", V(1.05, 1.4, 0.7), CF(0, -0.12, -0.35), white)
+	shape(m, "egg", V(0.95, 0.62, 0.5), CF(0, 0.45, -0.45), white)
+	shape(m, "wedge", V(0.26, 0.2, 0.35), CF(0, 0.36, -0.82), RGB(255, 160, 30))
+	shape(m, "egg", V(1.5, 0.25, 1.4), CF(0, 0.12, 0), RGB(220, 40, 50))
+	shape(m, "block", V(0.25, 0.55, 0.08), CF(0.35, -0.2, -0.66) * ANG(0, 0, 0.15), RGB(220, 40, 50))
+	for sx = -1, 1, 2 do
+		cuteEye(m, CF(sx * 0.2, 0.56, -0.66), 0.18)
+		shape(m, "egg", V(0.18, 0.1, 0.05), CF(sx * 0.33, 0.38, -0.66), RGB(255, 150, 170))
+		flap(shape(m, "egg", V(0.18, 0.9, 0.45), CF(sx * 0.74, -0.05, 0) * ANG(0, 0, sx * 0.25), black), CF(sx * 0.62, 0.35, 0), sx * 0.4, 7)
+		shape(m, "egg", V(0.4, 0.12, 0.5), CF(sx * 0.28, -0.92, -0.2), RGB(255, 160, 30))
+	end
+	return root
+end
+
+PetBuilders.flame = function(m)
+	local root = shape(m, "ball", V(1.1, 1.1, 1.1), CF(), RGB(255, 130, 30), MAT.Neon)
+	shape(m, "ball", V(1.5, 1.5, 1.5), CF(), RGB(255, 210, 60), MAT.Neon, { Transparency = 0.65 })
+	flap(shape(m, "egg", V(0.85, 1.05, 0.85), CF(0, 0.75, 0.05), RGB(255, 150, 30), MAT.Neon, { Transparency = 0.15 }), CF(0, 0.4, 0), 0.12, 6, "x")
+	flap(shape(m, "egg", V(0.5, 0.8, 0.5), CF(0, 1.3, 0.1), RGB(255, 220, 70), MAT.Neon), CF(0, 0.9, 0), 0.2, 7, "x")
+	flap(shape(m, "egg", V(0.25, 0.5, 0.25), CF(0, 1.72, 0.15), RGB(255, 250, 200), MAT.Neon), CF(0, 1.4, 0), 0.3, 8, "x")
+	for sx = -1, 1, 2 do
+		shape(m, "egg", V(0.18, 0.28, 0.1), CF(sx * 0.2, 0.1, -0.56), RGB(40, 20, 10))
+	end
+	shape(m, "egg", V(0.3, 0.08, 0.06), CF(0, -0.15, -0.55), RGB(40, 20, 10))
+	local f = Instance.new("Fire")
+	f.Size = 2.5
+	f.Heat = 5
+	f.Parent = root
+	addLight(root, RGB(255, 150, 50), 10)
+	return root
+end
+
+PetBuilders.bee = function(m)
+	local yellow, black = RGB(255, 200, 30), RGB(30, 25, 20)
+	local root = shape(m, "egg", V(1.3, 1.2, 1.7), CF(), yellow)
+	shape(m, "egg", V(1.33, 1.23, 0.32), CF(0, 0, 0.12), black)
+	shape(m, "egg", V(1.2, 1.1, 0.3), CF(0, 0, 0.55), black)
+	shape(m, "ball", V(0.95, 0.95, 0.95), CF(0, 0.15, -0.95), yellow)
+	shape(m, "wedge", V(0.14, 0.14, 0.35), CF(0, -0.05, 1.02), black)
+	for sx = -1, 1, 2 do
+		cuteEye(m, CF(sx * 0.22, 0.26, -1.36), 0.2)
+		shape(m, "egg", V(0.2, 0.1, 0.05), CF(sx * 0.33, 0.06, -1.37), RGB(255, 140, 150))
+		shape(m, "block", V(0.06, 0.6, 0.06), CF(sx * 0.2, 0.78, -1.08) * ANG(-0.3, 0, -sx * 0.3), black)
+		shape(m, "ball", V(0.18, 0.18, 0.18), CF(sx * 0.3, 1.06, -1.18), black)
+		flap(shape(m, "egg", V(0.95, 0.06, 0.55), CF(sx * 0.62, 0.68, 0), RGB(210, 240, 255), MAT.Glass, { Transparency = 0.35 }), CF(sx * 0.18, 0.62, 0), sx * 0.6, 24)
+	end
+	return root
+end
+
+PetBuilders.snowman = function(m)
+	local white, coal = RGB(245, 250, 255), RGB(25, 25, 30)
+	local root = shape(m, "ball", V(1.5, 1.5, 1.5), CF(), white)
+	shape(m, "ball", V(1.1, 1.1, 1.1), CF(0, 1.0, 0), white)
+	shape(m, "ball", V(0.8, 0.8, 0.8), CF(0, 1.75, 0), white)
+	shape(m, "egg", V(1.05, 0.22, 1.05), CF(0, 1.42, 0), RGB(220, 40, 50))
+	shape(m, "block", V(0.22, 0.5, 0.06), CF(0.3, 1.2, -0.5) * ANG(0, 0, 0.2), RGB(220, 40, 50))
+	shape(m, "cyl", V(0.5, 0.14, 0.14), CF(0, 1.72, -0.58) * ANG(0, math.pi / 2, 0), RGB(255, 130, 30))
+	shape(m, "cyl", V(0.08, 0.85, 0.85), CF(0, 2.12, 0) * UPR, coal)
+	shape(m, "cyl", V(0.5, 0.55, 0.55), CF(0, 2.38, 0) * UPR, coal)
+	shape(m, "cyl", V(0.1, 0.57, 0.57), CF(0, 2.2, 0) * UPR, RGB(200, 30, 40))
+	for sx = -1, 1, 2 do
+		shape(m, "ball", V(0.13, 0.13, 0.13), CF(sx * 0.15, 1.86, -0.36), coal)
+		flap(shape(m, "block", V(0.07, 0.9, 0.07), CF(sx * 0.82, 1.2, 0) * ANG(0, 0, sx * 0.9), RGB(110, 70, 40)), CF(sx * 0.5, 1.0, 0), sx * 0.25, 5)
+	end
+	for i, y in ipairs({ 1.2, 0.9, 0.35 }) do
+		shape(m, "ball", V(0.14, 0.14, 0.14), CF(0, y, i == 3 and -0.74 or -0.54), coal)
+	end
+	return root
+end
+
+PetBuilders.cubecat = function(m)
+	local white, pink, gray = RGB(245, 245, 245), RGB(255, 160, 180), RGB(170, 170, 180)
+	local root = shape(m, "block", V(1.5, 1.3, 1.4), CF(), white)
+	for i = -1, 1 do
+		shape(m, "block", V(0.18, 0.04, 0.6), CF(i * 0.35, 0.66, 0.2), gray)
+	end
+	for sx = -1, 1, 2 do
+		shape(m, "wedge", V(0.42, 0.48, 0.3), CF(sx * 0.45, 0.88, -0.2), white)
+		shape(m, "wedge", V(0.22, 0.28, 0.08), CF(sx * 0.45, 0.82, -0.36), pink)
+		cuteEye(m, CF(sx * 0.32, 0.15, -0.72), 0.27)
+		shape(m, "egg", V(0.24, 0.12, 0.04), CF(sx * 0.5, -0.12, -0.71), pink)
+		shape(m, "block", V(0.5, 0.03, 0.03), CF(sx * 0.62, -0.08, -0.71) * ANG(0, 0, sx * 0.15), RGB(60, 60, 60))
+		shape(m, "block", V(0.5, 0.03, 0.03), CF(sx * 0.62, -0.18, -0.71) * ANG(0, 0, -sx * 0.1), RGB(60, 60, 60))
+		shape(m, "egg", V(0.35, 0.25, 0.35), CF(sx * 0.4, -0.65, -0.5), white)
+	end
+	shape(m, "ball", V(0.14, 0.14, 0.14), CF(0, -0.05, -0.72), pink)
+	local tailHinge = CF(0, -0.3, 0.7)
+	flap(shape(m, "block", V(0.2, 0.2, 0.45), CF(0, -0.25, 0.9), white), tailHinge, 0.3, 4, "y")
+	flap(shape(m, "block", V(0.2, 0.45, 0.2), CF(0, 0.0, 1.1), white), tailHinge, 0.3, 4, "y")
+	flap(shape(m, "block", V(0.2, 0.2, 0.2), CF(0, 0.25, 1.1), gray), tailHinge, 0.3, 4, "y")
+	return root
+end
+
+PetBuilders.ghostpet = function(m)
+	local c = RGB(225, 240, 255)
+	local root = shape(m, "egg", V(1.4, 1.6, 1.4), CF(), c, MAT.Neon, { Transparency = 0.3 })
+	for i = 0, 3 do
+		local a = i / 4 * math.pi * 2 + math.pi / 4
+		shape(m, "ball", V(0.55, 0.55, 0.55), CF(math.sin(a) * 0.42, -0.72, math.cos(a) * 0.42), c, MAT.Neon, { Transparency = 0.3 })
+	end
+	for sx = -1, 1, 2 do
+		shape(m, "egg", V(0.22, 0.36, 0.1), CF(sx * 0.25, 0.22, -0.66), RGB(25, 25, 40))
+		shape(m, "ball", V(0.08, 0.08, 0.08), CF(sx * 0.22, 0.3, -0.71), RGB(255, 255, 255), MAT.Neon)
+		shape(m, "egg", V(0.22, 0.1, 0.05), CF(sx * 0.42, 0.0, -0.62), RGB(255, 170, 200))
+		flap(shape(m, "egg", V(0.28, 0.5, 0.28), CF(sx * 0.75, -0.05, -0.1) * ANG(0, 0, sx * 0.5), c, MAT.Neon, { Transparency = 0.3 }), CF(sx * 0.6, 0.1, 0), sx * 0.4, 5)
+	end
+	shape(m, "egg", V(0.2, 0.26, 0.08), CF(0, -0.12, -0.68), RGB(25, 25, 40))
+	addLight(root, RGB(190, 220, 255), 10)
+	return root
+end
+
+PetBuilders.slime = function(m)
+	local root = shape(m, "egg", V(1.9, 1.35, 1.9), CF(), RGB(255, 110, 20), MAT.SmoothPlastic, { Transparency = 0.2 })
+	shape(m, "egg", V(1.25, 0.8, 1.25), CF(0, -0.1, 0), RGB(255, 60, 0), MAT.Neon)
+	shape(m, "ball", V(0.55, 0.55, 0.55), CF(0.35, 0.68, 0.25), RGB(255, 130, 30), MAT.SmoothPlastic, { Transparency = 0.2 })
+	for sx = -1, 1, 2 do
+		cuteEye(m, CF(sx * 0.36, 0.25, -0.85), 0.28)
+		shape(m, "egg", V(0.26, 0.12, 0.06), CF(sx * 0.6, 0.0, -0.8), RGB(255, 180, 160))
+		shape(m, "egg", V(0.22, 0.35, 0.22), CF(sx * 0.6, -0.65, sx * 0.3), RGB(255, 90, 10), MAT.Neon)
+	end
+	shape(m, "egg", V(0.4, 0.12, 0.06), CF(0, -0.1, -0.92), RGB(80, 20, 10))
+	addLight(root, RGB(255, 110, 30), 10)
+	return root
+end
+
+PetBuilders.robocube = function(m)
+	local metal, cyan = RGB(165, 170, 180), RGB(60, 230, 255)
+	local root = shape(m, "block", V(1.5, 1.5, 1.5), CF(), metal, MAT.DiamondPlate)
+	shape(m, "block", V(1.2, 0.8, 0.06), CF(0, 0.1, -0.76), RGB(20, 25, 35))
+	shape(m, "block", V(0.06, 0.6, 0.08), CF(0, 1.05, 0), RGB(120, 125, 135), MAT.Metal)
+	local tip = shape(m, "ball", V(0.26, 0.26, 0.26), CF(0, 1.4, 0), RGB(255, 50, 50), MAT.Neon)
+	addLight(tip, RGB(255, 60, 60), 6)
+	shape(m, "block", V(0.5, 0.06, 0.04), CF(0, -0.12, -0.8), cyan, MAT.Neon)
+	for sx = -1, 1, 2 do
+		shape(m, "block", V(0.3, 0.22, 0.04), CF(sx * 0.27, 0.2, -0.8), cyan, MAT.Neon)
+		shape(m, "cyl", V(0.15, 0.45, 0.45), CF(sx * 0.82, 0.1, 0), RGB(200, 205, 215), MAT.Metal)
+		shape(m, "cyl", V(0.3, 0.45, 0.45), CF(sx * 0.4, -0.9, 0) * UPR, RGB(70, 75, 85), MAT.Metal)
+		flap(shape(m, "egg", V(0.3, 0.55, 0.3), CF(sx * 0.4, -1.3, 0), cyan, MAT.Neon, { Transparency = 0.2 }), CF(sx * 0.4, -1.05, 0), 0.15, 20, "x")
+	end
+	return root
+end
+
+PetBuilders.minivolcano = function(m)
+	local rock = RGB(70, 55, 50)
+	local root = shape(m, "cyl", V(0.7, 2.0, 2.0), CF() * UPR, rock, MAT.Basalt)
+	shape(m, "cyl", V(0.6, 1.5, 1.5), CF(0, 0.6, 0) * UPR, rock:Lerp(Color3.new(0, 0, 0), 0.1), MAT.Basalt)
+	shape(m, "cyl", V(0.5, 1.05, 1.05), CF(0, 1.1, 0) * UPR, rock:Lerp(Color3.new(0, 0, 0), 0.2), MAT.Basalt)
+	local crater = shape(m, "cyl", V(0.12, 0.8, 0.8), CF(0, 1.37, 0) * UPR, RGB(255, 90, 0), MAT.Neon)
+	for i = 0, 2 do
+		local a = i / 3 * math.pi * 2 + 0.5
+		shape(m, "block", V(0.14, 0.9, 0.08), CF(math.sin(a) * 0.62, 0.8, math.cos(a) * 0.62) * ANG(0, a, 0), RGB(255, 110, 0), MAT.Neon)
+	end
+	for sx = -1, 1, 2 do
+		cuteEye(m, CF(sx * 0.35, 0.3, -0.98), 0.24)
+		shape(m, "egg", V(0.24, 0.12, 0.05), CF(sx * 0.6, 0.1, -0.92), RGB(255, 140, 120))
+	end
+	shape(m, "egg", V(0.35, 0.1, 0.05), CF(0, 0.08, -1.0), RGB(255, 90, 0), MAT.Neon)
+	local f = Instance.new("Fire")
+	f.Size = 2.5
+	f.Heat = 7
+	f.Parent = crater
+	local sm = Instance.new("Smoke")
+	sm.Size = 1
+	sm.Opacity = 0.15
+	sm.RiseVelocity = 3
+	sm.Parent = crater
+	addLight(crater, RGB(255, 110, 30), 10)
+	return root
+end
+
+PetBuilders.phoenix = function(m)
+	local red, orange, yellow, gold = RGB(225, 45, 20), RGB(255, 125, 20), RGB(255, 215, 70), RGB(255, 190, 40)
+	local root = shape(m, "egg", V(1.25, 1.15, 1.7), CF(), orange)
+	shape(m, "egg", V(0.95, 0.85, 1.15), CF(0, -0.15, -0.3), yellow)
+	shape(m, "ball", V(0.95, 0.95, 0.95), CF(0, 0.75, -0.75), orange)
+	shape(m, "wedge", V(0.26, 0.26, 0.42), CF(0, 0.62, -1.32), gold, MAT.Foil)
+	for i = -1, 1 do
+		local col = i == 0 and red or orange
+		shape(m, "egg", V(0.12, 0.7, 0.26), CF(i * 0.14, 1.3, -0.62) * ANG(0.45, 0, -i * 0.35), col)
+		shape(m, "ball", V(0.16, 0.16, 0.16), CF(i * 0.27, 1.62, -0.48), yellow, MAT.Neon)
+	end
+	for sx = -1, 1, 2 do
+		cuteEye(m, CF(sx * 0.27, 0.86, -1.1), 0.21)
+		local hinge = CF(sx * 0.5, 0.28, -0.1)
+		flap(shape(m, "egg", V(1.6, 0.12, 0.75), CF(sx * 1.25, 0.3, -0.1), red), hinge, sx * 0.55, 6)
+		flap(shape(m, "egg", V(1.3, 0.12, 0.6), CF(sx * 1.12, 0.33, 0.28), orange), hinge, sx * 0.55, 6)
+		flap(shape(m, "egg", V(1.0, 0.1, 0.45), CF(sx * 0.98, 0.36, 0.6), yellow, MAT.Neon), hinge, sx * 0.55, 6)
+	end
+	local tailHinge = CF(0, 0, 0.75)
+	local tail
+	for i = -2, 2 do
+		local col = (i % 2 == 0) and red or orange
+		local feather = shape(m, "egg", V(0.2, 0.12, 1.8), CF(i * 0.18, -0.15 - math.abs(i) * 0.05, 1.55) * ANG(0.3, i * 0.22, 0), col)
+		flap(feather, tailHinge, 0.15, 3, "x")
+		local tipCf = feather.CFrame * CF(0, 0, 0.85)
+		flap(shape(m, "ball", V(0.26, 0.26, 0.26), tipCf, yellow, MAT.Neon), tailHinge, 0.15, 3, "x")
+		if i == 0 then
+			tail = feather
+		end
+	end
+	local fire = Instance.new("Fire")
+	fire.Size = 2
+	fire.Heat = 4
+	fire.Color = RGB(255, 160, 40)
+	fire.SecondaryColor = RGB(255, 60, 0)
+	fire.Parent = tail
+	addLight(root, RGB(255, 150, 60), 10)
+	return root
+end
+
+PetBuilders.dragon = function(m)
+	local green, belly, dark = RGB(80, 195, 90), RGB(210, 240, 150), RGB(50, 140, 60)
+	local root = shape(m, "egg", V(1.3, 1.1, 2.0), CF(), green)
+	shape(m, "egg", V(0.95, 0.8, 1.6), CF(0, -0.2, -0.05), belly)
+	shape(m, "egg", V(0.7, 0.9, 0.7), CF(0, 0.55, -0.85) * ANG(0.4, 0, 0), green)
+	shape(m, "egg", V(0.95, 0.8, 1.0), CF(0, 0.95, -1.25), green)
+	shape(m, "egg", V(0.72, 0.5, 0.72), CF(0, 0.82, -1.75), belly)
+	for sx = -1, 1, 2 do
+		shape(m, "ball", V(0.1, 0.1, 0.1), CF(sx * 0.15, 0.95, -2.1), RGB(30, 30, 30))
+		cuteEye(m, CF(sx * 0.3, 1.12, -1.6), 0.24)
+		shape(m, "egg", V(0.15, 0.5, 0.15), CF(sx * 0.25, 1.45, -1.05) * ANG(-0.5, 0, sx * 0.2), RGB(255, 240, 200))
+		local hinge = CF(sx * 0.45, 0.45, -0.2)
+		flap(shape(m, "egg", V(1.9, 0.08, 1.15), CF(sx * 1.35, 0.6, 0.05) * ANG(0, 0, -sx * 0.15), RGB(255, 170, 60)), hinge, sx * 0.5, 6)
+		flap(shape(m, "block", V(1.9, 0.12, 0.12), CF(sx * 1.35, 0.65, -0.5) * ANG(0, 0, -sx * 0.15), dark), hinge, sx * 0.5, 6)
+		for sz = -1, 1, 2 do
+			shape(m, "egg", V(0.35, 0.5, 0.35), CF(sx * 0.45, -0.55, sz * 0.55), dark)
+		end
+	end
+	for i = 0, 3 do
+		local z = -0.45 + i * 0.4
+		shape(m, "wedge", V(0.1, 0.35 - i * 0.05, 0.38), CF(0, 0.62 - i * 0.04, z), RGB(255, 150, 40))
+	end
+	local tailHinge = CF(0, 0, 0.9)
+	flap(shape(m, "egg", V(0.6, 0.5, 0.85), CF(0, -0.05, 1.2), green), tailHinge, 0.25, 3, "y")
+	flap(shape(m, "egg", V(0.45, 0.38, 0.7), CF(0, 0.05, 1.75), green), tailHinge, 0.25, 3, "y")
+	flap(shape(m, "egg", V(0.3, 0.26, 0.6), CF(0, 0.2, 2.25), green), tailHinge, 0.25, 3, "y")
+	flap(shape(m, "wedge", V(0.12, 0.45, 0.45), CF(0, 0.3, 2.62), RGB(255, 150, 40)), tailHinge, 0.25, 3, "y")
+	Instance.new("Sparkles").Parent = root
+	return root
+end
+
+-- Если в ReplicatedStorage есть папка LavaPetModels с моделью, названной как id питомца
+-- (например "phoenix"), игра возьмёт эту модель вместо встроенной.
+local function customPetModel(pet)
+	local folder = game:GetService("ReplicatedStorage"):FindFirstChild("LavaPetModels")
+	local src = folder and folder:FindFirstChild(pet.id)
+	if not src or not src:IsA("Model") then
+		return nil
+	end
+	local model = src:Clone()
+	local first
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanTouch = false
+			d.CanQuery = false
+			d.Massless = true
+			first = first or d
+		elseif d:IsA("Script") or d:IsA("LocalScript") then
+			d:Destroy() -- чужие скрипты из Toolbox не нужны
+		end
+	end
+	if not first then
+		return nil
+	end
+	model.PrimaryPart = model.PrimaryPart or first
+	-- подгоняем размер: питомец примерно 2 стада
+	local _, size = model:GetBoundingBox()
+	local biggest = math.max(size.X, size.Y, size.Z)
+	if biggest > 0 then
+		pcall(function()
+			model:ScaleTo(model:GetScale() * (2.2 / biggest))
+		end)
+	end
+	model:PivotTo(CFrame.new())
+	return model
 end
 
 local function buildPet(pet)
+	local custom = customPetModel(pet)
+	if custom then
+		custom.Name = pet.id
+		return custom
+	end
 	local model = Instance.new("Model")
 	model.Name = pet.id
-	local c = pet.color
-	local o = CFrame.new()
-	local root
-	if pet.id == "duckling" or pet.id == "goldduck" then
-		local mat = pet.id == "goldduck" and Enum.Material.Foil or Enum.Material.SmoothPlastic
-		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c, Material = mat })
-		petPart(model, { Shape = BALL, Size = Vector3.new(1.1, 1.1, 1.1), CFrame = o * CFrame.new(0, 0.9, -0.5), Color = c, Material = mat })
-		petPart(model, { Size = Vector3.new(0.5, 0.25, 0.6), CFrame = o * CFrame.new(0, 0.85, -1.15), Color = Color3.fromRGB(255, 130, 20) })
-		eyes(model, o * CFrame.new(0, 1.1, -0.95), 0.25)
-		if pet.id == "goldduck" then
-			Instance.new("Sparkles").Parent = root
-		end
-	elseif pet.id == "flame" then
-		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.4, 1.4, 1.4), CFrame = o, Color = c, Material = Enum.Material.Neon })
-		local f = Instance.new("Fire")
-		f.Size = 2
-		f.Heat = 4
-		f.Parent = root
-		eyes(model, o * CFrame.new(0, 0.15, -0.65), 0.25)
-	elseif pet.id == "cubecat" then
-		root = petPart(model, { Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c })
-		petPart(model, { Size = Vector3.new(0.4, 0.5, 0.3), CFrame = o * CFrame.new(-0.5, 1, 0), Color = c })
-		petPart(model, { Size = Vector3.new(0.4, 0.5, 0.3), CFrame = o * CFrame.new(0.5, 1, 0), Color = c })
-		petPart(model, { Size = Vector3.new(0.3, 0.2, 0.05), CFrame = o * CFrame.new(0, -0.1, -0.81), Color = Color3.fromRGB(255, 130, 160) })
-		eyes(model, o * CFrame.new(0, 0.25, -0.8), 0.35)
-	elseif pet.id == "slime" then
-		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.8, 1.8, 1.8), CFrame = o, Color = c, Material = Enum.Material.CrackedLava })
-		eyes(model, o * CFrame.new(0, 0.3, -0.85), 0.3)
-		local l = Instance.new("PointLight")
-		l.Color = c
-		l.Range = 8
-		l.Parent = root
-	elseif pet.id == "phoenix" then
-		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.4, 1.4, 1.4), CFrame = o, Color = c, Material = Enum.Material.Neon })
-		for sx = -1, 1, 2 do
-			petPart(model, { Size = Vector3.new(1.6, 0.15, 0.9), CFrame = o * CFrame.new(sx * 1.2, 0.2, 0.2) * CFrame.Angles(0, 0, sx * 0.4), Color = Color3.fromRGB(255, 80, 30), Material = Enum.Material.Neon })
-		end
-		local f = Instance.new("Fire")
-		f.Size = 2
-		f.Color = Color3.fromRGB(255, 200, 60)
-		f.Parent = root
-		eyes(model, o * CFrame.new(0, 0.2, -0.65), 0.25)
-	elseif pet.id == "frog" then
-		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c })
-		for sx = -1, 1, 2 do
-			petPart(model, { Shape = BALL, Size = Vector3.new(0.6, 0.6, 0.6), CFrame = o * CFrame.new(sx * 0.4, 0.75, -0.4), Color = Color3.new(1, 1, 1) })
-			petPart(model, { Shape = BALL, Size = Vector3.new(0.3, 0.3, 0.3), CFrame = o * CFrame.new(sx * 0.4, 0.8, -0.65), Color = Color3.new(0, 0, 0) })
-		end
-		petPart(model, { Size = Vector3.new(0.8, 0.08, 0.05), CFrame = o * CFrame.new(0, 0.05, -0.8), Color = Color3.fromRGB(200, 60, 80) })
-	elseif pet.id == "penguin" then
-		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c })
-		petPart(model, { Shape = BALL, Size = Vector3.new(1.2, 1.2, 1.2), CFrame = o * CFrame.new(0, -0.1, -0.3), Color = Color3.new(1, 1, 1) })
-		petPart(model, { Size = Vector3.new(0.35, 0.2, 0.4), CFrame = o * CFrame.new(0, 0.2, -0.95), Color = Color3.fromRGB(255, 160, 30) })
-		eyes(model, o * CFrame.new(0, 0.45, -0.75), 0.25)
-	elseif pet.id == "bee" then
-		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.5, 1.5, 1.5), CFrame = o, Color = c })
-		for i = -1, 1, 2 do
-			petPart(model, { Size = Vector3.new(1.52, 0.25, 1.52), CFrame = o * CFrame.new(0, i * 0.3, 0), Color = Color3.fromRGB(30, 25, 20) })
-			petPart(model, { Size = Vector3.new(0.9, 0.08, 0.6), CFrame = o * CFrame.new(i * 0.7, 0.75, 0.2) * CFrame.Angles(0, 0, i * 0.4), Color = Color3.fromRGB(220, 240, 255), Transparency = 0.3 })
-		end
-		eyes(model, o * CFrame.new(0, 0.15, -0.72), 0.25)
-	elseif pet.id == "snowman" then
-		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.5, 1.5, 1.5), CFrame = o, Color = c })
-		petPart(model, { Shape = BALL, Size = Vector3.new(1.05, 1.05, 1.05), CFrame = o * CFrame.new(0, 1.1, 0), Color = c })
-		petPart(model, { Size = Vector3.new(0.15, 0.15, 0.5), CFrame = o * CFrame.new(0, 1.1, -0.65), Color = Color3.fromRGB(255, 130, 30) })
-		petPart(model, { Size = Vector3.new(0.9, 0.5, 0.9), CFrame = o * CFrame.new(0, 1.75, 0), Color = Color3.fromRGB(30, 30, 35) })
-		eyes(model, o * CFrame.new(0, 1.3, -0.47), 0.18)
-	elseif pet.id == "ghostpet" then
-		root = petPart(model, { Shape = BALL, Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c, Material = Enum.Material.Neon, Transparency = 0.35 })
-		eyes(model, o * CFrame.new(0, 0.2, -0.75), 0.28)
-		local l = Instance.new("PointLight")
-		l.Color = c
-		l.Range = 8
-		l.Parent = root
-	elseif pet.id == "robocube" then
-		root = petPart(model, { Size = Vector3.new(1.6, 1.6, 1.6), CFrame = o, Color = c, Material = Enum.Material.DiamondPlate })
-		for sx = -1, 1, 2 do
-			petPart(model, { Size = Vector3.new(0.35, 0.2, 0.05), CFrame = o * CFrame.new(sx * 0.35, 0.25, -0.81), Color = Color3.fromRGB(60, 220, 255), Material = Enum.Material.Neon })
-		end
-		petPart(model, { Size = Vector3.new(0.1, 0.6, 0.1), CFrame = o * CFrame.new(0, 1.1, 0), Color = Color3.fromRGB(120, 120, 130) })
-		petPart(model, { Shape = BALL, Size = Vector3.new(0.3, 0.3, 0.3), CFrame = o * CFrame.new(0, 1.45, 0), Color = Color3.fromRGB(255, 60, 60), Material = Enum.Material.Neon })
-	elseif pet.id == "minivolcano" then
-		root = petPart(model, { Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.8, 2, 2), CFrame = o * CFrame.Angles(0, 0, math.pi / 2), Color = c, Material = Enum.Material.Basalt })
-		petPart(model, { Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.7, 1.4, 1.4), CFrame = o * CFrame.new(0, 0.7, 0) * CFrame.Angles(0, 0, math.pi / 2), Color = c, Material = Enum.Material.Basalt })
-		local top = petPart(model, { Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 0.9, 0.9), CFrame = o * CFrame.new(0, 1.1, 0) * CFrame.Angles(0, 0, math.pi / 2), Color = Color3.fromRGB(255, 90, 0), Material = Enum.Material.Neon })
-		local f = Instance.new("Fire")
-		f.Size = 2
-		f.Heat = 6
-		f.Parent = top
-		eyes(model, o * CFrame.new(0, 0.3, -1.0), 0.3)
-	else -- dragon
-		root = petPart(model, { Size = Vector3.new(1.2, 1.1, 1.8), CFrame = o, Color = c })
-		petPart(model, { Size = Vector3.new(0.9, 0.8, 0.9), CFrame = o * CFrame.new(0, 0.6, -1.2), Color = c })
-		petPart(model, { Size = Vector3.new(0.5, 0.4, 0.5), CFrame = o * CFrame.new(0, 0.45, -1.8), Color = Color3.fromRGB(60, 150, 70) })
-		for sx = -1, 1, 2 do
-			petPart(model, { Size = Vector3.new(1.8, 0.12, 1), CFrame = o * CFrame.new(sx * 1.4, 0.5, 0) * CFrame.Angles(0, 0, sx * 0.5), Color = Color3.fromRGB(255, 200, 60) })
-			petPart(model, { Size = Vector3.new(0.15, 0.4, 0.15), CFrame = o * CFrame.new(sx * 0.25, 1.15, -1.1), Color = Color3.fromRGB(255, 240, 200) })
-		end
-		petPart(model, { Size = Vector3.new(0.4, 0.4, 1.4), CFrame = o * CFrame.new(0, -0.1, 1.5), Color = c })
-		eyes(model, o * CFrame.new(0, 0.8, -1.66), 0.25)
-		Instance.new("Sparkles").Parent = root
-	end
+	-- невидимая «опора» в центре: за неё клиент двигает питомца и машет крыльями
+	local root = shape(model, "block", V(0.2, 0.2, 0.2), CF(), RGB(255, 255, 255), nil, { Transparency = 1, Name = "PetRoot" })
+	local builder = PetBuilders[pet.id] or PetBuilders.duckling
+	builder(model)
 	model.PrimaryPart = root
 	return model
 end

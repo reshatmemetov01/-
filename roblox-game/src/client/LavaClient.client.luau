@@ -911,6 +911,7 @@ workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale
 -- ============ ПИТОМЦЫ ЛЕТАЮТ ЗА ХОЗЯЕВАМИ ============
 local petFolder = workspace:WaitForChild("LavaPets", 30)
 local petState = {}
+local petFlaps = {}
 RunService.RenderStepped:Connect(function(dt)
 	if not petFolder then
 		return
@@ -926,11 +927,40 @@ RunService.RenderStepped:Connect(function(dt)
 			cur = cur:Lerp(target, math.clamp(dt * 8, 0, 1))
 			petState[model] = cur
 			model:PivotTo(cur)
+			-- крылья, хвосты и огоньки машут
+			local flaps = petFlaps[model]
+			if not flaps then
+				flaps = {}
+				for _, d in ipairs(model:GetDescendants()) do
+					if d:IsA("BasePart") and d:GetAttribute("Flap") then
+						table.insert(flaps, d)
+					end
+				end
+				petFlaps[model] = flaps
+			end
+			for _, part in ipairs(flaps) do
+				local hinge = part:GetAttribute("Hinge")
+				local fromHinge = part:GetAttribute("FromHinge")
+				if hinge and fromHinge then
+					local angle = part:GetAttribute("Flap") * math.sin(t * (part:GetAttribute("FlapSpeed") or 8))
+					local axis = part:GetAttribute("FlapAxis")
+					local rot
+					if axis == "x" then
+						rot = CFrame.Angles(angle, 0, 0)
+					elseif axis == "y" then
+						rot = CFrame.Angles(0, angle, 0)
+					else
+						rot = CFrame.Angles(0, 0, angle)
+					end
+					part.CFrame = cur * hinge * rot * fromHinge
+				end
+			end
 		end
 	end
 	for model in pairs(petState) do
 		if not model.Parent then
 			petState[model] = nil
+			petFlaps[model] = nil
 		end
 	end
 end)
