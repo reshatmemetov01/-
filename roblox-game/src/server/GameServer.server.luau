@@ -67,6 +67,12 @@ local function defaultData()
 		vipChest = 0,
 		receipts = {},
 		autoEquipped = {},
+		chDay = 0, -- задания дня
+		chProgress = {},
+		chDone = {},
+		dcDay = 0, -- сундуки дня
+		dcFound = {},
+		bestTime = 0, -- лучшее время прохождения (сек)
 	}
 end
 
@@ -113,6 +119,9 @@ local function multiplier(player, s)
 	if player:GetAttribute("PassVIP") then
 		m *= Config.VIP_COIN_BONUS
 	end
+	if workspace:GetAttribute("Event") == "golden" then
+		m *= 2 -- 💰 золотой час
+	end
 	return m
 end
 
@@ -147,6 +156,93 @@ local function syncAttributes(player)
 	end
 end
 
+-- ============ ЗАДАНИЯ ДНЯ ============
+local HttpService = game:GetService("HttpService")
+
+local function today()
+	return math.floor(os.time() / 86400)
+end
+
+local challengeCache = {}
+local function todaysChallenges(day)
+	if challengeCache[day] then
+		return challengeCache[day]
+	end
+	local rng = Random.new(day * 7349 + 11)
+	local pool = table.clone(Config.Challenges)
+	local list, usedKinds = {}, {}
+	while #list < Config.CHALLENGES_PER_DAY and #pool > 0 do
+		local c = table.remove(pool, rng:NextInteger(1, #pool))
+		if not usedKinds[c.kind] then
+			usedKinds[c.kind] = true
+			table.insert(list, c)
+		end
+	end
+	challengeCache[day] = list
+	return list
+end
+
+local function ensureChallengeDay(s)
+	local d = s.data
+	local day = today()
+	if d.chDay ~= day then
+		d.chDay = day
+		d.chProgress = {}
+		d.chDone = {}
+	end
+end
+
+local function syncChallenges(player)
+	local s = sessions[player]
+	if not s then
+		return
+	end
+	ensureChallengeDay(s)
+	local out = {}
+	for _, c in ipairs(todaysChallenges(s.data.chDay)) do
+		table.insert(out, {
+			id = c.id,
+			kind = c.kind,
+			goal = c.goal,
+			reward = c.reward,
+			progress = math.min(s.data.chProgress[c.id] or 0, c.goal),
+			done = s.data.chDone[c.id] == true,
+		})
+	end
+	player:SetAttribute("Challenges", HttpService:JSONEncode(out))
+end
+
+-- absolute = true: прогресс — это текущее значение (например, серия без смертей)
+local function progressChallenge(player, kind, amount, absolute)
+	local s = sessions[player]
+	if not s or not s.loaded then
+		return
+	end
+	ensureChallengeDay(s)
+	local changed = false
+	for _, c in ipairs(todaysChallenges(s.data.chDay)) do
+		if c.kind == kind and not s.data.chDone[c.id] then
+			local cur = s.data.chProgress[c.id] or 0
+			local new = absolute and math.max(cur, amount) or (cur + amount)
+			if new ~= cur then
+				s.data.chProgress[c.id] = new
+				changed = true
+			end
+			if new >= c.goal then
+				s.data.chDone[c.id] = true
+				s.data.coins += c.reward
+				notify(player, "n_challenge_done", Color3.fromRGB(120, 255, 140), c.reward)
+				EffectRE:FireClient(player, "duck")
+				changed = true
+			end
+		end
+	end
+	if changed then
+		syncChallenges(player)
+		syncAttributes(player)
+	end
+end
+
 local function addCoins(player, amount, useMultiplier)
 	local s = sessions[player]
 	if not s then
@@ -155,6 +251,9 @@ local function addCoins(player, amount, useMultiplier)
 	local gained = useMultiplier and math.floor(amount * multiplier(player, s) + 0.5) or amount
 	s.data.coins += gained
 	syncAttributes(player)
+	if useMultiplier then
+		progressChallenge(player, "coins", gained)
+	end
 	return gained
 end
 
@@ -1045,6 +1144,15 @@ local function onCharacter(player, char)
 	task.wait()
 	teleportToStage(player)
 	applyCharacter(player)
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.Died:Connect(function()
+			local ss = sessions[player]
+			if ss then
+				ss.noDeathStreak = 0
+			end
+		end)
+	end
 	task.delay(1.5, function()
 		if player.Character == char then
 			applySkin(player)
@@ -1053,6 +1161,42 @@ local function onCharacter(player, char)
 end
 
 -- ============ ЭТАПЫ ============
+-- ⏱ Время забега: от портала в лобби до кубка
+local finishRun
+local timeStore
+pcall(function()
+	timeStore = DataStoreService:GetOrderedDataStore(Config.TIME_LEADERBOARD_KEY)
+end)
+
+local function fmtTime(t)
+	local m = math.floor(t / 60)
+	local sec = t - m * 60
+	return string.format("%02d:%05.2f", m, sec)
+end
+
+finishRun = function(player, s)
+	if not s.runStart then
+		return
+	end
+	local t = workspace:GetServerTimeNow() - s.runStart
+	s.runStart = nil
+	player:SetAttribute("RunStart", nil)
+	player:SetAttribute("RunTime", t)
+	notify(player, "n_run_time", Color3.fromRGB(150, 220, 255), fmtTime(t))
+	if s.runValid and (s.data.bestTime == 0 or t < s.data.bestTime) then
+		s.data.bestTime = t
+		player:SetAttribute("BestTime", t)
+		notify(player, "n_new_record", Color3.fromRGB(255, 215, 80), fmtTime(t))
+		if timeStore and not s.noSave then
+			task.spawn(function()
+				pcall(function()
+					timeStore:SetAsync(tostring(player.UserId), math.floor(t * 100))
+				end)
+			end)
+		end
+	end
+end
+
 local function setStage(player, n)
 	local s = sessions[player]
 	if not s then
@@ -1066,14 +1210,19 @@ local function setStage(player, n)
 		if n < FINISH then
 			addCoins(player, Config.STAGE_REWARD, true)
 		end
+		s.noDeathStreak = (s.noDeathStreak or 0) + 1
+		progressChallenge(player, "stages", 1)
+		progressChallenge(player, "nodeath", s.noDeathStreak, true)
 		if (n - 1) % Config.STAGES_PER_ZONE == 0 and n < FINISH then
 			local zone = Config.Zones[Config.ZoneOfStage(n)]
 			EffectRE:FireClient(player, "zone", Config.ZoneOfStage(n))
 			notify(player, "n_new_zone", zone.color, zone.emoji, "@zone_" .. Config.ZoneOfStage(n))
+			progressChallenge(player, "zone", 1)
 		end
 	end
 	if n == FINISH and not d.finishedRun then
 		d.finishedRun = true
+		finishRun(player, s)
 		local gained = addCoins(player, Config.FINISH_REWARD, true)
 		awardBadge(player, Config.Badges.Finish)
 		EffectRE:FireClient(player, "finish")
@@ -1522,6 +1671,7 @@ for _, duck in ipairs(CollectionService:GetTagged("Duck")) do
 			applyOverhead(player)
 		end
 		syncAttributes(player)
+		progressChallenge(player, "secret", 1)
 		task.spawn(saveData, player)
 	end)
 end
@@ -1540,6 +1690,7 @@ for _, chest in ipairs(CollectionService:GetTagged("Secret")) do
 		awardBadge(player, Config.Badges[SECRET_BADGES[id] or ""])
 		EffectRE:FireClient(player, "duck")
 		notify(player, "n_secret", Color3.fromRGB(255, 200, 80), gained)
+		progressChallenge(player, "secret", 1)
 	end)
 end
 
@@ -1657,6 +1808,10 @@ MarketplaceService.ProcessReceipt = function(receipt)
 	end
 	local id = receipt.ProductId
 	local P = Config.Products
+	if id == P.SkipStage or id == P.SkipZone then
+		s.runValid = false -- забег с пропусками не идёт в таблицу рекордов
+		player:SetAttribute("RunValid", false)
+	end
 	if id == P.SkipStage then
 		local n = math.min(d.stage + 1, FINISH)
 		setStage(player, n)
@@ -1754,6 +1909,8 @@ local function doRebirth(player, s)
 	d.stage = 1
 	d.maxStage = 1
 	d.finishedRun = false
+	s.runStart = nil
+	player:SetAttribute("RunStart", nil)
 	local bonus = Config.REBIRTH_COINS * d.rebirths
 	d.coins += bonus
 	awardBadge(player, Config.Badges.Rebirth)
@@ -1845,6 +2002,7 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 		syncAttributes(player)
 		EffectRE:FireClient(player, "duck")
 		notify(player, "n_gift", Color3.fromRGB(255, 215, 80), gained)
+		progressChallenge(player, "gift", 1)
 	elseif action == "Rebirth" then
 		doRebirth(player, s)
 	elseif action == "Respawn" then
@@ -1914,6 +2072,18 @@ local function onPlayerAdded(player)
 	end
 	giveDaily(player, s)
 	syncAttributes(player)
+	syncChallenges(player)
+	if s.data.dcDay ~= today() then
+		s.data.dcDay = today()
+		s.data.dcFound = {}
+	end
+	player:SetAttribute("DailyFound", csvKeys(s.data.dcFound))
+	player:SetAttribute("BestTime", s.data.bestTime)
+	task.delay(6, function()
+		if player.Parent then
+			notify(player, "n_daily_chests", Color3.fromRGB(255, 215, 80), Config.DAILY_CHESTS)
+		end
+	end)
 	player:SetAttribute("Loaded", true)
 	-- пропуск могли купить на странице игры, не заходя в неё
 	for key in pairs(AUTO_EQUIP) do
@@ -1966,6 +2136,366 @@ task.spawn(function()
 	end
 end)
 
+-- ============ ЛИНИЯ СТАРТА: запуск таймера забега ============
+for _, line in ipairs(CollectionService:GetTagged("StartLine")) do
+	line.Touched:Connect(function(hit)
+		local player = playerFromHit(hit)
+		local s = player and sessions[player]
+		if not s or not s.loaded or s.runStart then
+			return
+		end
+		-- таймер идёт только в «чистом» забеге: с 1 этапа, без открытых этапов дальше
+		if s.data.stage <= 1 and s.data.maxStage <= 1 then
+			s.runStart = workspace:GetServerTimeNow()
+			s.runValid = true
+			player:SetAttribute("RunStart", s.runStart)
+			player:SetAttribute("RunValid", true)
+			player:SetAttribute("RunTime", nil)
+		end
+	end)
+end
+
+-- ============ МЕТЕОРИТЫ ============
+local meteorFolder = Instance.new("Folder")
+meteorFolder.Name = "LavaMeteors"
+meteorFolder.Parent = workspace
+local meteorParams = RaycastParams.new()
+meteorParams.FilterType = Enum.RaycastFilterType.Exclude
+local lobbyPos = map.checkpoints[1].Position
+
+local function inLobby(pos)
+	local dx, dz = pos.X - lobbyPos.X, pos.Z - lobbyPos.Z
+	return dx * dx + dz * dz < 50 * 50
+end
+
+local function fxPart(props)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanTouch = false
+	p.CanQuery = false
+	p.CastShadow = false
+	if props.Shape then
+		p.Shape = props.Shape
+	end
+	for k, v in pairs(props) do
+		if k ~= "Shape" then
+			p[k] = v
+		end
+	end
+	p.Parent = meteorFolder
+	return p
+end
+
+local function spawnMeteor(targetPos)
+	local ignore = { meteorFolder, petFolder }
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then
+			table.insert(ignore, p.Character)
+		end
+	end
+	meteorParams.FilterDescendantsInstances = ignore
+	local res = workspace:Raycast(targetPos + Vector3.new(0, 30, 0), Vector3.new(0, -90, 0), meteorParams)
+	if not res then
+		return
+	end
+	local ground = res.Position
+	-- красный круг-предупреждение
+	local warnRing = fxPart({
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.2, 9, 9),
+		CFrame = CFrame.new(ground + Vector3.new(0, 0.15, 0)) * CFrame.Angles(0, 0, math.pi / 2),
+		Color = Color3.fromRGB(255, 40, 40),
+		Material = Enum.Material.Neon,
+		Transparency = 0.5,
+	})
+	TweenService:Create(warnRing, TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Transparency = 0.15 }):Play()
+	-- сам метеорит
+	local start = ground + Vector3.new(math.random(-25, 25), 85, math.random(-25, 25))
+	local rock = fxPart({
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(4.5, 4.5, 4.5),
+		CFrame = CFrame.new(start),
+		Color = Color3.fromRGB(70, 50, 45),
+		Material = Enum.Material.Basalt,
+	})
+	local f = Instance.new("Fire")
+	f.Size = 8
+	f.Heat = 20
+	f.Parent = rock
+	local l = Instance.new("PointLight")
+	l.Color = Color3.fromRGB(255, 120, 30)
+	l.Range = 18
+	l.Brightness = 2
+	l.Parent = rock
+	TweenService:Create(rock, TweenInfo.new(1.4, Enum.EasingStyle.Linear), { CFrame = CFrame.new(ground) }):Play()
+	task.delay(1.4, function()
+		local blast = fxPart({ Shape = Enum.PartType.Ball, Size = Vector3.new(9, 9, 9), CFrame = CFrame.new(ground), Transparency = 1 })
+		if refreshOverlap() then
+			killInside(blast)
+		end
+		local ex = Instance.new("Explosion")
+		ex.Position = ground
+		ex.BlastPressure = 0
+		ex.BlastRadius = 0
+		ex.DestroyJointRadiusPercent = 0
+		ex.Parent = workspace
+		warnRing:Destroy()
+		rock:Destroy()
+		task.delay(0.2, function()
+			blast:Destroy()
+		end)
+	end)
+end
+
+-- метеорит рядом с игроком (с упреждением по его скорости)
+local function meteorNear(p)
+	local _, hum, root = getCharacterParts(p)
+	local s = sessions[p]
+	if not root or not hum or hum.Health <= 0 or not s or s.data.stage >= FINISH or inLobby(root.Position) then
+		return
+	end
+	local v = root.AssemblyLinearVelocity
+	local target = root.Position + Vector3.new(v.X, 0, v.Z) * 1.2 + Vector3.new(math.random(-8, 8), 0, math.random(-8, 8))
+	task.spawn(spawnMeteor, target)
+end
+
+-- 🌋 Остров вулкана: метеориты падают всегда
+task.spawn(function()
+	while true do
+		task.wait(Config.ZONE4_METEOR_INTERVAL)
+		for _, p in ipairs(Players:GetPlayers()) do
+			local s = sessions[p]
+			if s and s.data.stage <= Config.TOTAL_STAGES and Config.ZoneOfStage(s.data.stage) == 4 then
+				meteorNear(p)
+			end
+		end
+	end
+end)
+
+-- ============ ГЛОБАЛЬНЫЕ СОБЫТИЯ ============
+local EVENT_ORDER = { "eruption", "night", "meteors", "icestorm", "golden" }
+local eventRunning = false
+
+local function setEruptors(mult)
+	for _, crater in ipairs(CollectionService:GetTagged("Eruptor")) do
+		local em = crater:FindFirstChild("Eruption")
+		if em then
+			local base = em:GetAttribute("BaseRate") or em.Rate
+			em:SetAttribute("BaseRate", base)
+			em.Rate = base * mult
+		end
+	end
+end
+
+local function runEvent(name)
+	local def = Config.Events[name]
+	if not def or eventRunning then
+		return
+	end
+	eventRunning = true
+	workspace:SetAttribute("Event", name)
+	workspace:SetAttribute("EventEnds", workspace:GetServerTimeNow() + def.duration)
+	notifyAll("ev_" .. name, Color3.fromRGB(255, 200, 80))
+	if name == "eruption" then
+		setEruptors(6)
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		syncAttributes(p) -- обновить множитель монет (золотой час)
+	end
+	local endsAt = os.clock() + def.duration
+	while os.clock() < endsAt do
+		if name == "meteors" then
+			for _, p in ipairs(Players:GetPlayers()) do
+				meteorNear(p)
+			end
+			task.wait(1.6)
+		else
+			task.wait(1)
+		end
+	end
+	if name == "eruption" then
+		setEruptors(1)
+	end
+	workspace:SetAttribute("Event", nil)
+	workspace:SetAttribute("EventEnds", nil)
+	notifyAll("ev_over", Color3.fromRGB(150, 255, 160))
+	for _, p in ipairs(Players:GetPlayers()) do
+		local _, hum = getCharacterParts(p)
+		if hum and hum.Health > 0 then
+			progressChallenge(p, "event", 1)
+		end
+		syncAttributes(p)
+	end
+	eventRunning = false
+end
+
+task.spawn(function()
+	if not Config.EVENTS_ENABLED then
+		return
+	end
+	task.wait(Config.EVENT_FIRST_DELAY)
+	local last
+	while true do
+		local name
+		repeat
+			name = EVENT_ORDER[math.random(1, #EVENT_ORDER)]
+		until name ~= last
+		last = name
+		runEvent(name)
+		task.wait(math.random(Config.EVENT_INTERVAL_MIN, Config.EVENT_INTERVAL_MAX))
+	end
+end)
+
+-- ============ СУНДУКИ ДНЯ ============
+local dailyFolder = Instance.new("Folder")
+dailyFolder.Name = "LavaDailyChests"
+dailyFolder.Parent = workspace
+local dailyDay = -1
+
+local function onDailyChest(player, id)
+	local s = sessions[player]
+	if not s or not s.loaded then
+		return
+	end
+	local d = s.data
+	local day = today()
+	if d.dcDay ~= day then
+		d.dcDay = day
+		d.dcFound = {}
+	end
+	if d.dcFound[id] then
+		return
+	end
+	d.dcFound[id] = true
+	local found = countKeys(d.dcFound)
+	local gained = addCoins(player, math.random(Config.DAILY_CHEST_MIN, Config.DAILY_CHEST_MAX), true)
+	notify(player, "n_daily_chest", Color3.fromRGB(255, 215, 80), found, Config.DAILY_CHESTS, gained)
+	if math.random() < Config.DAILY_CHEST_TRAIL_CHANCE then
+		local options = {}
+		for _, t in ipairs(Config.Trails) do
+			if t.price and not d.trails[t.id] then
+				table.insert(options, t)
+			end
+		end
+		if #options > 0 then
+			local t = options[math.random(1, #options)]
+			d.trails[t.id] = true
+			notify(player, "n_daily_chest_trail", Color3.fromRGB(200, 150, 255), "@item_trails_" .. t.id)
+		end
+	end
+	EffectRE:FireClient(player, "duck")
+	player:SetAttribute("DailyFound", csvKeys(d.dcFound))
+	progressChallenge(player, "secret", 1)
+	syncAttributes(player)
+	task.spawn(saveData, player)
+end
+
+local function buildDailyChests()
+	local day = today()
+	if day == dailyDay then
+		return false
+	end
+	dailyDay = day
+	dailyFolder:ClearAllChildren()
+	local rng = Random.new(day * 917 + 3)
+	local candidates = {}
+	for n = 3, Config.TOTAL_STAGES do
+		if map.checkpoints[n] then
+			table.insert(candidates, n)
+		end
+	end
+	for _ = 1, math.min(Config.DAILY_CHESTS, #candidates) do
+		local n = table.remove(candidates, rng:NextInteger(1, #candidates))
+		local pad = map.checkpoints[n]
+		local cf = pad.CFrame * CFrame.new(4.2, pad.Size.Y / 2, 4.2)
+		local id = "d" .. day .. "_" .. n
+		local model = Instance.new("Model")
+		model.Name = "DailyChest"
+		local function cp(size, offset, color, material)
+			local p = Instance.new("Part")
+			p.Anchored = true
+			p.CanCollide = false
+			p.Size = size
+			p.CFrame = cf * offset
+			p.Color = color
+			p.Material = material or Enum.Material.SmoothPlastic
+			p.Parent = model
+			return p
+		end
+		local base = cp(Vector3.new(3.4, 2.2, 2.6), CFrame.new(0, 1.1, 0), Color3.fromRGB(160, 90, 255))
+		cp(Vector3.new(3.6, 0.9, 2.8), CFrame.new(0, 2.6, 0), Color3.fromRGB(255, 210, 60), Enum.Material.Foil)
+		cp(Vector3.new(0.9, 0.9, 0.3), CFrame.new(0, 2, -1.35), Color3.fromRGB(255, 250, 200), Enum.Material.Neon)
+		-- золотой луч света, видно издалека
+		local beam = cp(Vector3.new(80, 2.2, 2.2), CFrame.new(0, 42, 0) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(255, 220, 90), Enum.Material.Neon)
+		beam.Shape = Enum.PartType.Cylinder
+		beam.Transparency = 0.6
+		beam.CanTouch = false
+		beam.CanQuery = false
+		beam.CastShadow = false
+		local sp = Instance.new("Sparkles")
+		sp.SparkleColor = Color3.fromRGB(255, 220, 90)
+		sp.Parent = base
+		base:SetAttribute("ChestId", id)
+		CollectionService:AddTag(base, "DailyChest")
+		model.PrimaryPart = base
+		model.Parent = dailyFolder
+		base.Touched:Connect(function(hit)
+			local player = playerFromHit(hit)
+			if player then
+				onDailyChest(player, id)
+			end
+		end)
+	end
+	return true
+end
+
+buildDailyChests()
+task.spawn(function()
+	while true do
+		task.wait(60)
+		if buildDailyChests() then
+			for _, p in ipairs(Players:GetPlayers()) do
+				local s = sessions[p]
+				if s then
+					s.data.dcFound = {}
+					s.data.dcDay = today()
+					p:SetAttribute("DailyFound", "")
+					syncChallenges(p)
+				end
+				notify(p, "n_daily_chests", Color3.fromRGB(255, 215, 80), Config.DAILY_CHESTS)
+			end
+		end
+	end
+end)
+
+-- ============ КОМАНДЫ ДЛЯ ТЕСТА (только владелец игры или Studio) ============
+-- В чате: /event eruption | night | meteors | icestorm | golden
+local function canAdmin(player)
+	return RunService:IsStudio() or player.UserId == game.CreatorId
+end
+
+local function onChat(player, msg)
+	if not canAdmin(player) then
+		return
+	end
+	local name = string.match(msg, "^/event%s+(%w+)")
+	if name and Config.Events[name] then
+		task.spawn(runEvent, name)
+	end
+end
+
+Players.PlayerAdded:Connect(function(p)
+	p.Chatted:Connect(function(msg)
+		onChat(p, msg)
+	end)
+end)
+for _, p in ipairs(Players:GetPlayers()) do
+	p.Chatted:Connect(function(msg)
+		onChat(p, msg)
+	end)
+end
+
 -- ============ ТАБЛИЦА ЛИДЕРОВ ============
 local nameCache = {}
 task.spawn(function()
@@ -1994,6 +2524,34 @@ task.spawn(function()
 							local st = e.value % 1000
 							local stText = st >= FINISH and "🏆" or tostring(st)
 							row.Text = string.format("%d. %s — 🔁%d · 🏁 %s", i, name or "Player", reb, stText)
+						else
+							row.Text = i .. ". ---"
+						end
+					end
+				end
+			end
+		end
+		if timeStore then
+			local ok, pages = pcall(function()
+				return timeStore:GetSortedAsync(true, 10)
+			end)
+			if ok and pages then
+				local entries = pages:GetCurrentPage()
+				for i = 1, 10 do
+					local row = map.timeRows[i]
+					local e = entries[i]
+					if row then
+						if e then
+							local uid = tonumber(e.key)
+							local name = nameCache[uid]
+							if not name and uid then
+								local okName, res = pcall(function()
+									return Players:GetNameFromUserIdAsync(uid)
+								end)
+								name = okName and res or "Player"
+								nameCache[uid] = name
+							end
+							row.Text = string.format("%d. %s — %s", i, name or "Player", fmtTime(e.value / 100))
 						else
 							row.Text = i .. ". ---"
 						end

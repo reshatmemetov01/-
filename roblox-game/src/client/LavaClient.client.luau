@@ -126,7 +126,7 @@ local nextBtn = button({ text = "▶", size = UDim2.fromOffset(50, 50), position
 local left = scaled(new("Frame", {
 	AnchorPoint = Vector2.new(0, 0.5),
 	Position = UDim2.new(0, 10, 0.45, 0),
-	Size = UDim2.fromOffset(160, 400),
+	Size = UDim2.fromOffset(160, 460),
 	BackgroundTransparency = 1,
 }, gui))
 new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, left)
@@ -200,7 +200,7 @@ textStroke(shieldNum)
 -- ============ УВЕДОМЛЕНИЯ ============
 local toastArea = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 160),
+	Position = UDim2.new(0.5, 0, 0, 210),
 	Size = UDim2.new(0.6, 0, 0, 220),
 	BackgroundTransparency = 1,
 }, gui)
@@ -1125,8 +1125,9 @@ RunService.Heartbeat:Connect(function(dt)
 		if not rising.active then
 			local moved = Vector3.new(pos.X - rising.startPos.X, 0, pos.Z - rising.startPos.Z).Magnitude
 			local lc = lobbyCenter()
-			local inLobby = st == 1 and lc ~= nil and Vector3.new(pos.X - lc.X, 0, pos.Z - lc.Z).Magnitude < 34
-			if moved > 14 and not inLobby then
+			local inLobby = st == 1 and lc ~= nil and Vector3.new(pos.X - lc.X, 0, pos.Z - lc.Z).Magnitude < 46
+			local erupting = workspace:GetAttribute("Event") == "eruption"
+			if (moved > 14 or erupting) and not inLobby then
 				rising.active = true
 				toast(tr("lava_rising"), Color3.fromRGB(255, 120, 40))
 			end
@@ -1136,7 +1137,8 @@ RunService.Heartbeat:Connect(function(dt)
 			local water = workspace:GetAttribute("LavaIsWater") == true
 			if not water then
 				local k = (st - 1) / TOTAL
-				rising.y += (Config.RISING_LAVA_SPEED + (Config.RISING_LAVA_SPEED_MAX - Config.RISING_LAVA_SPEED) * k) * dt
+				local mult = workspace:GetAttribute("Event") == "eruption" and Config.ERUPTION_LAVA_MULT or 1
+				rising.y += (Config.RISING_LAVA_SPEED + (Config.RISING_LAVA_SPEED_MAX - Config.RISING_LAVA_SPEED) * k) * dt * mult
 			end
 			local feet = pos.Y - 3
 			if (player:GetAttribute("ShieldUntil") or 0) > os.time() then
@@ -1159,6 +1161,358 @@ RunService.Heartbeat:Connect(function(dt)
 		lavaGlow.CFrame = CFrame.new(0, -500, 0)
 	end
 end)
+
+-- ============ КРУТЯЩИЕСЯ ОБЪЕКТЫ И ФЛАГИ ============
+local rotors = {}
+local function addRotor(p)
+	if p:GetAttribute("RotorCenter") then
+		table.insert(rotors, p)
+	end
+end
+for _, p in ipairs(CollectionService:GetTagged("Rotor")) do
+	addRotor(p)
+end
+CollectionService:GetInstanceAddedSignal("Rotor"):Connect(addRotor)
+
+local flags = {}
+local function scanFlags()
+	local m = workspace:FindFirstChild("LavaMap")
+	if not m then
+		return
+	end
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") and d:GetAttribute("Wave") then
+			table.insert(flags, { part = d, base = d.CFrame, phase = math.random() * 6 })
+		end
+	end
+end
+task.spawn(function()
+	while not workspace:GetAttribute("MapReady") do
+		task.wait(0.5)
+	end
+	task.wait(1)
+	scanFlags()
+end)
+
+RunService.RenderStepped:Connect(function()
+	local t = os.clock()
+	local camPos = workspace.CurrentCamera and workspace.CurrentCamera.CFrame.Position or Vector3.zero
+	for _, p in ipairs(rotors) do
+		-- далёкие объекты не крутим — экономим кадры
+		if (p.Position - camPos).Magnitude < 450 then
+			local center = p:GetAttribute("RotorCenter")
+			local offset = p:GetAttribute("RotorOffset")
+			local a = t * (p:GetAttribute("RotorSpeed") or 0.5)
+			local axis = p:GetAttribute("RotorAxis")
+			local rot = axis == "y" and CFrame.Angles(0, a, 0) or (axis == "x" and CFrame.Angles(a, 0, 0) or CFrame.Angles(0, 0, a))
+			local cf = center * rot * offset
+			local hang = p:GetAttribute("RotorHang")
+			if hang then
+				p.CFrame = CFrame.new(cf.Position - Vector3.new(0, hang, 0)) * center.Rotation
+			else
+				p.CFrame = cf
+			end
+		end
+	end
+	for _, f in ipairs(flags) do
+		f.part.CFrame = f.base * CFrame.Angles(0, math.sin(t * 3 + f.phase) * 0.25, 0)
+	end
+end)
+
+-- ============ ОСВЕЩЕНИЕ КАЖДОГО МИРА ============
+local Lighting = game:GetService("Lighting")
+local LIGHT = {
+	{ ClockTime = 14.5, Brightness = 2.6, Ambient = Color3.fromRGB(130, 120, 140), Outdoor = Color3.fromRGB(170, 160, 180), Atmo = Color3.fromRGB(200, 225, 255), Density = 0.22, Haze = 0.4, Tint = Color3.fromRGB(255, 252, 245), Sat = 0.3 },
+	{ ClockTime = 13, Brightness = 2.8, Ambient = Color3.fromRGB(160, 130, 150), Outdoor = Color3.fromRGB(200, 170, 190), Atmo = Color3.fromRGB(255, 205, 235), Density = 0.25, Haze = 0.8, Tint = Color3.fromRGB(255, 240, 248), Sat = 0.4 },
+	{ ClockTime = 21.5, Brightness = 1.2, Ambient = Color3.fromRGB(70, 60, 120), Outdoor = Color3.fromRGB(90, 80, 150), Atmo = Color3.fromRGB(90, 70, 170), Density = 0.42, Haze = 2, Tint = Color3.fromRGB(225, 225, 255), Sat = 0.35 },
+	{ ClockTime = 17.6, Brightness = 2, Ambient = Color3.fromRGB(120, 80, 70), Outdoor = Color3.fromRGB(170, 110, 90), Atmo = Color3.fromRGB(255, 140, 90), Density = 0.35, Haze = 1.6, Tint = Color3.fromRGB(255, 232, 215), Sat = 0.25 },
+	{ ClockTime = 12, Brightness = 3, Ambient = Color3.fromRGB(150, 150, 170), Outdoor = Color3.fromRGB(190, 195, 215), Atmo = Color3.fromRGB(215, 235, 255), Density = 0.15, Haze = 0.2, Tint = Color3.fromRGB(255, 255, 250), Sat = 0.25 },
+}
+local NIGHT = { ClockTime = 0.5, Brightness = 0.4, Ambient = Color3.fromRGB(25, 25, 45), Outdoor = Color3.fromRGB(35, 35, 70), Atmo = Color3.fromRGB(30, 30, 70), Density = 0.4, Haze = 1.5, Tint = Color3.fromRGB(190, 200, 255), Sat = 0.1 }
+
+local function applyLight(prof, extraTint)
+	local info = TweenInfo.new(2.5, Enum.EasingStyle.Sine)
+	TweenService:Create(Lighting, info, { ClockTime = prof.ClockTime, Brightness = prof.Brightness, Ambient = prof.Ambient, OutdoorAmbient = prof.Outdoor }):Play()
+	local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmo then
+		TweenService:Create(atmo, info, { Color = prof.Atmo, Density = prof.Density, Haze = prof.Haze }):Play()
+	end
+	local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+	if cc then
+		TweenService:Create(cc, info, { TintColor = extraTint or prof.Tint, Saturation = prof.Sat }):Play()
+	end
+end
+
+local currentLightKey = nil
+local function refreshLighting()
+	local ev = workspace:GetAttribute("Event")
+	local st = player:GetAttribute("Stage") or 1
+	local zone = Config.ZoneOfStage(math.min(st, TOTAL))
+	if st >= FINISH then
+		zone = 5
+	end
+	local key = tostring(ev) .. zone
+	if key == currentLightKey then
+		return
+	end
+	currentLightKey = key
+	if ev == "night" then
+		applyLight(NIGHT)
+	elseif ev == "golden" then
+		applyLight(LIGHT[zone], Color3.fromRGB(255, 235, 170))
+	elseif ev == "eruption" then
+		applyLight(LIGHT[4], Color3.fromRGB(255, 200, 180))
+	elseif ev == "icestorm" then
+		applyLight(LIGHT[zone], Color3.fromRGB(215, 235, 255))
+	else
+		applyLight(LIGHT[zone])
+	end
+end
+player:GetAttributeChangedSignal("Stage"):Connect(refreshLighting)
+workspace:GetAttributeChangedSignal("Event"):Connect(refreshLighting)
+task.delay(1, refreshLighting)
+
+-- ============ СОБЫТИЯ СЕРВЕРА: БАННЕР С ОТСЧЁТОМ ============
+local EVENT_COLORS = {
+	eruption = Color3.fromRGB(255, 80, 30),
+	night = Color3.fromRGB(80, 90, 200),
+	meteors = Color3.fromRGB(255, 120, 40),
+	icestorm = Color3.fromRGB(90, 190, 255),
+	golden = Color3.fromRGB(255, 200, 40),
+}
+local eventBar = scaled(new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 158),
+	Size = UDim2.fromOffset(460, 44),
+	BackgroundColor3 = Color3.fromRGB(255, 80, 30),
+	Visible = false,
+}, gui))
+corner(eventBar, 12)
+outline(eventBar, Color3.new(0, 0, 0), 3)
+local eventText = new("TextLabel", {
+	BackgroundTransparency = 1,
+	Size = UDim2.new(1, -16, 1, -8),
+	Position = UDim2.fromOffset(8, 4),
+	Font = Enum.Font.GothamBlack,
+	TextScaled = true,
+	TextColor3 = Color3.new(1, 1, 1),
+	Text = "",
+}, eventBar)
+textStroke(eventText)
+
+-- ночью у игрока свой фонарик
+local nightLight
+local function ensureNightLight(on)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if on and root then
+		if not nightLight or nightLight.Parent ~= root then
+			nightLight = new("PointLight", { Range = 28, Brightness = 2, Color = Color3.fromRGB(255, 230, 180), Shadows = true }, root)
+		end
+	elseif nightLight then
+		nightLight:Destroy()
+		nightLight = nil
+	end
+end
+
+-- снег для ледяного шторма
+local snowPart = new("Part", { Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false, Transparency = 1, Size = Vector3.new(80, 1, 80), CFrame = CFrame.new(0, -500, 0) }, workspace)
+local snow = new("ParticleEmitter", {
+	Color = ColorSequence.new(Color3.new(1, 1, 1)),
+	Size = NumberSequence.new(0.35),
+	Transparency = NumberSequence.new(0.1, 0.6),
+	Speed = NumberRange.new(10, 18),
+	Lifetime = NumberRange.new(2, 3),
+	Rate = 0,
+	SpreadAngle = Vector2.new(20, 20),
+	EmissionDirection = Enum.NormalId.Bottom,
+	Acceleration = Vector3.new(12, 0, 4),
+}, snowPart)
+
+local lastGust = 0
+RunService.Heartbeat:Connect(function()
+	local ev = workspace:GetAttribute("Event")
+	local ends = workspace:GetAttribute("EventEnds")
+	if ev and ends then
+		local left = math.max(0, math.ceil(ends - workspace:GetServerTimeNow()))
+		eventBar.Visible = true
+		eventBar.BackgroundColor3 = EVENT_COLORS[ev] or Color3.fromRGB(255, 120, 40)
+		eventText.Text = tr("ev_timer", tr("ev_" .. ev), left)
+	else
+		eventBar.Visible = false
+	end
+	ensureNightLight(ev == "night")
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if ev == "icestorm" and root then
+		snowPart.CFrame = CFrame.new(root.Position + Vector3.new(0, 30, 0))
+		snow.Rate = 220
+		-- порывы ветра
+		if os.clock() - lastGust > 2.6 and hum and hum.Health > 0 and hum.FloorMaterial ~= Enum.Material.Air then
+			lastGust = os.clock()
+			local a = math.random() * math.pi * 2
+			root:ApplyImpulse(Vector3.new(math.cos(a), 0.15, math.sin(a)) * root.AssemblyMass * 32)
+		end
+	else
+		snow.Rate = 0
+	end
+end)
+
+-- ============ ТАЙМЕР ЗАБЕГА ============
+local timerLabel = counter("⏱ 00:00", 6)
+timerLabel.Visible = false
+local function fmtTime(t)
+	local m = math.floor(t / 60)
+	return string.format("%02d:%05.2f", m, t - m * 60)
+end
+RunService.RenderStepped:Connect(function()
+	local start = player:GetAttribute("RunStart")
+	local final = player:GetAttribute("RunTime")
+	if start then
+		timerLabel.Visible = true
+		timerLabel.Text = tr("ui_timer", fmtTime(workspace:GetServerTimeNow() - start))
+		timerLabel.TextColor3 = player:GetAttribute("RunValid") == false and Color3.fromRGB(170, 170, 170) or Color3.new(1, 1, 1)
+	elseif final then
+		timerLabel.Visible = true
+		timerLabel.Text = "🏁 " .. fmtTime(final)
+		timerLabel.TextColor3 = Color3.fromRGB(255, 215, 80)
+	else
+		timerLabel.Visible = false
+	end
+end)
+
+-- ============ ЗАДАНИЯ ДНЯ ============
+local HttpService = game:GetService("HttpService")
+local tasksBtn = button({ text = tr("ui_tasks"), color = Color3.fromRGB(40, 160, 200), order = 3 }, left)
+local tasksWin = scaled(new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(460, 330),
+	BackgroundColor3 = Color3.fromRGB(25, 40, 60),
+	Visible = false,
+	ZIndex = 8,
+}, gui))
+corner(tasksWin, 18)
+outline(tasksWin, Color3.fromRGB(90, 200, 255), 3)
+local tTitle = new("TextLabel", { BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 10), Size = UDim2.new(1, -80, 0, 40), Font = Enum.Font.GothamBlack, TextScaled = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = GOLD, Text = tr("tasks_title"), ZIndex = 9 }, tasksWin)
+textStroke(tTitle)
+local tClose = button({ text = "✕", size = UDim2.fromOffset(40, 40), position = UDim2.new(1, -52, 0, 10), color = Color3.fromRGB(200, 50, 50) }, tasksWin)
+tClose.ZIndex = 9
+new("TextLabel", { BackgroundTransparency = 1, Position = UDim2.new(0, 16, 1, -34), Size = UDim2.new(1, -32, 0, 24), Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = Color3.fromRGB(180, 210, 240), Text = tr("tasks_hint"), ZIndex = 9 }, tasksWin)
+local taskRows = {}
+for i = 1, 3 do
+	local row = new("Frame", { Position = UDim2.fromOffset(16, 58 + (i - 1) * 80), Size = UDim2.new(1, -32, 0, 70), BackgroundColor3 = Color3.fromRGB(40, 60, 90), ZIndex = 9 }, tasksWin)
+	corner(row, 12)
+	local name = new("TextLabel", { BackgroundTransparency = 1, Position = UDim2.fromOffset(12, 6), Size = UDim2.new(1, -120, 0, 28), Font = Enum.Font.GothamBold, TextScaled = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.new(1, 1, 1), Text = "", ZIndex = 10 }, row)
+	local reward = new("TextLabel", { BackgroundTransparency = 1, Position = UDim2.new(1, -108, 0, 6), Size = UDim2.fromOffset(96, 28), Font = Enum.Font.GothamBlack, TextScaled = true, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = GOLD, Text = "", ZIndex = 10 }, row)
+	local barBg = new("Frame", { Position = UDim2.fromOffset(12, 42), Size = UDim2.new(1, -24, 0, 16), BackgroundColor3 = Color3.fromRGB(20, 30, 45), ZIndex = 10 }, row)
+	corner(barBg, 8)
+	local bar = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(90, 220, 120), ZIndex = 11 }, barBg)
+	corner(bar, 8)
+	local prog = new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = Color3.new(1, 1, 1), Text = "", ZIndex = 12 }, barBg)
+	taskRows[i] = { row = row, name = name, reward = reward, bar = bar, prog = prog }
+end
+
+local function challengeText(c)
+	return tr("ch_" .. c.kind, c.goal)
+end
+
+local function refreshTasks()
+	local raw = player:GetAttribute("Challenges")
+	local ok, list = pcall(function()
+		return HttpService:JSONDecode(raw or "[]")
+	end)
+	if not ok or type(list) ~= "table" then
+		list = {}
+	end
+	local doneCount = 0
+	for i = 1, 3 do
+		local c = list[i]
+		local r = taskRows[i]
+		r.row.Visible = c ~= nil
+		if c then
+			r.name.Text = challengeText(c)
+			r.reward.Text = "+" .. c.reward .. " 💰"
+			r.bar.Size = UDim2.fromScale(math.clamp(c.progress / c.goal, 0, 1), 1)
+			r.prog.Text = c.done and tr("task_done") or (c.progress .. " / " .. c.goal)
+			r.row.BackgroundColor3 = c.done and Color3.fromRGB(40, 100, 60) or Color3.fromRGB(40, 60, 90)
+			if c.done then
+				doneCount += 1
+			end
+		end
+	end
+	tasksBtn.Text = tr("ui_tasks") .. " " .. doneCount .. "/" .. #list
+	-- табло в лобби
+	for _, lbl in ipairs(CollectionService:GetTagged("ChallengeRow")) do
+		local idx = tonumber(string.match(lbl.Name, "%d+"))
+		local c = idx and list[idx]
+		if c then
+			lbl.Text = (c.done and "✅ " or "⬜ ") .. challengeText(c) .. "  (" .. c.progress .. "/" .. c.goal .. ")  +" .. c.reward .. "💰"
+		end
+	end
+end
+player:GetAttributeChangedSignal("Challenges"):Connect(refreshTasks)
+CollectionService:GetInstanceAddedSignal("ChallengeRow"):Connect(refreshTasks)
+refreshTasks()
+tasksBtn.Activated:Connect(function()
+	tasksWin.Visible = not tasksWin.Visible
+end)
+tClose.Activated:Connect(function()
+	tasksWin.Visible = false
+end)
+
+-- ============ КНОПКИ-ПОДСКАЗКИ В ЛОББИ (ProximityPrompt) ============
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local function translatePrompt(pp)
+	local a, o = pp:GetAttribute("ActionKey"), pp:GetAttribute("ObjectKey")
+	if a then
+		pp.ActionText = tr(a)
+	end
+	if o then
+		pp.ObjectText = tr(o)
+	end
+end
+for _, pp in ipairs(CollectionService:GetTagged("LocPrompt")) do
+	translatePrompt(pp)
+end
+CollectionService:GetInstanceAddedSignal("LocPrompt"):Connect(translatePrompt)
+ProximityPromptService.PromptTriggered:Connect(function(pp)
+	local shopTab = pp:GetAttribute("OpenShop")
+	if shopTab then
+		openShop(shopTab)
+	elseif pp:GetAttribute("OpenTasks") then
+		tasksWin.Visible = true
+	end
+end)
+
+-- ============ СУНДУКИ ДНЯ: прячем найденные ============
+local function refreshDailyChests()
+	local found = csvSet(player:GetAttribute("DailyFound"))
+	for _, base in ipairs(CollectionService:GetTagged("DailyChest")) do
+		local model = base.Parent
+		local isFound = found[base:GetAttribute("ChestId") or ""] == true
+		if model then
+			for _, p in ipairs(model:GetDescendants()) do
+				if p:IsA("BasePart") then
+					local orig = p:GetAttribute("OrigT")
+					if orig == nil then
+						orig = p.Transparency
+						p:SetAttribute("OrigT", orig)
+					end
+					p.Transparency = isFound and 1 or orig
+				elseif p:IsA("Sparkles") then
+					p.Enabled = not isFound
+				end
+			end
+		end
+	end
+end
+player:GetAttributeChangedSignal("DailyFound"):Connect(refreshDailyChests)
+CollectionService:GetInstanceAddedSignal("DailyChest"):Connect(function()
+	task.wait(0.5)
+	refreshDailyChests()
+end)
+task.delay(2, refreshDailyChests)
 
 -- ============ ПРИВИЛЕГИЯ «ДВОЙНОЙ ПРЫЖОК» ============
 local UserInputService = game:GetService("UserInputService")
