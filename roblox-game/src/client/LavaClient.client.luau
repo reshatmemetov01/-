@@ -143,7 +143,7 @@ rebirthBtn.Visible = false
 local right = scaled(new("Frame", {
 	AnchorPoint = Vector2.new(1, 0.5),
 	Position = UDim2.new(1, -10, 0.4, 0),
-	Size = UDim2.fromOffset(160, 150),
+	Size = UDim2.fromOffset(160, 260),
 	BackgroundTransparency = 1,
 }, gui))
 new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Right }, right)
@@ -1057,6 +1057,108 @@ if player.Character then
 	task.spawn(watchDeaths, player.Character)
 end
 player.CharacterAdded:Connect(watchDeaths)
+
+-- ============ ПОДНИМАЮЩАЯСЯ ЛАВА ============
+-- У каждого игрока своя: после чекпоинта лава ползёт вверх. Стоишь — догонит.
+local lavaMeter = counter("🔥", 5)
+lavaMeter.Visible = false
+local rising = { active = false, y = -1e6, startPos = nil }
+local lavaSheet, lavaGlow
+if Config.RISING_LAVA then
+	lavaSheet = new("Part", {
+		Name = "RisingLava",
+		Anchored = true,
+		CanCollide = false,
+		CanTouch = false,
+		CanQuery = false,
+		CastShadow = false,
+		Size = Vector3.new(500, 2, 500),
+		Material = Enum.Material.CrackedLava,
+		Color = Color3.fromRGB(255, 100, 10),
+		CFrame = CFrame.new(0, -500, 0),
+	}, workspace)
+	lavaGlow = new("Part", {
+		Name = "RisingLavaGlow",
+		Anchored = true,
+		CanCollide = false,
+		CanTouch = false,
+		CanQuery = false,
+		CastShadow = false,
+		Size = Vector3.new(500, 0.3, 500),
+		Material = Enum.Material.Neon,
+		Color = Color3.fromRGB(255, 150, 30),
+		Transparency = 0.5,
+		CFrame = CFrame.new(0, -500, 0),
+	}, workspace)
+end
+
+local function lobbyCenter()
+	local m = workspace:FindFirstChild("LavaMap")
+	local lobby = m and m:FindFirstChild("Lobby")
+	local f = lobby and lobby:FindFirstChild("LobbyFloor")
+	return f and f.Position
+end
+
+local function resetRising()
+	rising.active = false
+	rising.startPos = nil
+	rising.y = -1e6
+end
+player:GetAttributeChangedSignal("Stage"):Connect(resetRising)
+player.CharacterAdded:Connect(resetRising)
+
+RunService.Heartbeat:Connect(function(dt)
+	if not lavaSheet then
+		return
+	end
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local st = player:GetAttribute("Stage") or 1
+	local show = false
+	if root and hum and hum.Health > 0 and st < FINISH then
+		local pos = root.Position
+		if not rising.startPos then
+			rising.startPos = pos
+			rising.y = pos.Y - 3 - Config.RISING_LAVA_START
+		end
+		if not rising.active then
+			local moved = Vector3.new(pos.X - rising.startPos.X, 0, pos.Z - rising.startPos.Z).Magnitude
+			local lc = lobbyCenter()
+			local inLobby = st == 1 and lc ~= nil and Vector3.new(pos.X - lc.X, 0, pos.Z - lc.Z).Magnitude < 34
+			if moved > 14 and not inLobby then
+				rising.active = true
+				toast(tr("lava_rising"), Color3.fromRGB(255, 120, 40))
+			end
+		end
+		if rising.active then
+			show = true
+			local water = workspace:GetAttribute("LavaIsWater") == true
+			if not water then
+				local k = (st - 1) / TOTAL
+				rising.y += (Config.RISING_LAVA_SPEED + (Config.RISING_LAVA_SPEED_MAX - Config.RISING_LAVA_SPEED) * k) * dt
+			end
+			local feet = pos.Y - 3
+			if (player:GetAttribute("ShieldUntil") or 0) > os.time() then
+				rising.y = math.min(rising.y, feet - 4) -- 🛡 щит не пускает лаву выше ног
+			elseif feet < rising.y and not water then
+				hum.Health = 0
+			end
+			local gap = math.max(math.floor(feet - rising.y), 0)
+			lavaMeter.Text = tr("lava_meter", gap)
+			lavaMeter.TextColor3 = gap < 8 and Color3.fromRGB(255, 90, 60) or Color3.new(1, 1, 1)
+			lavaSheet.CFrame = CFrame.new(pos.X, rising.y - 1, pos.Z)
+			lavaGlow.CFrame = CFrame.new(pos.X, rising.y + 0.1, pos.Z)
+			lavaSheet.Color = water and Color3.fromRGB(40, 140, 255) or Color3.fromRGB(255, 100, 10)
+			lavaGlow.Color = water and Color3.fromRGB(120, 200, 255) or Color3.fromRGB(255, 150, 30)
+		end
+	end
+	lavaMeter.Visible = show
+	if not show then
+		lavaSheet.CFrame = CFrame.new(0, -500, 0)
+		lavaGlow.CFrame = CFrame.new(0, -500, 0)
+	end
+end)
 
 -- ============ ПРИВИЛЕГИЯ «ДВОЙНОЙ ПРЫЖОК» ============
 local UserInputService = game:GetService("UserInputService")

@@ -65,6 +65,13 @@ Config.NORMAL_JUMP = 7.2
 Config.SUPER_JUMP = 11
 Config.SHIELD_DURATION = 60
 
+-- 🔥 Поднимающаяся лава: после чекпоинта лава начинает подниматься к игроку.
+-- Стоишь на месте — догонит. Чтобы выключить — поставь false.
+Config.RISING_LAVA = true
+Config.RISING_LAVA_START = 28 -- насколько ниже чекпоинта стартует (в стадах)
+Config.RISING_LAVA_SPEED = 0.5 -- скорость на первых этапах (стадов в секунду)
+Config.RISING_LAVA_SPEED_MAX = 0.9 -- скорость на последних этапах
+
 Config.COIN_VALUE = 2 -- за одну монетку на карте
 Config.COIN_RESPAWN = 45 -- через сколько секунд монетка появится снова
 Config.STAGE_REWARD = 5 -- за каждый новый этап

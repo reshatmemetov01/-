@@ -36,7 +36,8 @@ local LAVA_COLOR = RGB(255, 85, 0)
 local FABRICS = { RGB(70, 110, 190), RGB(190, 70, 80), RGB(90, 160, 110), RGB(220, 170, 70), RGB(150, 90, 170) }
 local BOOKS = { RGB(200, 50, 50), RGB(50, 90, 200), RGB(40, 150, 80), RGB(230, 180, 40), RGB(130, 60, 160), RGB(240, 120, 40) }
 local PLATE_RIMS = { RGB(80, 140, 230), RGB(230, 80, 90), RGB(90, 190, 120), RGB(250, 190, 60) }
-local ROCKS = { RGB(90, 80, 78), RGB(105, 92, 85), RGB(78, 70, 72), RGB(115, 100, 90) }
+-- разноцветные «кристаллические» камни пещер
+local ROCKS = { RGB(130, 95, 190), RGB(70, 150, 190), RGB(170, 100, 200), RGB(90, 120, 200), RGB(60, 170, 160) }
 local ACCENT = {
 	RGB(255, 170, 70),
 	RGB(90, 200, 255),
@@ -674,6 +675,152 @@ function Obstacles.disks(ctx)
 	ctx.x = x
 end
 
+-- ============ НОВЫЕ ПРЕПЯТСТВИЯ ============
+local PARTY = {
+	RGB(255, 90, 150),
+	RGB(80, 210, 255),
+	RGB(255, 220, 60),
+	RGB(120, 230, 90),
+	RGB(180, 110, 255),
+	RGB(255, 150, 50),
+}
+
+-- Маятники: шары качаются поперёк дорожки
+function Obstacles.pendulum(ctx)
+	local r = ctx.rng
+	local len = r:NextInteger(26, 32)
+	local w = 9
+	local zc = ctx.z + 4 + len / 2
+	local x = ctx.x
+	local top = ctx.y
+	walkway(ctx, x, top, zc, w, len)
+	local H = 13
+	local count = 2 + ((ctx.diff > 0.5) and 1 or 0)
+	local frameColor = ACCENT[ctx.zone]
+	for i = 1, count do
+		local pz = zc - len / 2 + (i / (count + 1)) * len
+		part({ Size = V3(1, H + 1, 1), CFrame = L(ctx, x - w / 2 - 1, top + H / 2, pz), Color = darker(frameColor, 0.75) })
+		part({ Size = V3(1, H + 1, 1), CFrame = L(ctx, x + w / 2 + 1, top + H / 2, pz), Color = darker(frameColor, 0.75) })
+		part({ Size = V3(w + 3, 1, 1), CFrame = L(ctx, x, top + H + 0.5, pz), Color = frameColor })
+		local pivot = L(ctx, x, top + H, pz)
+		local armLen = H - 3
+		local armOffset = CF(0, -armLen / 2, 0)
+		local arm = part({ Size = V3(0.4, armLen, 0.4), CFrame = pivot * armOffset, Color = RGB(90, 90, 100), Material = M.Metal, CanCollide = false })
+		local headOffset = CF(0, -(armLen + 1), 0)
+		local head = killPart({ Shape = BALL, Size = V3(3.6, 3.6, 3.6), CFrame = pivot * headOffset, Color = RGB(255, 60, 70), Material = M.Neon })
+		local amp = 1.0 + 0.2 * ctx.diff
+		local speed = 1.3 + 0.8 * ctx.diff
+		local phase = i * 1.7
+		table.insert(info.pendulums, { part = arm, pivot = pivot, offset = armOffset, amp = amp, speed = speed, phase = phase })
+		table.insert(info.pendulums, { part = head, pivot = pivot, offset = headOffset, amp = amp, speed = speed, phase = phase })
+		table.insert(info.killers, { part = head })
+	end
+	maybeCoin(ctx, x, top, zc, 0.8)
+	ctx.x, ctx.z = x, zc + len / 2
+end
+
+-- Гейзеры: из лавы между платформами бьют огненные столбы
+function Obstacles.geysers(ctx)
+	local r = ctx.rng
+	local n = r:NextInteger(3, 4)
+	local x = ctx.x
+	for i = 1, n do
+		local gap = 4.5
+		local gz = ctx.z + gap / 2
+		local low = L(ctx, x, ctx.y - 16, gz) * ROT_UP
+		local high = L(ctx, x, ctx.y + 3, gz) * ROT_UP
+		local g = killPart({ Shape = CYL, Size = V3(14, 3.4, 3.4), CFrame = low, Color = RGB(255, 130, 0), Material = M.Neon })
+		local holder = part({ Size = V3(3, 0.5, 3), CFrame = L(ctx, x, ctx.y - 7, gz), Transparency = 1, CanCollide = false, CanTouch = false, CanQuery = false })
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color = ColorSequence.new(RGB(255, 230, 90), RGB(255, 80, 0))
+		pe.LightEmission = 1
+		pe.Size = NumberSequence.new(0.7, 0)
+		pe.Speed = NumberRange.new(6, 10)
+		pe.Lifetime = NumberRange.new(0.6, 1)
+		pe.Rate = 0
+		pe.EmissionDirection = Enum.NormalId.Top
+		pe.SpreadAngle = Vector2.new(15, 15)
+		pe.Parent = holder
+		table.insert(info.geysers, { part = g, low = low, high = high, delay = i * 0.8 + r:NextNumber(0, 0.5), bubbles = pe })
+		local size = 7
+		local zc = ctx.z + gap + size / 2
+		themedPlatform(ctx, x, ctx.y, zc, size, size)
+		maybeCoin(ctx, x, ctx.y, zc, 0.4)
+		ctx.z = zc + size / 2
+	end
+end
+
+-- Лазерные ворота: красные лучи ездят вверх-вниз
+function Obstacles.lasers(ctx)
+	local r = ctx.rng
+	local len = r:NextInteger(26, 32)
+	local w = 9
+	local zc = ctx.z + 4 + len / 2
+	local x = ctx.x
+	local top = ctx.y
+	walkway(ctx, x, top, zc, w, len)
+	local gates = 3
+	for i = 1, gates do
+		local gz = zc - len / 2 + (i / (gates + 1)) * len
+		for sx = -1, 1, 2 do
+			part({ Size = V3(1.2, 9.5, 1.2), CFrame = L(ctx, x + sx * (w / 2 + 0.8), top + 4.75, gz), Color = RGB(50, 50, 60), Material = M.Metal })
+			part({ Size = V3(1.3, 0.6, 1.3), CFrame = L(ctx, x + sx * (w / 2 + 0.8), top + 9.6, gz), Color = RGB(255, 40, 80), Material = M.Neon })
+		end
+		local base = L(ctx, x, top + 4.5, gz)
+		local beam = killPart({ Size = V3(w + 1.6, 0.4, 0.4), CFrame = base, Color = RGB(255, 30, 70), Material = M.Neon, CanCollide = false })
+		table.insert(info.movers, { part = beam, base = base, axis = V3(0, 1, 0), amp = 3.9, speed = 1.2 + 0.8 * ctx.diff, phase = i * 2.1 + r:NextNumber(0, 1) })
+		table.insert(info.killers, { part = beam })
+	end
+	maybeCoin(ctx, x, top, zc, 0.8)
+	ctx.x, ctx.z = x, zc + len / 2
+end
+
+-- Платформы на воздушных шариках (покачиваются)
+function Obstacles.balloons(ctx)
+	local r = ctx.rng
+	local n = r:NextInteger(4, 5)
+	for i = 1, n do
+		local size = 6.5
+		local zc = ctx.z + 3.5 + size / 2
+		local x = math.clamp(ctx.x + r:NextNumber(-5, 5), -10, 10)
+		local top = ctx.y + ((ctx.flat or ctx.y < 14) and 0 or r:NextNumber(0, 1.5))
+		local col = PARTY[r:NextInteger(1, #PARTY)]
+		local base = L(ctx, x, top - 0.5, zc)
+		local amp, speed, phase = 1.2, 1 + 0.5 * ctx.diff, i * 1.3
+		local plat = part({ Size = V3(size, 1, size), CFrame = base, Color = col })
+		local strOff = CF(0, 5, 0)
+		local str = part({ Size = V3(0.15, 9, 0.15), CFrame = base * strOff, Color = Color3.new(1, 1, 1), CanCollide = false })
+		local balOff = CF(0, 11.5, 0)
+		local bal = part({ Shape = BALL, Size = V3(6, 6, 6), CFrame = base * balOff, Color = col, CanCollide = false, Reflectance = 0.1 })
+		for _, pp in ipairs({ { plat, CF() }, { str, strOff }, { bal, balOff } }) do
+			table.insert(info.movers, { part = pp[1], base = base * pp[2], axis = V3(0, 1, 0), amp = amp, speed = speed, phase = phase })
+		end
+		addPath(base.Position)
+		maybeCoin(ctx, x, top + 1.2, zc, 0.4)
+		ctx.x, ctx.y, ctx.z = x, top, zc + size / 2
+	end
+end
+
+-- Толкающие стены: яркие блоки ездят поперёк дорожки
+function Obstacles.pushers(ctx)
+	local r = ctx.rng
+	local len = r:NextInteger(28, 34)
+	local w = 10
+	local zc = ctx.z + 4 + len / 2
+	local x = ctx.x
+	local top = ctx.y
+	walkway(ctx, x, top, zc, w, len)
+	local count = 3
+	for i = 1, count do
+		local pz = zc - len / 2 + (i / (count + 1)) * len
+		local base = L(ctx, x, top + 2, pz)
+		local block = part({ Size = V3(4, 4, 3), CFrame = base, Color = PARTY[((i + ctx.stage) % #PARTY) + 1] })
+		table.insert(info.movers, { part = block, base = base, axis = ctx.F.RightVector, amp = 3.2, speed = 1.1 + 0.8 * ctx.diff, phase = i * 2 + r:NextNumber(0, 1) })
+	end
+	maybeCoin(ctx, x, top, zc, 0.8)
+	ctx.x, ctx.z = x, zc + len / 2
+end
+
 -- Безопасный островок над волной лавы (только зона 4)
 local function island(ctx)
 	local size = 7
@@ -683,11 +830,11 @@ local function island(ctx)
 end
 
 local POOLS = {
-	{ "jumps", "stripes", "climb", "rope", "posts", "vanish", "movers", "bounce" },
-	{ "jumps", "conveyor", "spinner", "bounce", "climb", "rope", "movers", "stripes" },
-	{ "jumps", "cave", "vanish", "posts", "climb", "rope", "disks", "cave" },
-	{ "jumps", "movers", "spinner", "vanish", "disks", "posts", "conveyor", "stripes" },
-	{ "jumps", "bounce", "rope", "movers", "vanish", "disks", "posts" },
+	{ "jumps", "stripes", "climb", "rope", "posts", "vanish", "movers", "bounce", "pendulum", "balloons", "pushers" },
+	{ "jumps", "conveyor", "spinner", "bounce", "climb", "rope", "movers", "stripes", "pushers", "lasers", "geysers" },
+	{ "jumps", "cave", "vanish", "posts", "climb", "rope", "disks", "geysers", "lasers", "pendulum" },
+	{ "jumps", "movers", "spinner", "vanish", "disks", "posts", "conveyor", "stripes", "geysers", "lasers", "pushers" },
+	{ "jumps", "bounce", "rope", "movers", "vanish", "disks", "posts", "balloons", "pendulum", "pushers" },
 }
 
 local CLIMBING = { climb = true, bounce = true }
@@ -1028,7 +1175,62 @@ local function farFromPath(pos, minDist)
 	return true
 end
 
+local FESTIVE = {
+	RGB(255, 90, 150),
+	RGB(80, 210, 255),
+	RGB(255, 220, 60),
+	RGB(120, 230, 90),
+	RGB(180, 110, 255),
+	RGB(255, 150, 50),
+}
+
+-- Праздничный декор во всех зонах: связки шариков и гирлянды флажков
+local function festive(pos, rng, pathY)
+	local base = CF(pos.X, 0, pos.Z) * CFrame.Angles(0, rng:NextNumber(0, 2 * PI), 0)
+	if rng:NextNumber() < 0.5 then
+		local knot = base * CF(0, pathY + rng:NextNumber(0, 8), 0)
+		for i = 1, rng:NextInteger(5, 8) do
+			local s = rng:NextNumber(3.5, 5.5)
+			local off = V3(rng:NextNumber(-3, 3), rng:NextNumber(7, 12), rng:NextNumber(-3, 3))
+			local bp = (knot * CF(off)).Position
+			part({ Shape = BALL, Size = V3(s, s, s), CFrame = CF(bp), Color = FESTIVE[((i - 1) % #FESTIVE) + 1], CanCollide = false, Reflectance = 0.1, CastShadow = false })
+			local a = knot.Position
+			part({ Size = V3(0.1, 0.1, (bp - a).Magnitude), CFrame = CFrame.lookAt((a + bp) / 2, bp), Color = Color3.new(1, 1, 1), CanCollide = false, CastShadow = false })
+		end
+	else
+		local h = pathY + rng:NextNumber(6, 14)
+		local span = rng:NextNumber(24, 36)
+		local a = (base * CF(-span / 2, h, 0)).Position
+		local b = (base * CF(span / 2, h, 0)).Position
+		for _, p in ipairs({ a, b }) do
+			part({ Shape = CYL, Size = V3(h + 2, 1.2, 1.2), CFrame = CF(p.X, (h - 2) / 2, p.Z) * ROT_UP, Color = RGB(250, 250, 255) })
+			part({ Shape = BALL, Size = V3(2, 2, 2), CFrame = CF(p), Color = FESTIVE[rng:NextInteger(1, #FESTIVE)], Material = M.Neon })
+		end
+		local sag = V3(0, -3, 0)
+		local flags = 10
+		local prev = a
+		for i = 1, flags do
+			local t = i / flags
+			local pt = a:Lerp(b, t) + sag * (4 * t * (1 - t))
+			part({ Size = V3(0.08, 0.08, (pt - prev).Magnitude), CFrame = CFrame.lookAt((prev + pt) / 2, pt), Color = Color3.new(1, 1, 1), CanCollide = false, CastShadow = false })
+			local w = Instance.new("WedgePart")
+			w.Anchored = true
+			w.CanCollide = false
+			w.CastShadow = false
+			w.Size = V3(0.1, 2.2, 1.6)
+			w.CFrame = CFrame.lookAt(pt, pt + (b - a).Unit) * CF(0, -1.1, 0) * CFrame.Angles(PI, 0, 0)
+			w.Color = FESTIVE[(i % #FESTIVE) + 1]
+			w.Parent = currentFolder
+			prev = pt
+		end
+	end
+end
+
 local function decor(zone, pos, rng, pathY)
+	if rng:NextNumber() < 0.35 then
+		festive(pos, rng, pathY)
+		return
+	end
 	local yaw = CFrame.Angles(0, rng:NextNumber(0, 2 * PI), 0)
 	local base = CF(pos.X, 0, pos.Z) * yaw
 	local h = math.max(12, pathY + rng:NextNumber(-12, 14))
@@ -1228,29 +1430,37 @@ local function buildEmbers(rng)
 end
 
 local function setupLighting()
-	Lighting.ClockTime = 17.8
-	Lighting.Brightness = 2
-	Lighting.Ambient = RGB(90, 60, 50)
-	Lighting.OutdoorAmbient = RGB(150, 100, 80)
-	Lighting.EnvironmentDiffuseScale = 0.5
+	-- яркий солнечный день: сочные цвета, видно далеко
+	Lighting.ClockTime = 14.5
+	Lighting.Brightness = 2.6
+	Lighting.Ambient = RGB(130, 120, 140)
+	Lighting.OutdoorAmbient = RGB(170, 160, 180)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 1
+	Lighting.GlobalShadows = true
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere")
-	atmo.Density = 0.32
-	atmo.Offset = 0.25
-	atmo.Color = RGB(255, 150, 90)
-	atmo.Decay = RGB(120, 60, 40)
-	atmo.Glare = 0.3
-	atmo.Haze = 1.6
+	atmo.Density = 0.22
+	atmo.Offset = 0
+	atmo.Color = RGB(200, 225, 255)
+	atmo.Decay = RGB(255, 200, 170)
+	atmo.Glare = 0.2
+	atmo.Haze = 0.4
 	atmo.Parent = Lighting
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect") or Instance.new("BloomEffect")
-	bloom.Intensity = 0.6
-	bloom.Size = 24
-	bloom.Threshold = 1.4
+	bloom.Intensity = 0.5
+	bloom.Size = 20
+	bloom.Threshold = 1.6
 	bloom.Parent = Lighting
 	local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Instance.new("ColorCorrectionEffect")
-	cc.Saturation = 0.15
-	cc.Contrast = 0.05
-	cc.TintColor = RGB(255, 245, 235)
+	cc.Saturation = 0.3
+	cc.Contrast = 0.08
+	cc.Brightness = 0.03
+	cc.TintColor = RGB(255, 252, 245)
 	cc.Parent = Lighting
+	local rays = Lighting:FindFirstChildOfClass("SunRaysEffect") or Instance.new("SunRaysEffect")
+	rays.Intensity = 0.06
+	rays.Spread = 0.6
+	rays.Parent = Lighting
 end
 
 -- ============ ГЛАВНАЯ ФУНКЦИЯ ============
@@ -1264,6 +1474,8 @@ function MapBuilder.Build()
 		stalactites = {},
 		waves = {},
 		blinkers = {},
+		pendulums = {},
+		geysers = {},
 		pathPoints = {},
 		leaderboardRows = {},
 	}
@@ -1304,6 +1516,7 @@ function MapBuilder.Build()
 	buildLobby(ctx)
 
 	local stageFrames = {}
+	local prevPlan = {}
 	local pattern = { -1, -1, 1, 1 } -- направо, направо, налево, налево — «змейка»
 
 	for s = 1, TOTAL do
@@ -1334,21 +1547,26 @@ function MapBuilder.Build()
 		else
 			local pool = POOLS[ctx.zone]
 			local count = 2 + ((ctx.diff > 0.35) and 1 or 0)
-			local last = nil
+			local used = {}
 			for _ = 1, count do
 				local name
-				for _ = 1, 10 do
+				for _ = 1, 20 do
 					name = pool[r:NextInteger(1, #pool)]
 					local tooHigh = CLIMBING[name] and ctx.y > 60 * ctx.zone
-					if name ~= last and not tooHigh then
+					-- без повторов внутри этапа и с прошлым этапом — так карта разнообразнее
+					if not used[name] and not prevPlan[name] and not tooHigh then
 						break
 					end
 				end
 				table.insert(plan, name)
-				last = name
+				used[name] = true
 			end
 		end
 
+		prevPlan = {}
+		for _, name in ipairs(plan) do
+			prevPlan[name] = true
+		end
 		for i, name in ipairs(plan) do
 			Obstacles[name](ctx)
 			if ctx.zone == 4 and i < #plan then
@@ -1410,7 +1628,7 @@ function MapBuilder.Build()
 	currentFolder = decoFolder
 	local drng = Random.new(Config.MAP_SEED + 99)
 	for _, sf in ipairs(stageFrames) do
-		for _ = 1, 6 do
+		for _ = 1, 9 do
 			local z = drng:NextNumber(0, sf.len)
 			local side = drng:NextNumber() < 0.5 and -1 or 1
 			local x = side * drng:NextNumber(32, 60)

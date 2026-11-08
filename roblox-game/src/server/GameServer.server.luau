@@ -540,23 +540,34 @@ local function applySkin(player)
 		return
 	end
 	clearSkinExtras(char)
-	local material = Enum.Material[skin.material] or Enum.Material.SmoothPlastic
+	local okMat, material = pcall(function()
+		return Enum.Material[skin.material]
+	end)
+	if not okMat or not material then
+		material = Enum.Material.SmoothPlastic
+	end
 	local i = 0
 	for _, d in ipairs(char:GetDescendants()) do
-		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors") then
+		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("BodyColors") or d:IsA("SurfaceAppearance") then
+			-- SurfaceAppearance (новые головы/тела) закрывает цвет — убираем
 			d:Destroy()
 		elseif d:IsA("SpecialMesh") then
 			d.TextureId = ""
 		elseif d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
 			i += 1
-			if d:IsA("MeshPart") and d:FindFirstAncestorOfClass("Accessory") then
-				d.TextureID = ""
+			if d:IsA("MeshPart") then
+				pcall(function()
+					d.TextureID = ""
+				end)
 			end
 			d.Color = skin.colors and skin.colors[(i % #skin.colors) + 1] or skin.color
 			d.Material = material
 		end
 	end
-	addSkinExtras(char, skin)
+	local ok, err = pcall(addSkinExtras, char, skin)
+	if not ok then
+		warn("[LavaObby] skin extras:", err)
+	end
 end
 
 -- ============ ПИТОМЦЫ ============
@@ -1105,7 +1116,13 @@ local function kill(hum)
 	end
 	local owner = Players:GetPlayerFromCharacter(hum.Parent)
 	if owner and (owner:GetAttribute("ShieldUntil") or 0) > os.time() then
-		rescue(owner)
+		-- 🛡 со щитом лава не мешает: бежишь дальше. Возвращаем назад,
+		-- только если игрок провалился глубоко вниз (в лавовое море).
+		local s = sessions[owner]
+		local root = hum.Parent:FindFirstChild("HumanoidRootPart")
+		if s and root and s.lastSafe and root.Position.Y < s.lastSafe.Position.Y - 8 then
+			rescue(owner)
+		end
 		return
 	end
 	hum.Health = 0
@@ -1212,7 +1229,31 @@ RunService.Heartbeat:Connect(function()
 		sp.part.CFrame = sp.base * CFrame.Angles(0, t * sp.speed, 0) * sp.offset
 		sp.part.AssemblyAngularVelocity = Vector3.new(0, sp.speed, 0)
 	end
+	for _, pd in ipairs(map.pendulums) do
+		pd.part.CFrame = pd.pivot * CFrame.Angles(0, 0, pd.amp * math.sin(t * pd.speed + pd.phase)) * pd.offset
+	end
 end)
+
+-- Гейзеры лавы: пузырьки → огненный столб → вниз
+for _, g in ipairs(map.geysers) do
+	task.spawn(function()
+		task.wait(g.delay)
+		local upInfo = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		local downInfo = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		while true do
+			g.bubbles.Rate = 30 -- предупреждение
+			task.wait(1)
+			g.bubbles.Rate = 0
+			g.active = true
+			TweenService:Create(g.part, upInfo, { CFrame = g.high }):Play()
+			task.wait(1.3)
+			TweenService:Create(g.part, downInfo, { CFrame = g.low }):Play()
+			task.wait(0.6)
+			g.active = false
+			task.wait(2)
+		end
+	end)
+end
 
 -- Падающие сталактиты
 for _, st in ipairs(map.stalactites) do
@@ -1298,6 +1339,11 @@ task.spawn(function()
 			for _, st in ipairs(map.stalactites) do
 				if st.falling then
 					killInside(st.part)
+				end
+			end
+			for _, g in ipairs(map.geysers) do
+				if g.active then
+					killInside(g.part)
 				end
 			end
 			if waveDanger and not isWater() and tick % 2 == 0 then
@@ -1625,17 +1671,20 @@ MarketplaceService.ProcessReceipt = function(receipt)
 		local duration = Config.SHIELD_DURATION + (hasPerk(player, "shieldplus") and Config.PERK_SHIELD_BONUS or 0)
 		local untilT = math.max(player:GetAttribute("ShieldUntil") or 0, os.time()) + duration
 		player:SetAttribute("ShieldUntil", untilT)
-		local char = player.Character
-		if char and not char:FindFirstChild("LavaShieldFF") then
-			local ff = Instance.new("ForceField")
-			ff.Name = "LavaShieldFF"
-			ff.Parent = char
+		-- лёгкие голубые искорки вместо шара: дорогу видно
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if root and not root:FindFirstChild("LavaShieldFX") then
+			local fx = Instance.new("Sparkles")
+			fx.Name = "LavaShieldFX"
+			fx.SparkleColor = Color3.fromRGB(120, 210, 255)
+			fx.Parent = root
 		end
 		task.delay(untilT - os.time() + 0.5, function()
-			if (player:GetAttribute("ShieldUntil") or 0) <= os.time() and player.Character then
-				local ff = player.Character:FindFirstChild("LavaShieldFF")
-				if ff then
-					ff:Destroy()
+			local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			if (player:GetAttribute("ShieldUntil") or 0) <= os.time() and r then
+				local fx = r:FindFirstChild("LavaShieldFX")
+				if fx then
+					fx:Destroy()
 				end
 			end
 		end)
@@ -1779,6 +1828,9 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 		end
 		if cat.equipped then
 			d[cat.equipped] = item.id
+			if action == "EquipItem" then
+				notify(player, "n_equipped", Color3.fromRGB(120, 220, 255), "@item_" .. category .. "_" .. item.id)
+			end
 		end
 		syncAttributes(player)
 		applyCategory(player, category)
@@ -1843,6 +1895,10 @@ local function onPlayerAdded(player)
 
 	player.CharacterAdded:Connect(function(char)
 		onCharacter(player, char)
+	end)
+	player.CharacterAppearanceLoaded:Connect(function()
+		task.wait(0.2)
+		applySkin(player)
 	end)
 
 	checkPasses(player)
