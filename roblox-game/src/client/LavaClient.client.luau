@@ -202,43 +202,46 @@ local shieldNum = new("TextLabel", {
 textStroke(shieldNum)
 
 -- ============ УВЕДОМЛЕНИЯ ============
+-- Уведомления: аккуратно справа, под счётчиками, мелким шрифтом
 local toastArea = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 210),
-	Size = UDim2.new(0.6, 0, 0, 220),
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -10, 0.4, 140),
+	Size = UDim2.fromOffset(300, 170),
 	BackgroundTransparency = 1,
 }, gui)
-new("UIListLayout", { Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, toastArea)
+new("UIListLayout", { Padding = UDim.new(0, 4), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, toastArea)
 local toastOrder = 0
 
 local function toast(text, color)
 	toastOrder += 1
 	local t = new("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 34),
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = DARK,
-		BackgroundTransparency = 0.15,
+		BackgroundTransparency = 0.3,
 		Font = Enum.Font.GothamBold,
-		TextScaled = true,
+		TextSize = 14,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = color or Color3.new(1, 1, 1),
 		Text = text,
 		LayoutOrder = toastOrder,
 	}, toastArea)
-	corner(t, 10)
-	textStroke(t)
-	new("UIPadding", { PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, t)
+	corner(t, 8)
+	new("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, t)
 	local kids = {}
 	for _, c in ipairs(toastArea:GetChildren()) do
 		if c:IsA("TextLabel") then
 			table.insert(kids, c)
 		end
 	end
-	if #kids > 5 then
+	if #kids > 4 then
 		table.sort(kids, function(a, b)
 			return a.LayoutOrder < b.LayoutOrder
 		end)
 		kids[1]:Destroy()
 	end
-	task.delay(4.5, function()
+	task.delay(3.5, function()
 		if t.Parent then
 			TweenService:Create(t, TweenInfo.new(0.4), { TextTransparency = 1, BackgroundTransparency = 1 }):Play()
 			task.wait(0.45)
@@ -253,9 +256,9 @@ end)
 
 -- ============ БОЛЬШОЙ БАННЕР ============
 local banner = new("TextLabel", {
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.3),
-	Size = UDim2.new(0.8, 0, 0, 90),
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 210),
+	Size = UDim2.new(0.42, 0, 0, 40),
 	BackgroundTransparency = 1,
 	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
@@ -263,15 +266,15 @@ local banner = new("TextLabel", {
 	TextTransparency = 1,
 	Text = "",
 }, gui)
-local bannerStroke = new("UIStroke", { Thickness = 4, Color = Color3.new(0, 0, 0), Transparency = 1 }, banner)
+local bannerStroke = new("UIStroke", { Thickness = 2.5, Color = Color3.new(0, 0, 0), Transparency = 1 }, banner)
 
 local function showBanner(text, color)
 	banner.Text = text
 	banner.TextColor3 = color or Color3.new(1, 1, 1)
 	banner.TextTransparency = 0
 	bannerStroke.Transparency = 0
-	banner.Size = UDim2.new(0.5, 0, 0, 60)
-	TweenService:Create(banner, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Size = UDim2.new(0.8, 0, 0, 90) }):Play()
+	banner.Size = UDim2.new(0.3, 0, 0, 30)
+	TweenService:Create(banner, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Size = UDim2.new(0.42, 0, 0, 40) }):Play()
 	task.delay(2.6, function()
 		if banner.Text == text then
 			TweenService:Create(banner, TweenInfo.new(0.6), { TextTransparency = 1 }):Play()
@@ -281,9 +284,9 @@ local function showBanner(text, color)
 end
 
 local warnLabel = new("TextLabel", {
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.42),
-	Size = UDim2.new(0.7, 0, 0, 50),
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 256),
+	Size = UDim2.new(0.4, 0, 0, 28),
 	BackgroundTransparency = 1,
 	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
@@ -1564,6 +1567,95 @@ CollectionService:GetInstanceAddedSignal("DailyChest"):Connect(function()
 	refreshDailyChests()
 end)
 task.delay(2, refreshDailyChests)
+
+-- ============ УКАЗАТЕЛЬ «КУДА ИДТИ» ============
+-- Светящаяся линия от игрока до следующего чекпоинта (в лобби — до нужного портала).
+local guideTarget = new("Part", { Name = "GuideTarget", Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false, Transparency = 1, Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(0, -500, 0) }, workspace)
+local guideAtt1 = new("Attachment", {}, guideTarget)
+local guideAtt0 = nil
+local guideBeam = new("Beam", {
+	Attachment1 = guideAtt1,
+	Color = ColorSequence.new(Color3.fromRGB(255, 230, 90), Color3.fromRGB(255, 140, 40)),
+	Width0 = 0.5,
+	Width1 = 1.2,
+	FaceCamera = true,
+	LightEmission = 1,
+	Transparency = NumberSequence.new(0.7, 0.2),
+	Segments = 12,
+	Enabled = false,
+}, guideTarget)
+local guideRing = new("Part", { Anchored = true, CanCollide = false, CanTouch = false, CanQuery = false, Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 8, 8), Color = Color3.fromRGB(255, 220, 80), Material = Enum.Material.Neon, Transparency = 1, CFrame = CFrame.new(0, -500, 0) }, workspace)
+
+local function findGuideTarget()
+	local mx = player:GetAttribute("MaxStage") or 1
+	if player:GetAttribute("InLobby") then
+		local w = Config.ZoneOfStage(math.min(mx, TOTAL))
+		for _, d in ipairs(CollectionService:GetTagged("WorldPortal")) do
+			if d:GetAttribute("World") == w then
+				return d
+			end
+		end
+		return nil
+	end
+	local st = player:GetAttribute("Stage") or 1
+	if st >= FINISH then
+		return nil
+	end
+	local w = Config.ZoneOfStage(st)
+	local last = math.min(w * Config.STAGES_PER_ZONE, TOTAL)
+	if st == last and last < TOTAL then
+		for _, d in ipairs(CollectionService:GetTagged("WorldFinish")) do
+			if d:GetAttribute("World") == w then
+				return d
+			end
+		end
+		return nil
+	end
+	for _, cp in ipairs(CollectionService:GetTagged("Checkpoint")) do
+		if cp:GetAttribute("Stage") == st + 1 then
+			return cp
+		end
+	end
+	return nil
+end
+
+local currentGuide = nil
+local function refreshGuide()
+	currentGuide = findGuideTarget()
+end
+for _, attr in ipairs({ "Stage", "MaxStage", "InLobby" }) do
+	player:GetAttributeChangedSignal(attr):Connect(refreshGuide)
+end
+task.spawn(function()
+	while not workspace:GetAttribute("MapReady") do
+		task.wait(0.5)
+	end
+	task.wait(1)
+	refreshGuide()
+end)
+
+RunService.RenderStepped:Connect(function()
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root or not currentGuide or not currentGuide.Parent then
+		guideBeam.Enabled = false
+		guideRing.Transparency = 1
+		return
+	end
+	if not guideAtt0 or guideAtt0.Parent ~= root then
+		guideAtt0 = new("Attachment", { Name = "GuideAtt", Position = Vector3.new(0, -1.5, 0) }, root)
+		guideBeam.Attachment0 = guideAtt0
+	end
+	local tp = currentGuide.Position
+	local topY = tp.Y + 3
+	guideTarget.CFrame = CFrame.new(tp.X, topY, tp.Z)
+	local dist = (Vector3.new(tp.X, 0, tp.Z) - Vector3.new(root.Position.X, 0, root.Position.Z)).Magnitude
+	guideBeam.Enabled = dist > 14
+	-- пульсирующее кольцо над целью
+	local pulse = 0.5 + math.sin(os.clock() * 4) * 0.2
+	guideRing.CFrame = CFrame.new(tp.X, topY + 1, tp.Z) * CFrame.Angles(0, 0, math.pi / 2)
+	guideRing.Transparency = dist > 14 and pulse or 1
+end)
 
 -- ============ ПРИВИЛЕГИЯ «ДВОЙНОЙ ПРЫЖОК» ============
 local UserInputService = game:GetService("UserInputService")
