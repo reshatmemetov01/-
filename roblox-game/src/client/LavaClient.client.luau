@@ -1602,6 +1602,10 @@ local function findGuideTarget()
 		return nil
 	end
 	local w = Config.ZoneOfStage(st)
+	local first = (w - 1) * Config.STAGES_PER_ZONE + 1
+	if st ~= first then
+		return nil -- указатель только в лобби и на старте мира
+	end
 	local last = math.min(w * Config.STAGES_PER_ZONE, TOTAL)
 	if st == last and last < TOTAL then
 		for _, d in ipairs(CollectionService:GetTagged("WorldFinish")) do

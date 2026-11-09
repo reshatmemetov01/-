@@ -915,9 +915,9 @@ function Obstacles.balloons(ctx)
 		local base = L(ctx, x, top - 0.5, zc)
 		local amp, speed, phase = 1.2, 1 + 0.5 * ctx.diff, i * 1.3
 		local plat = part({ Size = V3(size, 1, size), CFrame = base, Color = col })
-		local strOff = CF(0, 5, 0)
-		local str = part({ Size = V3(0.15, 9, 0.15), CFrame = base * strOff, Color = Color3.new(1, 1, 1), CanCollide = false })
-		local balOff = CF(0, 11.5, 0)
+		local strOff = CF(0, 12, 0)
+		local str = part({ Size = V3(0.15, 23, 0.15), CFrame = base * strOff, Color = Color3.new(1, 1, 1), CanCollide = false })
+		local balOff = CF(0, 26, 0)
 		local bal = part({ Shape = BALL, Size = V3(6, 6, 6), CFrame = base * balOff, Color = col, CanCollide = false, Reflectance = 0.1 })
 		for _, pp in ipairs({ { plat, CF() }, { str, strOff }, { bal, balOff } }) do
 			table.insert(info.movers, { part = pp[1], base = base * pp[2], axis = V3(0, 1, 0), amp = amp, speed = speed, phase = phase })
@@ -2907,8 +2907,8 @@ local function parkPlateau(ctx, stageNum, padX, padTop, padZc, size, isEnd)
 	local propsN = math.floor(size / 6)
 	for i = 1, propsN do
 		local side = (i % 2 == 0) and 1 or -1
-		local px = side * rng:NextNumber(8, size / 2 - 4)
-		local pz = rng:NextNumber(-size / 3, size / 3)
+		local px = side * rng:NextNumber(9.5, size / 2 - 4)
+		local pz = rng:NextNumber(-size / 5, size / 5)
 		if px * px + pz * pz < (size / 2 - 3) ^ 2 then
 			local pcf = cf * CF(px, 0, pz) * CFrame.Angles(0, side > 0 and PI / 2 or -PI / 2, 0)
 			local roll = rng:NextNumber()
@@ -3311,9 +3311,9 @@ local function buildParkScenery(C, rng, stageFrames)
 	for i, sf in ipairs(stageFrames) do
 		if sf.zone == 1 then
 			local y = GY + 0.2 + i * 0.01
-			local bed = part({ Size = V3(riverW, 0.4, sf.len + 10), CFrame = sf.F * CF(0, y, -sf.len / 2), Color = RGB(255, 100, 10), Material = M.CrackedLava })
+			local bed = part({ Size = V3(riverW, 0.4, sf.len + 10), CFrame = sf.F * CF(0, y, -sf.len / 2), Color = RGB(235, 70, 10), Material = M.CrackedLava })
 			tag(bed, "Lava")
-			local glow = part({ Size = V3(riverW - 6, 0.3, sf.len + 4), CFrame = sf.F * CF(0, y + 0.12, -sf.len / 2), Color = RGB(255, 150, 30), Material = M.Neon, Transparency = 0.45, CanCollide = false, CanQuery = false })
+			local glow = part({ Size = V3(riverW - 6, 0.3, sf.len + 4), CFrame = sf.F * CF(0, y + 0.12, -sf.len / 2), Color = RGB(255, 80, 15), Material = M.Neon, Transparency = 0.78, CanCollide = false, CanQuery = false })
 			tag(glow, "Lava")
 			-- каменные берега
 			for sx = -1, 1, 2 do
@@ -3322,9 +3322,9 @@ local function buildParkScenery(C, rng, stageFrames)
 		end
 	end
 	for _, pl in ipairs(PARK.plateaus) do
-		local pool = part({ Shape = CYL, Size = V3(0.5, pl.size + 30, pl.size + 30), CFrame = CF(pl.pos.X, GY + 0.25, pl.pos.Z) * ROT_UP, Color = RGB(255, 100, 10), Material = M.CrackedLava })
+		local pool = part({ Shape = CYL, Size = V3(0.5, pl.size + 30, pl.size + 30), CFrame = CF(pl.pos.X, GY + 0.25, pl.pos.Z) * ROT_UP, Color = RGB(235, 70, 10), Material = M.CrackedLava })
 		tag(pool, "Lava")
-		local g2 = part({ Shape = CYL, Size = V3(0.3, pl.size + 26, pl.size + 26), CFrame = CF(pl.pos.X, GY + 0.4, pl.pos.Z) * ROT_UP, Color = RGB(255, 150, 30), Material = M.Neon, Transparency = 0.45, CanCollide = false, CanQuery = false })
+		local g2 = part({ Shape = CYL, Size = V3(0.3, pl.size + 26, pl.size + 26), CFrame = CF(pl.pos.X, GY + 0.4, pl.pos.Z) * ROT_UP, Color = RGB(255, 80, 15), Material = M.Neon, Transparency = 0.78, CanCollide = false, CanQuery = false })
 		tag(g2, "Lava")
 	end
 	-- смертельная зона далеко внизу (если упал с острова)
@@ -3533,7 +3533,8 @@ local function parkEntrance(ctx, first)
 	makeSign(L(ctx, -16.7, top + 25, 0), V3(0.6, 5.4, 27), "sign_park_title", RGB(60, 45, 70), RGB(255, 170, 40), Enum.NormalId.Left)
 	part({ Size = V3(0.4, 6, 29), CFrame = L(ctx, -16.5, top + 25, 0), Color = RGB(255, 130, 30), Material = M.Neon, Transparency = 0.5, CanCollide = false })
 	-- ларьки и магазин вокруг площади
-	local shop = { -0.5, 0.15, 0.85, 1.6, 2.3 }
+	-- ларьки только по бокам: проход от точки появления (−x) и выход к трассе (+z) свободны
+	local shop = { -0.35, 0.35, 0.95, -1.0, -1.6, -2.2 }
 	for i, a in ipairs(shop) do
 		local px, pz = math.cos(a) * 24, math.sin(a) * 24
 		local cf = CFrame.lookAt(L(ctx, px, top, pz).Position, L(ctx, 0, top, 0).Position)
@@ -3548,7 +3549,7 @@ local function parkEntrance(ctx, first)
 			popcornStand(cf, rng)
 		end
 	end
-	for _, a in ipairs({ -1.0, 0.5, 1.2, 1.95, 2.7 }) do
+	for _, a in ipairs({ -0.7, 0.2, 0.7, -1.3, -2.0 }) do
 		local p = L(ctx, math.cos(a) * 17, top, math.sin(a) * 17)
 		local cf = CFrame.lookAt(p.Position, L(ctx, 0, top, 0).Position)
 		if rng:NextNumber() < 0.5 then
