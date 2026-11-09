@@ -1073,7 +1073,7 @@ local function prompt(parentPart, actionKey, objectKey, attrName, attrValue)
 	pp.ActionText = Text.Get("en", actionKey)
 	pp.ObjectText = Text.Get("en", objectKey)
 	pp.HoldDuration = 0
-	pp.MaxActivationDistance = 12
+	pp.MaxActivationDistance = 20
 	pp.RequiresLineOfSight = false
 	pp:SetAttribute("ActionKey", actionKey)
 	pp:SetAttribute("ObjectKey", objectKey)
@@ -1186,9 +1186,10 @@ end
 local function floatingIsland(cf, rng, size, grassColor)
 	part({ Size = V3(size, 2, size), CFrame = cf * CF(0, -1, 0), Color = grassColor or RGB(110, 205, 80), Material = M.SmoothPlastic })
 	local s = size
+	local h = math.max(3, size * 0.12) -- большие острова — толще
 	for i = 1, 4 do
 		s = s * 0.78
-		part({ Size = V3(s, 3, s), CFrame = cf * CF(rng:NextNumber(-1, 1), -2 - i * 3 + 1.5, rng:NextNumber(-1, 1)) * CFrame.Angles(0, rng:NextNumber(-0.2, 0.2), 0), Color = (i % 2 == 0) and RGB(150, 110, 75) or RGB(130, 95, 65) })
+		part({ Size = V3(s, h, s), CFrame = cf * CF(rng:NextNumber(-1, 1), -2 - (i - 0.5) * h, rng:NextNumber(-1, 1)) * CFrame.Angles(0, rng:NextNumber(-0.2, 0.2), 0), Color = (i % 2 == 0) and RGB(150, 110, 75) or RGB(130, 95, 65) })
 	end
 end
 
@@ -1318,6 +1319,39 @@ local function trophyStatue(cf, k)
 	sp.Parent = c
 end
 
+-- 🏆 Гигантский золотой кубок со звездой
+local function giantTrophy(cf, k)
+	part({ Shape = CYL, Size = V3(1.5 * k, 8 * k, 8 * k), CFrame = cf * CF(0, 0.75 * k, 0) * ROT_UP, Color = RGB(60, 40, 30) })
+	part({ Size = V3(6 * k, 3 * k, 6 * k), CFrame = cf * CF(0, 3 * k, 0), Color = RGB(80, 50, 35), Material = M.Wood })
+	part({ Size = V3(6.3 * k, 0.6 * k, 6.3 * k), CFrame = cf * CF(0, 4.6 * k, 0), Color = GOLD, Material = M.Foil })
+	part({ Shape = CYL, Size = V3(3 * k, 1.6 * k, 1.6 * k), CFrame = cf * CF(0, 6.4 * k, 0) * ROT_UP, Color = GOLD, Material = M.Foil })
+	part({ Shape = BALL, Size = V3(2.6 * k, 2.6 * k, 2.6 * k), CFrame = cf * CF(0, 8 * k, 0), Color = GOLD, Material = M.Foil })
+	for i = 0, 4 do
+		local d = (3.6 + i * 0.95) * k
+		part({ Shape = CYL, Size = V3(1.2 * k, d, d), CFrame = cf * CF(0, (9.3 + i * 1.15) * k, 0) * ROT_UP, Color = GOLD, Material = i == 4 and M.Neon or M.Foil })
+	end
+	for sx = -1, 1, 2 do
+		for j = 0, 6 do
+			local a = -PI / 2 + j / 6 * PI
+			part({ Shape = BALL, Size = V3(1 * k, 1 * k, 1 * k), CFrame = cf * CF(sx * (4.3 * k + math.cos(a) * 1.9 * k), (11.6 + math.sin(a) * 2.1) * k, 0), Color = GOLD, Material = M.Foil })
+		end
+	end
+	local star = cf * CF(0, 18.2 * k, 0)
+	for i = 0, 4 do
+		local a = i / 5 * 2 * PI
+		part({ Size = V3(1 * k, 3.6 * k, 0.7 * k), CFrame = star * CFrame.Angles(0, 0, a) * CF(0, 1.6 * k, 0), Color = RGB(255, 230, 90), Material = M.Neon })
+	end
+	local glow = part({ Shape = BALL, Size = V3(1.6 * k, 1.6 * k, 1.6 * k), CFrame = star, Color = Color3.new(1, 1, 1), Material = M.Neon })
+	local l = Instance.new("PointLight")
+	l.Color = GOLD
+	l.Range = 40
+	l.Brightness = 3
+	l.Parent = glow
+	local sp = Instance.new("Sparkles")
+	sp.SparkleColor = GOLD
+	sp.Parent = glow
+end
+
 -- Рельсы горок по списку точек
 local function coasterRails(pts, groundY)
 	for i = 2, #pts do
@@ -1379,7 +1413,7 @@ local function buildLobby(ctx)
 		part({ Size = V3(w, 2.2, w), CFrame = L(ctx, 0, top + 1.1 + i * 2.2, 0) * CFrame.Angles(0, i * 0.4, 0), Color = RGB(90, 70, 65), Material = M.Basalt })
 		part({ Size = V3(w + 0.2, 0.3, 0.6), CFrame = L(ctx, 0, top + 1.6 + i * 2.2, 0) * CFrame.Angles(0, i * 0.4 + 0.7, 0), Color = RGB(255, 110, 0), Material = M.Neon, CanCollide = false })
 	end
-	trophyStatue(L(ctx, 0, top + 8.8, 0) * CFrame.Angles(0, PI, 0), 2.6)
+	giantTrophy(L(ctx, 0, top + 8.8, 0), 1.7)
 
 	-- 🧍 точка появления (спереди), смотрит на порталы
 	local spawn = Instance.new("SpawnLocation")
@@ -3129,34 +3163,35 @@ end
 
 -- ⭐ гигантское колесо обозрения со звездой
 local function giantFerrisWheel(base, R)
-	local center = base * CF(0, R + 10, 0)
+	local k = R / 48 -- всё растёт вместе с радиусом
+	local center = base * CF(0, R + 10 * k, 0)
 	local frame = RGB(150, 80, 230)
 	for sz = -1, 1, 2 do
 		for sx = -1, 1, 2 do
-			local foot = (base * CF(sx * R * 0.6, 0, sz * 7)).Position
-			local hub = (center * CF(0, 0, sz * 5)).Position
-			part({ Size = V3(2.2, 2.2, (hub - foot).Magnitude), CFrame = CFrame.lookAt((foot + hub) / 2, hub), Color = frame, Material = M.Metal })
+			local foot = (base * CF(sx * R * 0.6, 0, sz * 7 * k)).Position
+			local hub = (center * CF(0, 0, sz * 5 * k)).Position
+			part({ Size = V3(2.2 * k, 2.2 * k, (hub - foot).Magnitude), CFrame = CFrame.lookAt((foot + hub) / 2, hub), Color = frame, Material = M.Metal })
 		end
 	end
-	part({ Shape = CYL, Size = V3(12, 5, 5), CFrame = center * CFrame.Angles(0, PI / 2, 0), Color = RGB(80, 70, 100), Material = M.Metal })
+	part({ Shape = CYL, Size = V3(12 * k, 5 * k, 5 * k), CFrame = center * CFrame.Angles(0, PI / 2, 0), Color = RGB(80, 70, 100), Material = M.Metal })
 	-- звезда в центре (крутится вместе с колесом)
 	for i = 0, 4 do
 		local a = i / 5 * 2 * PI
-		rotor(part({ Size = V3(2.2, 9, 1.2), CFrame = center * CF(0, 0, -2.5) * CFrame.Angles(0, 0, a) * CF(0, 4, 0), Color = RGB(255, 220, 60), Material = M.Neon }), center, "z", 0.08)
+		rotor(part({ Size = V3(2.2 * k, 9 * k, 1.2 * k), CFrame = center * CF(0, 0, -2.5 * k) * CFrame.Angles(0, 0, a) * CF(0, 4 * k, 0), Color = RGB(255, 220, 60), Material = M.Neon }), center, "z", 0.08)
 	end
 	local segs = 40
 	for ring = 0, 1 do
-		local rr = ring == 0 and R or R - 4
+		local rr = ring == 0 and R or R - 4 * k
 		for i = 0, segs - 1 do
 			local a0, a1 = i / segs * 2 * PI, (i + 1) / segs * 2 * PI
 			for sz = -1, 1, 2 do
-				local p0 = (center * CF(math.cos(a0) * rr, math.sin(a0) * rr, sz * 2.5)).Position
-				local p1 = (center * CF(math.cos(a1) * rr, math.sin(a1) * rr, sz * 2.5)).Position
-				rotor(part({ Size = V3(1.2, 1.2, (p1 - p0).Magnitude + 0.3), CFrame = CFrame.lookAt((p0 + p1) / 2, p1), Color = frame }), center, "z", 0.08)
+				local p0 = (center * CF(math.cos(a0) * rr, math.sin(a0) * rr, sz * 2.5 * k)).Position
+				local p1 = (center * CF(math.cos(a1) * rr, math.sin(a1) * rr, sz * 2.5 * k)).Position
+				rotor(part({ Size = V3(1.2 * k, 1.2 * k, (p1 - p0).Magnitude + 0.3 * k), CFrame = CFrame.lookAt((p0 + p1) / 2, p1), Color = frame }), center, "z", 0.08)
 			end
 			if ring == 0 and i % 2 == 0 then
-				local bp = (center * CF(math.cos(a0) * (R + 0.8), math.sin(a0) * (R + 0.8), 0)).Position
-				rotor(part({ Shape = BALL, Size = V3(1.6, 1.6, 1.6), CFrame = CF(bp), Color = (i % 4 == 0) and RGB(255, 120, 220) or RGB(255, 230, 120), Material = M.Neon }), center, "z", 0.08)
+				local bp = (center * CF(math.cos(a0) * (R + 0.8 * k), math.sin(a0) * (R + 0.8 * k), 0)).Position
+				rotor(part({ Shape = BALL, Size = V3(1.6 * k, 1.6 * k, 1.6 * k), CFrame = CF(bp), Color = (i % 4 == 0) and RGB(255, 120, 220) or RGB(255, 230, 120), Material = M.Neon }), center, "z", 0.08)
 			end
 		end
 	end
@@ -3164,15 +3199,15 @@ local function giantFerrisWheel(base, R)
 	for i = 0, cabins - 1 do
 		local a = i / cabins * 2 * PI
 		local rim = (center * CF(math.cos(a) * R, math.sin(a) * R, 0)).Position
-		rotor(part({ Size = V3(0.8, 0.8, R), CFrame = CFrame.lookAt((center.Position + rim) / 2, rim), Color = RGB(220, 200, 255), Material = M.Metal }), center, "z", 0.08)
+		rotor(part({ Size = V3(0.8 * k, 0.8 * k, R), CFrame = CFrame.lookAt((center.Position + rim) / 2, rim), Color = RGB(220, 200, 255), Material = M.Metal }), center, "z", 0.08)
 		local col = PARTY[(i % #PARTY) + 1]
-		rotor(part({ Size = V3(5, 4, 5), CFrame = CF(rim - V3(0, 4.2, 0)) * center.Rotation, Color = col }), center, "z", 0.08, 4.2)
-		rotor(part({ Size = V3(5.6, 0.8, 5.6), CFrame = CF(rim - V3(0, 1.8, 0)) * center.Rotation, Color = col:Lerp(Color3.new(1, 1, 1), 0.4) }), center, "z", 0.08, 1.8)
-		rotor(part({ Size = V3(4, 1.6, 0.2), CFrame = CF(rim - V3(0, 4, 0)) * center.Rotation * CF(0, 0, -2.6), Color = RGB(150, 220, 255), Material = M.Neon }), center, "z", 0.08, 4)
+		rotor(part({ Size = V3(5 * k, 4 * k, 5 * k), CFrame = CF(rim - V3(0, 4.2 * k, 0)) * center.Rotation, Color = col }), center, "z", 0.08, 4.2 * k)
+		rotor(part({ Size = V3(5.6 * k, 0.8 * k, 5.6 * k), CFrame = CF(rim - V3(0, 1.8 * k, 0)) * center.Rotation, Color = col:Lerp(Color3.new(1, 1, 1), 0.4) }), center, "z", 0.08, 1.8 * k)
+		rotor(part({ Size = V3(4 * k, 1.6 * k, 0.2 * k), CFrame = CF(rim - V3(0, 4 * k, 0)) * center.Rotation * CF(0, 0, -2.6 * k), Color = RGB(150, 220, 255), Material = M.Neon }), center, "z", 0.08, 4 * k)
 	end
 	local l = Instance.new("PointLight")
 	l.Color = RGB(255, 200, 120)
-	l.Range = 60
+	l.Range = math.min(60 * k, 60)
 	l.Brightness = 2
 	l.Parent = part({ Size = V3(1, 1, 1), CFrame = center, Transparency = 1, CanCollide = false })
 end
@@ -3455,6 +3490,54 @@ local function parkIsland(pos, w, d, top, rng, faceCf)
 	return cf
 end
 
+-- 🌄 Великаны на горизонте вокруг парка: огромный вулкан, колесо, замок, острова-горы
+local function parkSkyline(C, rng, GY)
+	local function polar(a, r)
+		return V3(C.X + math.cos(a) * r, 0, C.Z + math.sin(a) * r)
+	end
+	local function faceCenter(pos, y)
+		return CFrame.lookAt(V3(pos.X, y, pos.Z), V3(C.X, y, C.Z))
+	end
+	-- 🌋 гигантский вулкан из облаков
+	local vp = polar(PI / 2, 640)
+	bigVolcano(CF(vp.X, GY - 160, vp.Z), 120, 320)
+	-- ⭐ гигантское колесо обозрения на острове
+	local fp = polar(0.3, 600)
+	local fcf = faceCenter(fp, GY + 10)
+	floatingIsland(fcf, rng, 170, RGB(110, 205, 80))
+	giantFerrisWheel(fcf, 95)
+	for _ = 1, 8 do
+		blockyTree(fcf * CF(rng:NextNumber(-70, 70), 0, rng:NextNumber(20, 70)), rng, rng:NextNumber(3, 4.5), pick(rng, { RGB(255, 160, 210), RGB(90, 200, 80) }))
+	end
+	-- 🏰 гигантский замок на острове
+	local cp = polar(PI * 0.82, 600)
+	local ccf = faceCenter(cp, GY + 20)
+	floatingIsland(ccf, rng, 180, RGB(110, 205, 80))
+	local castle = Instance.new("Model")
+	castle.Name = "GiantCastle"
+	castle.Parent = currentFolder
+	local prev = currentFolder
+	currentFolder = castle
+	parkCastle(ccf)
+	currentFolder = prev
+	castle.WorldPivot = ccf
+	castle:ScaleTo(3)
+	-- 🏝 острова-горы с водопадами
+	for i = 0, 7 do
+		local a = i / 8 * 2 * PI + 0.2
+		if math.abs(a - PI / 2) > 0.4 and math.abs(a - 0.3) > 0.4 and math.abs(a - PI * 0.82) > 0.4 then
+			local p = polar(a, rng:NextNumber(620, 780))
+			local icf = CF(p.X, GY + rng:NextNumber(-20, 90), p.Z)
+			local size = rng:NextNumber(90, 140)
+			floatingIsland(icf, rng, size, pick(rng, { RGB(110, 205, 80), RGB(255, 170, 215) }))
+			for _ = 1, 5 do
+				blockyTree(icf * CF(rng:NextNumber(-size / 3, size / 3), 0, rng:NextNumber(-size / 3, size / 3)), rng, rng:NextNumber(3, 5), pick(rng, { RGB(255, 160, 210), RGB(90, 200, 80) }))
+			end
+			waterfallFx(icf.Position + V3(size / 2 - 6, -1, 0), icf.Position + V3(size / 2 - 6, -200, 0), 16)
+		end
+	end
+end
+
 local function buildParkScenery(C, rng, stageFrames)
 	local T, GY = PARK.top, PARK.lavaY
 	local function polar(a, r)
@@ -3648,6 +3731,8 @@ local function buildParkScenery(C, rng, stageFrames)
 		end
 	end
 
+	parkSkyline(C, rng, GY)
+
 	-- 🎈 воздушные шары и парящие острова вокруг
 	for _ = 1, 6 do
 		local a = rng:NextNumber(0, 2 * PI)
@@ -3836,7 +3921,7 @@ function MapBuilder.Build()
 	map.Name = "LavaMap"
 	map.Parent = workspace
 
-	local lobby = Instance.new("Folder")
+	local lobby = Instance.new("Model")
 	lobby.Name = "Lobby"
 	lobby.Parent = map
 	currentFolder = lobby
@@ -3855,6 +3940,13 @@ function MapBuilder.Build()
 	}
 	LAVA_BOTTOM = -2
 	buildLobby(ctx)
+	-- 🌍 масштаб: всё лобби становится в несколько раз больше, персонаж — прежний
+	lobby.WorldPivot = CF(0, 12, 0)
+	lobby:ScaleTo(Config.LOBBY_SCALE)
+	local sp = lobby:FindFirstChild("LavaSpawn", true)
+	if sp then
+		info.lobbySpawn = sp.CFrame + V3(0, 3.5, 0)
+	end
 
 	local stageFrames = {}
 	local prevPlan = {}

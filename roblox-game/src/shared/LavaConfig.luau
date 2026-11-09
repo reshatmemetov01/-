@@ -13,6 +13,7 @@ Config.TOTAL_STAGES = 50 -- игровых этапов; чекпоинт 51 = �
 Config.STAGES_PER_ZONE = 10
 Config.MAP_SEED = 2026 -- поменяй число — получишь другую карту
 Config.WORLD_SPACING = 3000 -- миры стоят далеко друг от друга, у каждого своё место
+Config.LOBBY_SCALE = 2 -- во сколько раз лобби больше обычного (огромный масштаб)
 Config.WORLD_REWARD = 300 -- награда за прохождение мира
 -- В каком мире есть поднимающаяся лава (в парке опасность — лавовые реки)
 Config.WorldRisingLava = { false, true, true, true, true }

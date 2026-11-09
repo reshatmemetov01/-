@@ -2283,7 +2283,8 @@ local lobbyPos = map.lobbySpawn.Position
 
 local function inLobby(pos)
 	local dx, dz = pos.X - lobbyPos.X, pos.Z - lobbyPos.Z
-	return dx * dx + dz * dz < 80 * 80
+	local r = 80 * Config.LOBBY_SCALE
+	return dx * dx + dz * dz < r * r
 end
 
 local function fxPart(props)

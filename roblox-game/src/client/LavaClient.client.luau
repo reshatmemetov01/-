@@ -1180,7 +1180,7 @@ RunService.Heartbeat:Connect(function(dt)
 		if not rising.active then
 			local moved = Vector3.new(pos.X - rising.startPos.X, 0, pos.Z - rising.startPos.Z).Magnitude
 			local lc = lobbyCenter()
-			local inLobby = st == 1 and lc ~= nil and Vector3.new(pos.X - lc.X, 0, pos.Z - lc.Z).Magnitude < 74
+			local inLobby = st == 1 and lc ~= nil and Vector3.new(pos.X - lc.X, 0, pos.Z - lc.Z).Magnitude < 74 * Config.LOBBY_SCALE
 			local erupting = workspace:GetAttribute("Event") == "eruption"
 			if (moved > 14 or erupting) and not inLobby then
 				rising.active = true
@@ -1254,7 +1254,7 @@ RunService.RenderStepped:Connect(function()
 	local camPos = workspace.CurrentCamera and workspace.CurrentCamera.CFrame.Position or Vector3.zero
 	for _, p in ipairs(rotors) do
 		-- далёкие объекты не крутим — экономим кадры
-		if (p.Position - camPos).Magnitude < 450 then
+		if (p.Position - camPos).Magnitude < 1400 then
 			local center = p:GetAttribute("RotorCenter")
 			local offset = p:GetAttribute("RotorOffset")
 			local a = t * (p:GetAttribute("RotorSpeed") or 0.5)
