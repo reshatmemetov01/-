@@ -711,6 +711,23 @@ local function refreshHud()
 	vipBtn.Text = player:GetAttribute("PassVIP") and tr("ui_vip_owned") or tr("ui_vip")
 end
 
+-- Верхняя панель в лобби видна только 5 секунд после входа, потом прячется
+local lobbyPanelToken = 0
+local function onLobbyChanged()
+	lobbyPanelToken += 1
+	local token = lobbyPanelToken
+	top.Visible = true
+	if player:GetAttribute("InLobby") then
+		task.delay(5, function()
+			if token == lobbyPanelToken and player:GetAttribute("InLobby") then
+				top.Visible = false
+			end
+		end)
+	end
+end
+player:GetAttributeChangedSignal("InLobby"):Connect(onLobbyChanged)
+task.defer(onLobbyChanged)
+
 CollectionService:GetInstanceAddedSignal("PortalLock"):Connect(function()
 	task.defer(refreshHud)
 end)
