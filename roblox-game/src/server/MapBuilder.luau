@@ -2861,7 +2861,7 @@ local function arrowSign(cf)
 end
 
 -- круглая площадка-чекпоинт парка: трава, брусчатка, скалы до лавы, ларьки по краям
-local function parkPlateau(ctx, stageNum, padX, padTop, padZc, size, isEnd)
+local function parkPlateau(ctx, stageNum, padX, padTop, padZc, size, isEnd, noProps)
 	local rng = Random.new(Config.MAP_SEED + stageNum * 31)
 	local cf = L(ctx, padX, padTop, padZc)
 	table.insert(PARK.plateaus, { pos = cf.Position, size = size })
@@ -2904,7 +2904,7 @@ local function parkPlateau(ctx, stageNum, padX, padTop, padZc, size, isEnd)
 	-- травяная «кайма» по краю
 	part({ Shape = CYL, Size = V3(1.2, size + 0.6, size + 0.6), CFrame = cf * CF(0, -2.2, 0) * ROT_UP, Color = RGB(90, 180, 70), CanCollide = false })
 	-- реквизит по бокам (центральный коридор свободен)
-	local propsN = math.floor(size / 6)
+	local propsN = noProps and 0 or math.floor(size / 6)
 	for i = 1, propsN do
 		local side = (i % 2 == 0) and 1 or -1
 		local px = side * rng:NextNumber(9.5, size / 2 - 4)
@@ -3506,7 +3506,7 @@ end
 local function parkEntrance(ctx, first)
 	local top = ctx.y
 	local size = 64
-	parkPlateau(ctx, first, 0, top, 0, size, false)
+	parkPlateau(ctx, first, 0, top, 0, size, false, true) -- без случайных ларьков: тут путь от портала
 	local rng = Random.new(Config.MAP_SEED + 1001)
 	-- точка прибытия (со стороны края острова), смотрит на арку
 	info.spawnCF[first] = L(ctx, -24, top + 3.5, 0) * CFrame.Angles(0, -PI / 2, 0)
