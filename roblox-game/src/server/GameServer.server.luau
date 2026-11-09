@@ -328,10 +328,30 @@ local function teleportToStage(player)
 	if not s or not char or not root then
 		return
 	end
-	local cf = map.spawnCF[s.data.stage] or map.spawnCF[1]
+	local cf
+	if s.inLobby then
+		cf = map.lobbySpawn
+	else
+		cf = map.spawnCF[s.data.stage] or map.spawnCF[1]
+	end
 	root.AssemblyLinearVelocity = Vector3.zero
 	char:PivotTo(cf)
 	s.lastSafe = cf
+end
+
+-- 🏠 лобби / 🌍 мир
+local function setInLobby(player, inLobby)
+	local s = sessions[player]
+	if not s then
+		return
+	end
+	s.inLobby = inLobby
+	player:SetAttribute("InLobby", inLobby)
+end
+
+local function worldRange(w)
+	local first = (w - 1) * Config.STAGES_PER_ZONE + 1
+	return first, math.min(w * Config.STAGES_PER_ZONE, Config.TOTAL_STAGES)
 end
 
 local function applyTrail(player)
@@ -1811,6 +1831,7 @@ MarketplaceService.ProcessReceipt = function(receipt)
 	if id == P.SkipStage or id == P.SkipZone then
 		s.runValid = false -- забег с пропусками не идёт в таблицу рекордов
 		player:SetAttribute("RunValid", false)
+		setInLobby(player, false)
 	end
 	if id == P.SkipStage then
 		local n = math.min(d.stage + 1, FINISH)
@@ -1848,6 +1869,20 @@ MarketplaceService.ProcessReceipt = function(receipt)
 		local amount = (id == P.Coins500 and 500) or (id == P.Coins2500 and 2500) or 10000
 		addCoins(player, amount, false)
 		notify(player, "n_coins", Color3.fromRGB(255, 215, 80), amount)
+	elseif id == P.UnlockWorld then
+		local unlocked = false
+		for w = 2, #Config.Zones do
+			local first = worldRange(w)
+			if d.maxStage < first then
+				d.maxStage = first
+				notify(player, "n_world_unlocked", Color3.fromRGB(120, 255, 140), w)
+				unlocked = true
+				break
+			end
+		end
+		if not unlocked then
+			addCoins(player, 500, false) -- всё уже открыто — компенсируем монетами
+		end
 	elseif id == P.LavaToWater then
 		setWater(Config.WATER_PRODUCT_DURATION, player.DisplayName)
 	else
@@ -1911,6 +1946,7 @@ local function doRebirth(player, s)
 	d.finishedRun = false
 	s.runStart = nil
 	player:SetAttribute("RunStart", nil)
+	setInLobby(player, true)
 	local bonus = Config.REBIRTH_COINS * d.rebirths
 	d.coins += bonus
 	awardBadge(player, Config.Badges.Rebirth)
@@ -1941,7 +1977,9 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 			return
 		end
 		n = math.floor(n)
-		if n >= 1 and n <= d.maxStage then
+		-- перемещаться можно только внутри текущего мира
+		local sameWorld = Config.ZoneOfStage(math.min(n, Config.TOTAL_STAGES)) == Config.ZoneOfStage(math.min(d.stage, Config.TOTAL_STAGES))
+		if not s.inLobby and sameWorld and n >= 1 and n <= d.maxStage then
 			d.stage = n
 			syncAttributes(player)
 			teleportToStage(player)
@@ -2007,6 +2045,9 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 		doRebirth(player, s)
 	elseif action == "Respawn" then
 		teleportToStage(player)
+	elseif action == "ToLobby" then
+		setInLobby(player, true)
+		teleportToStage(player)
 	end
 end)
 
@@ -2048,8 +2089,10 @@ local function onPlayerAdded(player)
 		collected = {},
 		giftCount = 0,
 		nextGift = os.time() + Config.GIFT_INTERVAL,
+		inLobby = true, -- игрок появляется в лобби и выбирает портал
 	}
 	sessions[player] = s
+	player:SetAttribute("InLobby", true)
 
 	player.CharacterAdded:Connect(function(char)
 		onCharacter(player, char)
@@ -2155,13 +2198,88 @@ for _, line in ipairs(CollectionService:GetTagged("StartLine")) do
 	end)
 end
 
+-- ============ ПОРТАЛЫ МИРОВ ============
+for _, disc in ipairs(CollectionService:GetTagged("WorldPortal")) do
+	local w = disc:GetAttribute("World")
+	disc.Touched:Connect(function(hit)
+		local player = playerFromHit(hit)
+		local s = player and sessions[player]
+		if not s or not s.loaded or not s.inLobby then
+			return
+		end
+		local now = os.clock()
+		if now - (s.lastPortal or 0) < 1.5 then
+			return
+		end
+		s.lastPortal = now
+		local d = s.data
+		local first, last = worldRange(w)
+		if d.maxStage < first then
+			notify(player, "n_portal_locked", Color3.fromRGB(255, 160, 80), w - 1)
+			return
+		end
+		-- продолжаем с самого дальнего этапа в этом мире; пройденный мир — заново с начала
+		if d.maxStage <= last then
+			d.stage = math.max(first, d.maxStage)
+		else
+			d.stage = first
+		end
+		-- ⏱ забег на время начинается в портале 1 у новичков
+		if w == 1 and d.maxStage <= 1 and not s.runStart then
+			s.runStart = workspace:GetServerTimeNow()
+			s.runValid = true
+			player:SetAttribute("RunStart", s.runStart)
+			player:SetAttribute("RunValid", true)
+			player:SetAttribute("RunTime", nil)
+		end
+		setInLobby(player, false)
+		syncAttributes(player)
+		teleportToStage(player)
+		EffectRE:FireClient(player, "zone", w)
+	end)
+end
+
+for _, disc in ipairs(CollectionService:GetTagged("WorldFinish")) do
+	local w = disc:GetAttribute("World")
+	disc.Touched:Connect(function(hit)
+		local player = playerFromHit(hit)
+		local s = player and sessions[player]
+		if not s or not s.loaded or s.inLobby then
+			return
+		end
+		local d = s.data
+		if Config.ZoneOfStage(math.min(d.stage, Config.TOTAL_STAGES)) ~= w then
+			return
+		end
+		local _, last = worldRange(w)
+		local nextFirst = last + 1
+		if d.maxStage < nextFirst then
+			-- мир пройден впервые: открываем следующий портал
+			setStage(player, nextFirst)
+			local gained = addCoins(player, Config.WORLD_REWARD, true)
+			notify(player, "n_world_done", Color3.fromRGB(255, 215, 80), w, gained)
+			EffectRE:FireClient(player, "finish")
+			task.spawn(saveData, player)
+		else
+			d.stage = nextFirst
+		end
+		setInLobby(player, true)
+		syncAttributes(player)
+		task.delay(1.2, function()
+			if player.Parent then
+				teleportToStage(player)
+			end
+		end)
+	end)
+end
+
 -- ============ МЕТЕОРИТЫ ============
 local meteorFolder = Instance.new("Folder")
 meteorFolder.Name = "LavaMeteors"
 meteorFolder.Parent = workspace
 local meteorParams = RaycastParams.new()
 meteorParams.FilterType = Enum.RaycastFilterType.Exclude
-local lobbyPos = map.checkpoints[1].Position
+local lobbyPos = map.lobbySpawn.Position
 
 local function inLobby(pos)
 	local dx, dz = pos.X - lobbyPos.X, pos.Z - lobbyPos.Z
@@ -2408,7 +2526,8 @@ local function buildDailyChests()
 	for _ = 1, math.min(Config.DAILY_CHESTS, #candidates) do
 		local n = table.remove(candidates, rng:NextInteger(1, #candidates))
 		local pad = map.checkpoints[n]
-		local cf = pad.CFrame * CFrame.new(4.2, pad.Size.Y / 2, 4.2)
+		local spawnCf = map.spawnCF[n] or pad.CFrame
+		local cf = spawnCf * CFrame.new(5, -3.5, 5)
 		local id = "d" .. day .. "_" .. n
 		local model = Instance.new("Model")
 		model.Name = "DailyChest"
@@ -2482,6 +2601,17 @@ local function onChat(player, msg)
 	local name = string.match(msg, "^/event%s+(%w+)")
 	if name and Config.Events[name] then
 		task.spawn(runEvent, name)
+	end
+	-- /world 3 — открыть миры до 3-го и перенестись туда (для проверки)
+	local wn = tonumber(string.match(msg, "^/world%s+(%d+)"))
+	local s = sessions[player]
+	if wn and s and wn >= 1 and wn <= #Config.Zones then
+		local first = worldRange(wn)
+		s.data.maxStage = math.max(s.data.maxStage, first)
+		s.data.stage = first
+		setInLobby(player, false)
+		syncAttributes(player)
+		teleportToStage(player)
 	end
 end
 

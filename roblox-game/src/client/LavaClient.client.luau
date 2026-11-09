@@ -136,6 +136,10 @@ local giftBtn = button({ text = "🎁 5:00", color = Color3.fromRGB(150, 90, 200
 local skipBtn = button({ text = tr("ui_skip"), color = Color3.fromRGB(230, 140, 30), order = 4 }, left)
 local shieldBtn = button({ text = tr("ui_shield"), color = Color3.fromRGB(40, 130, 230), order = 5 }, left)
 local respawnBtn = button({ text = tr("ui_respawn"), color = Color3.fromRGB(90, 90, 100), order = 6 }, left)
+local lobbyBtn = button({ text = tr("ui_lobby"), color = Color3.fromRGB(60, 160, 120), order = 6 }, left)
+lobbyBtn.Activated:Connect(function()
+	ActionRE:FireServer("ToLobby")
+end)
 local rebirthBtn = button({ text = tr("ui_rebirth"), color = Color3.fromRGB(200, 60, 200), order = 7 }, left)
 rebirthBtn.Visible = false
 
@@ -656,7 +660,13 @@ local lastZone = nil
 local function refreshHud()
 	local st = player:GetAttribute("Stage") or 1
 	local mx = player:GetAttribute("MaxStage") or 1
-	if st >= FINISH then
+	local inLobby = player:GetAttribute("InLobby") == true
+	if inLobby then
+		stageLabel.Text = tr("ui_in_lobby")
+		zoneLabel.Text = tr("ui_in_lobby_sub")
+		zoneLabel.TextColor3 = Color3.fromRGB(255, 220, 120)
+		barFill.Size = UDim2.fromScale(math.clamp((mx - 1) / TOTAL, 0, 1), 1)
+	elseif st >= FINISH then
 		stageLabel.Text = tr("ui_finish")
 		zoneLabel.Text = tr("ui_finish_sub", TOTAL)
 		barFill.Size = UDim2.fromScale(1, 1)
@@ -669,19 +679,39 @@ local function refreshHud()
 		barFill.Size = UDim2.fromScale((st - 1) / TOTAL, 1)
 		barFill.BackgroundColor3 = zone.color
 	end
-	prevBtn.Visible = st > 1
-	nextBtn.Visible = st < mx
+	-- стрелки работают только внутри текущего мира
+	local w = Config.ZoneOfStage(math.min(st, TOTAL))
+	local wFirst = (w - 1) * Config.STAGES_PER_ZONE + 1
+	local wLast = math.min(w * Config.STAGES_PER_ZONE, TOTAL)
+	prevBtn.Visible = not inLobby and st > wFirst
+	nextBtn.Visible = not inLobby and st < mx and st < wLast
+	lobbyBtn.Visible = not inLobby
+	respawnBtn.Visible = not inLobby
 	rebirthBtn.Visible = mx >= FINISH
 	coinsLabel.Text = "💰 " .. (player:GetAttribute("Coins") or 0)
 	ducksLabel.Text = "🦆 " .. (player:GetAttribute("Ducks") or 0) .. "/" .. Config.DUCK_COUNT
 	local mult = player:GetAttribute("Multiplier") or 1
 	local reb = player:GetAttribute("Rebirths") or 0
 	multLabel.Text = "x" .. string.format("%.2g", mult) .. " 💰" .. (reb > 0 and ("  🔁" .. reb) or "")
-	skipBtn.Visible = st < FINISH
+	skipBtn.Visible = not inLobby and st < FINISH
+	shieldBtn.Visible = not inLobby
+	-- замки на порталах
+	for _, lock in ipairs(CollectionService:GetTagged("PortalLock")) do
+		local lw = lock:GetAttribute("World") or 1
+		local open = mx >= (lw - 1) * Config.STAGES_PER_ZONE + 1
+		lock.Transparency = open and 1 or 0.15
+		local sg = lock:FindFirstChildOfClass("SurfaceGui")
+		if sg then
+			sg.Enabled = not open
+		end
+	end
 	vipBtn.Text = player:GetAttribute("PassVIP") and tr("ui_vip_owned") or tr("ui_vip")
 end
 
-for _, attr in ipairs({ "Stage", "MaxStage", "Coins", "Ducks", "Multiplier", "Rebirths", "PassVIP" }) do
+CollectionService:GetInstanceAddedSignal("PortalLock"):Connect(function()
+	task.defer(refreshHud)
+end)
+for _, attr in ipairs({ "Stage", "MaxStage", "Coins", "Ducks", "Multiplier", "Rebirths", "PassVIP", "InLobby" }) do
 	player:GetAttributeChangedSignal(attr):Connect(refreshHud)
 end
 for _, attr in ipairs({
@@ -763,7 +793,7 @@ end)
 -- ============ ВОЛНА ЛАВЫ / ВОДА ============
 local function inZone4()
 	local st = player:GetAttribute("Stage") or 1
-	return Config.ZoneOfStage(math.min(st, TOTAL)) == 4 and st <= TOTAL
+	return not player:GetAttribute("InLobby") and Config.ZoneOfStage(math.min(st, TOTAL)) == 4 and st <= TOTAL
 end
 
 local function refreshWarn()
@@ -1106,6 +1136,7 @@ local function resetRising()
 	rising.y = -1e6
 end
 player:GetAttributeChangedSignal("Stage"):Connect(resetRising)
+player:GetAttributeChangedSignal("InLobby"):Connect(resetRising)
 player.CharacterAdded:Connect(resetRising)
 
 RunService.Heartbeat:Connect(function(dt)
@@ -1117,7 +1148,10 @@ RunService.Heartbeat:Connect(function(dt)
 	local root = char and char:FindFirstChild("HumanoidRootPart")
 	local st = player:GetAttribute("Stage") or 1
 	local show = false
-	if root and hum and hum.Health > 0 and st < FINISH then
+	local inLobbyNow = player:GetAttribute("InLobby") == true
+	local worldLava = Config.WorldRisingLava[Config.ZoneOfStage(math.min(st, TOTAL))] ~= false
+	local eruptingNow = workspace:GetAttribute("Event") == "eruption"
+	if root and hum and hum.Health > 0 and st < FINISH and not inLobbyNow and (worldLava or eruptingNow) then
 		local pos = root.Position
 		if not rising.startPos then
 			rising.startPos = pos
@@ -1252,6 +1286,9 @@ local function refreshLighting()
 	if st >= FINISH then
 		zone = 5
 	end
+	if player:GetAttribute("InLobby") then
+		zone = 1
+	end
 	local key = tostring(ev) .. zone
 	if key == currentLightKey then
 		return
@@ -1270,6 +1307,7 @@ local function refreshLighting()
 	end
 end
 player:GetAttributeChangedSignal("Stage"):Connect(refreshLighting)
+player:GetAttributeChangedSignal("InLobby"):Connect(refreshLighting)
 workspace:GetAttributeChangedSignal("Event"):Connect(refreshLighting)
 task.delay(1, refreshLighting)
 

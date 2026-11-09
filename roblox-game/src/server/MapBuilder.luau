@@ -1215,6 +1215,48 @@ local function waterfallFx(top, bottom, width)
 	return fall
 end
 
+-- Портал-кольцо с диском (декор или рабочий портал с тегом)
+local function portalGate(cf, R, colA, colB, discColor, tagName, worldNum)
+	local segs = 24
+	for i = 0, segs - 1 do
+		local a0, a1 = i / segs * 2 * PI, (i + 1) / segs * 2 * PI
+		local mid = (a0 + a1) / 2
+		if math.sin(mid) > -0.6 then
+			local p0 = (cf * CF(math.cos(a0) * R, math.sin(a0) * R, 0)).Position
+			local p1 = (cf * CF(math.cos(a1) * R, math.sin(a1) * R, 0)).Position
+			part({ Size = V3(1.8, 1.8, (p1 - p0).Magnitude + 0.3), CFrame = CFrame.lookAt((p0 + p1) / 2, p1), Color = (i % 2 == 0) and colA or colB })
+			if i % 2 == 0 then
+				part({ Shape = BALL, Size = V3(0.9, 0.9, 0.9), CFrame = CF(p0), Color = Color3.new(1, 1, 1), Material = M.Neon, CanCollide = false })
+			end
+		end
+	end
+	for sx = -1, 1, 2 do
+		part({ Size = V3(2.6, R * 0.6, 2.6), CFrame = cf * CF(sx * R * 0.82, -R + R * 0.3, 0), Color = colA })
+	end
+	local disc = part({ Shape = CYL, Size = V3(0.5, 2 * R - 1.2, 2 * R - 1.2), CFrame = cf * CFrame.Angles(0, PI / 2, 0), Color = discColor, Material = M.Neon, Transparency = 0.3, CanCollide = false })
+	local pe = Instance.new("ParticleEmitter")
+	pe.Color = ColorSequence.new(Color3.new(1, 1, 1), discColor)
+	pe.LightEmission = 1
+	pe.Size = NumberSequence.new(0.7, 0)
+	pe.Speed = NumberRange.new(2, 4)
+	pe.Lifetime = NumberRange.new(1, 2)
+	pe.Rate = 25
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Parent = disc
+	local l = Instance.new("PointLight")
+	l.Color = discColor
+	l.Range = 24
+	l.Brightness = 2
+	l.Parent = disc
+	if tagName then
+		tag(disc, tagName)
+		disc:SetAttribute("World", worldNum)
+	else
+		disc.CanTouch = false
+	end
+	return disc
+end
+
 -- ============ ЛОББИ (как на картинке: площадь с фонтаном и зданиями) ============
 local function buildLobby(ctx)
 	local top = 12
@@ -1225,8 +1267,7 @@ local function buildLobby(ctx)
 
 	-- остров: трава + скалы снизу
 	local floor = part({ Name = "LobbyFloor", Size = V3(R * 2, 2, R * 2), CFrame = L(ctx, 0, top - 1, 0), Color = RGB(110, 205, 80) })
-	floor:SetAttribute("Stage", 1)
-	info.checkpoints[1] = floor
+	info.lobbyFloor = floor
 	local s = R * 2
 	for i = 1, 4 do
 		s = s * 0.86
@@ -1287,7 +1328,7 @@ local function buildLobby(ctx)
 	spawn.Transparency = 1
 	spawn.CanCollide = false
 	spawn.Parent = currentFolder
-	info.spawnCF[1] = L(ctx, 0, top + 6.5, -60)
+	info.lobbySpawn = L(ctx, 0, top + 6.5, -60)
 
 	-- 🏆 таблицы лидеров по бокам от точки появления (смотрят на площадь)
 	info.leaderboardRows = makeBoard(L(ctx, -22, top + 9, -60), V3(16, 13, 1), Enum.NormalId.Front, "sign_top")
@@ -1441,35 +1482,41 @@ local function buildLobby(ctx)
 	end
 	sg.Parent = dboard
 
-	-- 🌀 ГЛАВНЫЙ ПОРТАЛ «50 ЭТАПОВ» (впереди, по центру)
-	local pz, pR, pcy = 64, 9, top + 10.6
-	part({ Size = V3(30, 1, 10), CFrame = L(ctx, 0, top + 0.5, pz), Color = RGB(170, 170, 185), Material = M.Cobblestone })
-	portalRing(ctx, 0, pcy, pz, pR, "xy", RGB(255, 200, 50), RGB(255, 110, 30), true)
-	for sx = -1, 1, 2 do
-		part({ Size = V3(3, 5, 3), CFrame = L(ctx, sx * 7.8, top + 2.5, pz), Color = RGB(255, 140, 30) })
-		part({ Size = V3(3, 22, 3), CFrame = L(ctx, sx * 13, top + 11, pz), Color = RGB(200, 200, 215), Material = M.Marble })
-		part({ Size = V3(4, 1.4, 4), CFrame = L(ctx, sx * 13, top + 22.7, pz), Color = GOLD, Material = M.Foil })
+	-- 🌀 ПОРТАЛЫ В 5 МИРОВ (впереди, полукругом)
+	local pz = 54
+	part({ Size = V3(120, 1, 22), CFrame = L(ctx, 0, top + 0.5, pz), Color = RGB(170, 170, 185), Material = M.Cobblestone })
+	for w = 1, #Config.Zones do
+		local px = (w - 3) * 23
+		local col = ACCENT[w]
+		local gate = L(ctx, px, top + 9, pz + math.abs(w - 3) * -2)
+		local disc = portalGate(gate, 7, col, Color3.new(1, 1, 1), col, "WorldPortal", w)
+		local _ = disc
+		local zinfo = Config.Zones[w]
+		makeSign(gate * CF(0, 11, 0), V3(16, 5, 1), "sign_world", col, Color3.new(1, 1, 1), Enum.NormalId.Back, nil, { tostring(w), zinfo.emoji, "@zone_" .. w })
+		-- замок (клиент прячет его, если мир открыт)
+		local lock = part({ Name = "PortalLock", Size = V3(8, 8, 0.6), CFrame = gate * CF(0, 0, 0.8), Color = RGB(40, 35, 50), Transparency = 0.15, CanCollide = false, CanTouch = false })
+		lock:SetAttribute("World", w)
+		tag(lock, "PortalLock")
+		local lsg = Instance.new("SurfaceGui")
+		lsg.Face = Enum.NormalId.Back
+		lsg.LightInfluence = 0
+		lsg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		lsg.PixelsPerStud = 30
+		local ll = Instance.new("TextLabel")
+		ll.Size = UDim2.fromScale(1, 1)
+		ll.BackgroundTransparency = 1
+		ll.TextScaled = true
+		ll.Font = Enum.Font.GothamBlack
+		ll.TextColor3 = Color3.new(1, 1, 1)
+		ll.Text = "🔒"
+		ll.Parent = lsg
+		lsg.Parent = lock
+		-- постамент со ступенькой
+		part({ Size = V3(18, 1, 6), CFrame = L(ctx, px, top + 1, pz + math.abs(w - 3) * -2), Color = darker(col, 0.8) })
 	end
-	local swirl = part({ Shape = CYL, Size = V3(0.4, 2 * pR - 1, 2 * pR - 1), CFrame = L(ctx, 0, pcy, pz) * CFrame.Angles(0, PI / 2, 0), Color = RGB(255, 120, 30), Material = M.Neon, Transparency = 0.35, CanCollide = false, CanTouch = false, CanQuery = false })
-	part({ Shape = CYL, Size = V3(0.5, pR, pR), CFrame = L(ctx, 0, pcy, pz) * CFrame.Angles(0, PI / 2, 0), Color = RGB(255, 230, 120), Material = M.Neon, Transparency = 0.3, CanCollide = false, CanTouch = false, CanQuery = false })
-	local sw = Instance.new("ParticleEmitter")
-	sw.Color = ColorSequence.new(RGB(255, 240, 150), RGB(255, 90, 20))
-	sw.LightEmission = 1
-	sw.Size = NumberSequence.new(0.8, 0)
-	sw.Speed = NumberRange.new(2, 5)
-	sw.Lifetime = NumberRange.new(1, 2)
-	sw.Rate = 40
-	sw.SpreadAngle = Vector2.new(180, 180)
-	sw.Parent = swirl
-	local pl = Instance.new("PointLight")
-	pl.Color = RGB(255, 160, 60)
-	pl.Range = 30
-	pl.Brightness = 2
-	pl.Parent = swirl
-	local startLine = part({ Name = "StartLine", Size = V3(16, 14, 2), CFrame = L(ctx, 0, top + 7, pz), Transparency = 1, CanCollide = false })
-	tag(startLine, "StartLine")
-	makeSign(L(ctx, 0, top + 23, pz), V3(22, 4, 1.5), "sign_portal", RGB(255, 110, 30), Color3.new(1, 1, 1), Enum.NormalId.Back)
-	makeSign(L(ctx, 0, top + 28.5, pz), V3(30, 6, 1.5), "welcome", RGB(60, 20, 10), RGB(255, 210, 90), Enum.NormalId.Back)
+	makeSign(L(ctx, 0, top + 30, pz + 4), V3(34, 6, 1.5), "welcome", RGB(60, 20, 10), RGB(255, 210, 90), Enum.NormalId.Back)
+	part({ Size = V3(2, 30, 2), CFrame = L(ctx, -17, top + 15, pz + 4), Color = RGB(200, 200, 215), Material = M.Marble })
+	part({ Size = V3(2, 30, 2), CFrame = L(ctx, 17, top + 15, pz + 4), Color = RGB(200, 200, 215), Material = M.Marble })
 
 	-- 🌳 природа: деревья по краю острова, кусты, цветы, фонари, заборы
 	local function freeSpot(x, z)
@@ -1483,7 +1530,7 @@ local function buildLobby(ctx)
 		if math.abs(z - 4) < 8 and math.abs(x) > 20 then
 			return false
 		end
-		local zones = { { -46, -13, 9 }, { -30, -16, 7 }, { -50, 6, 14 }, { 50, 6, 14 }, { -40, -34, 18 }, { 44, -30, 16 }, { -24, 34, 10 }, { 24, 34, 10 }, { 0, -58, 16 }, { 0, 64, 16 }, { -22, -60, 10 }, { 22, -60, 10 } }
+		local zones = { { -46, 50, 12 }, { -23, 52, 12 }, { 23, 52, 12 }, { 46, 50, 12 }, { -46, -13, 9 }, { -30, -16, 7 }, { -50, 6, 14 }, { 50, 6, 14 }, { -40, -34, 18 }, { 44, -30, 16 }, { -24, 34, 10 }, { 24, 34, 10 }, { 0, -58, 16 }, { 0, 64, 16 }, { -22, -60, 10 }, { 22, -60, 10 } }
 		for _, zz in ipairs(zones) do
 			if (x - zz[1]) ^ 2 + (z - zz[2]) ^ 2 < zz[3] ^ 2 then
 				return false
@@ -2753,6 +2800,705 @@ local function setupLighting()
 	rays.Parent = Lighting
 end
 
+-- ============ МИР 1: ПАРК РАЗВЛЕЧЕНИЙ (большой парящий остров) ============
+-- R — радиус острова, ring — радиус спирали трассы в начале (растёт к краю на ringGrow)
+local PARK = { lavaY = 70, top = 84, R = 300, ring = 130, ringGrow = 90 }
+local PARK_STONE = RGB(185, 180, 195)
+local PARK_CLIFF = { RGB(135, 125, 150), RGB(115, 105, 130) }
+
+-- ярмарочная палатка с полосатым навесом
+local function marketStall(cf, rng, col)
+	col = col or pick(rng, { RGB(230, 50, 60), RGB(60, 120, 230), RGB(255, 110, 190) })
+	part({ Size = V3(7, 3, 4), CFrame = cf * CF(0, 1.5, 0), Color = RGB(175, 120, 75), Material = M.WoodPlanks })
+	part({ Size = V3(7.4, 0.4, 4.4), CFrame = cf * CF(0, 3.2, 0), Color = Color3.new(1, 1, 1) })
+	for i = -2, 2 do
+		part({ Size = V3(0.9, 0.9, 0.9), CFrame = cf * CF(i * 1.3, 3.85, 0) * CFrame.Angles(0, i, 0), Color = pick(rng, PARTY), CanCollide = false })
+	end
+	for sx = -1, 1, 2 do
+		for sz = -1, 1, 2 do
+			part({ Size = V3(0.4, 7, 0.4), CFrame = cf * CF(sx * 3.4, 3.5, sz * 1.9), Color = Color3.new(1, 1, 1) })
+		end
+	end
+	local stripes = 6
+	local sw = 7.8 / stripes
+	for i = 0, stripes - 1 do
+		local c = (i % 2 == 0) and col or Color3.new(1, 1, 1)
+		local w1 = Instance.new("WedgePart")
+		w1.Anchored = true
+		w1.Size = V3(sw, 1.8, 2.8)
+		w1.CFrame = cf * CF(-3.9 + (i + 0.5) * sw, 7.9, -1.4)
+		w1.Color = c
+		w1.Parent = currentFolder
+		local w2 = w1:Clone()
+		w2.CFrame = cf * CF(-3.9 + (i + 0.5) * sw, 7.9, 1.4) * CFrame.Angles(0, PI, 0)
+		w2.Parent = currentFolder
+	end
+	part({ Shape = BALL, Size = V3(0.8, 0.8, 0.8), CFrame = cf * CF(0, 9, 0), Color = RGB(255, 220, 60), Material = M.Neon, CanCollide = false })
+end
+
+-- столик под зонтиком
+local function umbrellaTable(cf, rng)
+	part({ Shape = CYL, Size = V3(0.3, 3.2, 3.2), CFrame = cf * CF(0, 2.4, 0) * ROT_UP, Color = Color3.new(1, 1, 1) })
+	part({ Size = V3(0.3, 2.4, 0.3), CFrame = cf * CF(0, 1.2, 0), Color = RGB(80, 80, 90) })
+	part({ Size = V3(0.2, 3.5, 0.2), CFrame = cf * CF(0, 4.2, 0), Color = Color3.new(1, 1, 1), CanCollide = false })
+	local col = pick(rng, { RGB(255, 110, 190), RGB(230, 50, 60), RGB(60, 150, 255) })
+	for k = 0, 2 do
+		local d = 7 * (1 - k * 0.32)
+		part({ Shape = CYL, Size = V3(0.5, d, d), CFrame = cf * CF(0, 5.6 + k * 0.45, 0) * ROT_UP, Color = (k % 2 == 0) and col or Color3.new(1, 1, 1), CanCollide = false })
+	end
+	for sx = -1, 1, 2 do
+		part({ Shape = CYL, Size = V3(1.4, 1.2, 1.2), CFrame = cf * CF(sx * 2.4, 0.7, 0) * ROT_UP, Color = col })
+	end
+end
+
+-- указатель со стрелками (фиолетовый неон, как на картинке)
+local function arrowSign(cf)
+	part({ Size = V3(0.4, 3, 0.4), CFrame = cf * CF(0, 1.5, 0), Color = RGB(70, 60, 90) })
+	local p = makeSign(cf * CF(0, 4, 0), V3(5, 2, 0.4), "sign_arrows", RGB(150, 70, 230), RGB(255, 255, 255), Enum.NormalId.Back)
+	part({ Size = V3(5.4, 2.4, 0.3), CFrame = p.CFrame * CF(0, 0, 0.1), Color = RGB(220, 120, 255), Material = M.Neon, CanCollide = false })
+end
+
+-- круглая площадка-чекпоинт парка: трава, брусчатка, скалы до лавы, ларьки по краям
+local function parkPlateau(ctx, stageNum, padX, padTop, padZc, size, isEnd)
+	local rng = Random.new(Config.MAP_SEED + stageNum * 31)
+	local cf = L(ctx, padX, padTop, padZc)
+	local topPart = part({ Name = "Checkpoint" .. stageNum, Shape = CYL, Size = V3(2, size, size), CFrame = cf * CF(0, -1, 0) * ROT_UP, Color = RGB(115, 210, 85) })
+	if not isEnd then
+		topPart:SetAttribute("Stage", stageNum)
+		tag(topPart, "Checkpoint")
+		info.checkpoints[stageNum] = topPart
+	end
+	-- брусчатка: круг в центре + дорожка насквозь
+	part({ Shape = CYL, Size = V3(0.2, size * 0.5, size * 0.5), CFrame = cf * CF(0, 0.05, 0) * ROT_UP, Color = PARK_STONE, Material = M.Cobblestone, CanCollide = false })
+	part({ Size = V3(8, 0.2, size - 1), CFrame = cf * CF(0, 0.06, 0), Color = PARK_STONE, Material = M.Cobblestone, CanCollide = false })
+	if not isEnd then
+		local glow = part({ Shape = CYL, Size = V3(0.25, 7, 7), CFrame = cf * CF(0, 0.12, 0) * ROT_UP, Color = RGB(255, 200, 60), Material = M.Neon, CanCollide = false })
+		local sg = Instance.new("SurfaceGui")
+		sg.Face = Enum.NormalId.Right
+		sg.LightInfluence = 0
+		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		sg.PixelsPerStud = 40
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.fromScale(1, 1)
+		lbl.BackgroundTransparency = 1
+		lbl.TextScaled = true
+		lbl.Font = Enum.Font.GothamBlack
+		lbl.TextColor3 = Color3.new(0.1, 0.05, 0)
+		lbl.Text = tostring(stageNum)
+		lbl.Parent = sg
+		sg.Parent = glow
+	end
+	-- скалы под площадкой до лавы
+	local s = size
+	for i = 1, 3 do
+		s *= 0.9
+		part({ Shape = CYL, Size = V3(5, s, s), CFrame = cf * CF(rng:NextNumber(-0.6, 0.6), -2 - (i - 0.5) * 5, rng:NextNumber(-0.6, 0.6)) * ROT_UP, Color = PARK_CLIFF[(i % 2) + 1], Material = M.Slate })
+	end
+	local bottomTop = padTop - 17
+	if bottomTop > LAVA_BOTTOM + 1 then
+		part({ Shape = CYL, Size = V3(bottomTop - LAVA_BOTTOM, s * 0.85, s * 0.85), CFrame = cf * CF(0, (LAVA_BOTTOM + bottomTop) / 2 - padTop, 0) * ROT_UP, Color = PARK_CLIFF[2], Material = M.Slate })
+	end
+	-- травяная «кайма» по краю
+	part({ Shape = CYL, Size = V3(1.2, size + 0.6, size + 0.6), CFrame = cf * CF(0, -2.2, 0) * ROT_UP, Color = RGB(90, 180, 70), CanCollide = false })
+	-- реквизит по бокам (центральный коридор свободен)
+	local propsN = math.floor(size / 6)
+	for i = 1, propsN do
+		local side = (i % 2 == 0) and 1 or -1
+		local px = side * rng:NextNumber(8, size / 2 - 4)
+		local pz = rng:NextNumber(-size / 3, size / 3)
+		if px * px + pz * pz < (size / 2 - 3) ^ 2 then
+			local pcf = cf * CF(px, 0, pz) * CFrame.Angles(0, side > 0 and PI / 2 or -PI / 2, 0)
+			local roll = rng:NextNumber()
+			if roll < 0.25 then
+				marketStall(pcf, rng)
+			elseif roll < 0.4 then
+				umbrellaTable(pcf, rng)
+			elseif roll < 0.55 then
+				blockyTree(pcf, rng, rng:NextNumber(0.9, 1.2))
+			elseif roll < 0.67 then
+				bench(pcf)
+			elseif roll < 0.77 then
+				popcornStand(pcf, rng)
+			elseif roll < 0.85 then
+				balloonCart(pcf, rng)
+			else
+				lamp(pcf)
+			end
+		end
+	end
+	-- фонари у выхода и указатель
+	for sx = -1, 1, 2 do
+		lamp(cf * CF(sx * 5.5, 0, size / 2 - 2.5))
+	end
+	if not isEnd then
+		arrowSign(cf * CF(6.5, 0, size / 2 - 1.5))
+	end
+	for k = 0, 3 do
+		local a = k / 4 * 2 * PI
+		addPath((cf * CF(math.cos(a) * size / 2, 0, math.sin(a) * size / 2)).Position)
+	end
+	addPath(cf.Position)
+	return topPart, cf
+end
+
+-- ⭐ гигантское колесо обозрения со звездой
+local function giantFerrisWheel(base, R)
+	local center = base * CF(0, R + 10, 0)
+	local frame = RGB(150, 80, 230)
+	for sz = -1, 1, 2 do
+		for sx = -1, 1, 2 do
+			local foot = (base * CF(sx * R * 0.6, 0, sz * 7)).Position
+			local hub = (center * CF(0, 0, sz * 5)).Position
+			part({ Size = V3(2.2, 2.2, (hub - foot).Magnitude), CFrame = CFrame.lookAt((foot + hub) / 2, hub), Color = frame, Material = M.Metal })
+		end
+	end
+	part({ Shape = CYL, Size = V3(12, 5, 5), CFrame = center * CFrame.Angles(0, PI / 2, 0), Color = RGB(80, 70, 100), Material = M.Metal })
+	-- звезда в центре (крутится вместе с колесом)
+	for i = 0, 4 do
+		local a = i / 5 * 2 * PI
+		rotor(part({ Size = V3(2.2, 9, 1.2), CFrame = center * CF(0, 0, -2.5) * CFrame.Angles(0, 0, a) * CF(0, 4, 0), Color = RGB(255, 220, 60), Material = M.Neon }), center, "z", 0.08)
+	end
+	local segs = 40
+	for ring = 0, 1 do
+		local rr = ring == 0 and R or R - 4
+		for i = 0, segs - 1 do
+			local a0, a1 = i / segs * 2 * PI, (i + 1) / segs * 2 * PI
+			for sz = -1, 1, 2 do
+				local p0 = (center * CF(math.cos(a0) * rr, math.sin(a0) * rr, sz * 2.5)).Position
+				local p1 = (center * CF(math.cos(a1) * rr, math.sin(a1) * rr, sz * 2.5)).Position
+				rotor(part({ Size = V3(1.2, 1.2, (p1 - p0).Magnitude + 0.3), CFrame = CFrame.lookAt((p0 + p1) / 2, p1), Color = frame }), center, "z", 0.08)
+			end
+			if ring == 0 and i % 2 == 0 then
+				local bp = (center * CF(math.cos(a0) * (R + 0.8), math.sin(a0) * (R + 0.8), 0)).Position
+				rotor(part({ Shape = BALL, Size = V3(1.6, 1.6, 1.6), CFrame = CF(bp), Color = (i % 4 == 0) and RGB(255, 120, 220) or RGB(255, 230, 120), Material = M.Neon }), center, "z", 0.08)
+			end
+		end
+	end
+	local cabins = 16
+	for i = 0, cabins - 1 do
+		local a = i / cabins * 2 * PI
+		local rim = (center * CF(math.cos(a) * R, math.sin(a) * R, 0)).Position
+		rotor(part({ Size = V3(0.8, 0.8, R), CFrame = CFrame.lookAt((center.Position + rim) / 2, rim), Color = RGB(220, 200, 255), Material = M.Metal }), center, "z", 0.08)
+		local col = PARTY[(i % #PARTY) + 1]
+		rotor(part({ Size = V3(5, 4, 5), CFrame = CF(rim - V3(0, 4.2, 0)) * center.Rotation, Color = col }), center, "z", 0.08, 4.2)
+		rotor(part({ Size = V3(5.6, 0.8, 5.6), CFrame = CF(rim - V3(0, 1.8, 0)) * center.Rotation, Color = col:Lerp(Color3.new(1, 1, 1), 0.4) }), center, "z", 0.08, 1.8)
+		rotor(part({ Size = V3(4, 1.6, 0.2), CFrame = CF(rim - V3(0, 4, 0)) * center.Rotation * CF(0, 0, -2.6), Color = RGB(150, 220, 255), Material = M.Neon }), center, "z", 0.08, 4)
+	end
+	local l = Instance.new("PointLight")
+	l.Color = RGB(255, 200, 120)
+	l.Range = 60
+	l.Brightness = 2
+	l.Parent = part({ Size = V3(1, 1, 1), CFrame = center, Transparency = 1, CanCollide = false })
+end
+
+-- 🎢 американские горки с петлёй вокруг части острова
+local function parkCoaster(C, a0, a1, rr, baseY, groundY)
+	local pts = {}
+	local n = 70
+	for i = 0, n do
+		local t = i / n
+		local a = a0 + (a1 - a0) * t
+		local y = baseY + 18 + math.sin(t * PI * 4) * 12 + math.sin(t * PI) * 10
+		table.insert(pts, V3(C.X + math.cos(a) * rr, y, C.Z + math.sin(a) * rr))
+	end
+	-- вертикальная петля посередине
+	local mid = math.floor(n / 2)
+	local p = pts[mid]
+	local tangent = (pts[mid + 1] - pts[mid - 1]).Unit
+	local outward = V3(p.X - C.X, 0, p.Z - C.Z).Unit
+	local loop = {}
+	for i = 0, 24 do
+		local ph = i / 24 * 2 * PI
+		table.insert(loop, p + tangent * (16 * math.sin(ph)) + V3(0, 16 - 16 * math.cos(ph), 0) + outward * (i / 24 * 6))
+	end
+	local function rails(list, startIdx)
+		for i = 2, #list do
+			local a, b = list[i - 1], list[i]
+			local dir = b - a
+			if dir.Magnitude > 0.1 then
+				local side = dir:Cross(V3(0, 1, 0))
+				if side.Magnitude < 0.01 then
+					side = V3(1, 0, 0)
+				end
+				side = side.Unit * 1.4
+				for sgn = -1, 1, 2 do
+					local ra, rb = a + side * sgn, b + side * sgn
+					part({ Size = V3(0.6, 0.6, (rb - ra).Magnitude + 0.3), CFrame = CFrame.lookAt((ra + rb) / 2, rb), Color = RGB(220, 40, 50), Material = M.Metal })
+				end
+				part({ Size = V3(3.4, 0.3, 0.5), CFrame = CFrame.lookAt((a + b) / 2, b), Color = RGB(70, 70, 80), Material = M.Metal })
+				if (i + startIdx) % 4 == 0 and list == pts then
+					local h = a.Y - groundY
+					part({ Size = V3(1, h, 1), CFrame = CF(a.X, groundY + h / 2, a.Z), Color = RGB(200, 200, 215), Material = M.Metal })
+				end
+			end
+		end
+	end
+	rails(pts, 0)
+	rails(loop, 0)
+	-- вагончики
+	for k = 0, 2 do
+		local a, b = pts[12 + k * 3], pts[13 + k * 3]
+		local cfc = CFrame.lookAt(a, b) * CF(0, 1.4, 0)
+		part({ Size = V3(3.2, 1.8, 4), CFrame = cfc, Color = PARTY[k + 1] })
+		part({ Size = V3(3.2, 1.2, 0.6), CFrame = cfc * CF(0, 1.4, -1.6), Color = RGB(255, 230, 80) })
+	end
+end
+
+-- 🗼 башня свободного падения (кольцо с сиденьями ездит вверх-вниз)
+local function dropTower(base, h)
+	for i = 0, math.floor(h / 6) - 1 do
+		part({ Shape = CYL, Size = V3(6, 6, 6), CFrame = base * CF(0, i * 6 + 3, 0) * ROT_UP, Color = (i % 2 == 0) and RGB(150, 80, 230) or Color3.new(1, 1, 1) })
+	end
+	part({ Shape = CYL, Size = V3(3, 12, 12), CFrame = base * CF(0, h + 1.5, 0) * ROT_UP, Color = RGB(255, 200, 60) })
+	local tip = part({ Shape = BALL, Size = V3(4, 4, 4), CFrame = base * CF(0, h + 5, 0), Color = RGB(120, 220, 255), Material = M.Neon })
+	local l = Instance.new("PointLight")
+	l.Color = RGB(120, 220, 255)
+	l.Range = 40
+	l.Parent = tip
+	local ringBase = base * CF(0, h * 0.5, 0)
+	local ring = part({ Shape = CYL, Size = V3(2, 14, 14), CFrame = ringBase * ROT_UP, Color = RGB(255, 80, 120), CanCollide = false })
+	table.insert(info.movers, { part = ring, base = ringBase * ROT_UP, axis = V3(0, 1, 0), amp = h * 0.38, speed = 0.7, phase = 0 })
+	for i = 0, 7 do
+		local a = i / 8 * 2 * PI
+		local seatBase = ringBase * CF(math.cos(a) * 7.5, -0.5, math.sin(a) * 7.5)
+		local seat = part({ Size = V3(1.6, 2, 1.6), CFrame = seatBase, Color = PARTY[(i % #PARTY) + 1], CanCollide = false })
+		table.insert(info.movers, { part = seat, base = seatBase, axis = V3(0, 1, 0), amp = h * 0.38, speed = 0.7, phase = 0 })
+	end
+end
+
+-- 🌋 большой извергающийся вулкан
+local function bigVolcano(base, R, H)
+	local layers = 9
+	for i = 0, layers - 1 do
+		local rr = R * (1 - i / (layers + 1.5))
+		part({ Shape = CYL, Size = V3(H / layers + 0.5, rr * 2, rr * 2), CFrame = base * CF(0, (i + 0.5) * H / layers, 0) * ROT_UP, Color = darker(RGB(105, 85, 78), 1 - i * 0.04), Material = M.Basalt })
+	end
+	for k = 0, 5 do
+		local a = k / 6 * 2 * PI + 0.3
+		local dir = V3(math.cos(a), 0, math.sin(a))
+		for i = 0, layers - 2 do
+			local rr = R * (1 - (i + 0.5) / (layers + 1.5))
+			local pos = base.Position + dir * (rr + 0.3) + V3(0, (i + 0.5) * H / layers, 0)
+			part({ Size = V3(3, H / layers + 0.6, 1), CFrame = CFrame.lookAt(pos, pos + dir), Color = RGB(255, 110, 0), Material = M.Neon, CanCollide = false })
+		end
+	end
+	local topR = R * (1 - (layers - 0.5) / (layers + 1.5))
+	local crater = part({ Name = "ParkCrater", Shape = CYL, Size = V3(1, topR * 1.6, topR * 1.6), CFrame = base * CF(0, H + 0.3, 0) * ROT_UP, Color = RGB(255, 110, 0), Material = M.Neon })
+	local em = Instance.new("ParticleEmitter")
+	em.Name = "Eruption"
+	em.Color = ColorSequence.new(RGB(255, 230, 80), RGB(255, 50, 0))
+	em.LightEmission = 1
+	em.Size = NumberSequence.new(4, 1)
+	em.Speed = NumberRange.new(50, 80)
+	em.SpreadAngle = Vector2.new(20, 20)
+	em.Acceleration = V3(0, -45, 0)
+	em.Lifetime = NumberRange.new(2.5, 4)
+	em.Rate = 12
+	em.EmissionDirection = Enum.NormalId.Right
+	em.Parent = crater
+	tag(crater, "Eruptor")
+	local sm = Instance.new("Smoke")
+	sm.Size = 40
+	sm.Opacity = 0.35
+	sm.RiseVelocity = 18
+	sm.Color = RGB(50, 45, 45)
+	sm.Parent = crater
+	local f = Instance.new("Fire")
+	f.Size = 20
+	f.Heat = 20
+	f.Parent = crater
+	local l = Instance.new("PointLight")
+	l.Color = RGB(255, 120, 40)
+	l.Range = 60
+	l.Brightness = 3
+	l.Parent = crater
+end
+
+-- 🏰 замок с фиолетовыми башнями
+local function worldTower(cf, dia, h, roofColor, stone)
+	part({ Shape = CYL, Size = V3(h, dia, dia), CFrame = cf * CF(0, h / 2, 0) * ROT_UP, Color = stone })
+	for i = 0, 7 do
+		local a = i / 8 * 2 * PI
+		part({ Size = V3(1.6, 1.8, 1.6), CFrame = cf * CF(math.cos(a) * dia / 2, h + 0.9, math.sin(a) * dia / 2), Color = stone })
+	end
+	local layers = 7
+	for i = 0, layers - 1 do
+		local d = (dia + 1.5) * (1 - i / layers)
+		part({ Shape = CYL, Size = V3(1.8, d, d), CFrame = cf * CF(0, h + 2 + i * 1.8, 0) * ROT_UP, Color = (i % 2 == 0) and roofColor or roofColor:Lerp(Color3.new(1, 1, 1), 0.2) })
+	end
+	local tipY = h + 2 + layers * 1.8
+	part({ Size = V3(0.25, 5, 0.25), CFrame = cf * CF(0, tipY + 2, 0), Color = RGB(80, 80, 90) })
+	local flag = part({ Size = V3(0.1, 2, 3.4), CFrame = cf * CF(0, tipY + 3.8, 1.75), Color = RGB(230, 50, 80), CanCollide = false })
+	flag:SetAttribute("Wave", true)
+	for i = 0, 3 do
+		local a = i / 4 * 2 * PI + PI / 4
+		part({ Size = V3(0.3, 3, 1.4), CFrame = cf * CF(math.cos(a) * dia / 2, h * 0.65, math.sin(a) * dia / 2) * CFrame.Angles(0, -a, 0), Color = RGB(255, 210, 120), Material = M.Neon, CanCollide = false })
+	end
+end
+
+local function parkCastle(cf)
+	local stone = RGB(200, 195, 210)
+	local roof = RGB(140, 70, 220)
+	part({ Size = V3(44, 16, 34), CFrame = cf * CF(0, 8, 0), Color = stone })
+	for i = -10, 10 do
+		part({ Size = V3(1.6, 2, 1.6), CFrame = cf * CF(i * 2.1, 17, -17), Color = stone })
+	end
+	part({ Size = V3(9, 12, 1), CFrame = cf * CF(0, 6, -17.2), Color = RGB(70, 50, 40), Material = M.Wood })
+	part({ Size = V3(11, 1.4, 1.4), CFrame = cf * CF(0, 12.6, -17.4), Color = RGB(255, 210, 90), Material = M.Neon })
+	for sx = -1, 1, 2 do
+		part({ Size = V3(5, 10, 0.3), CFrame = cf * CF(sx * 12, 9, -17.2), Color = RGB(140, 60, 210), CanCollide = false })
+		part({ Size = V3(2, 2, 0.35), CFrame = cf * CF(sx * 12, 10, -17.3), Color = RGB(255, 210, 90), Material = M.Neon, CanCollide = false })
+	end
+	worldTower(cf * CF(-22, 0, -17), 10, 26, roof, stone)
+	worldTower(cf * CF(22, 0, -17), 10, 26, roof, stone)
+	worldTower(cf * CF(-22, 0, 17), 10, 26, roof, stone)
+	worldTower(cf * CF(22, 0, 17), 10, 26, roof, stone)
+	worldTower(cf * CF(0, 16, 4), 14, 26, roof, stone)
+	worldTower(cf * CF(-10, 16, 10), 7, 18, RGB(220, 80, 200), stone)
+	worldTower(cf * CF(10, 16, 10), 7, 18, RGB(220, 80, 200), stone)
+end
+
+-- 🏴‍☠️ пиратский корабль в пруду
+local function pirateShip(cf)
+	local wood, dark = RGB(140, 90, 50), RGB(95, 60, 35)
+	part({ Size = V3(12, 7, 30), CFrame = cf * CF(0, 3.5, 0), Color = wood, Material = M.WoodPlanks })
+	part({ Size = V3(12.4, 1.2, 30.4), CFrame = cf * CF(0, 7, 0), Color = dark, Material = M.Wood })
+	local bow = Instance.new("WedgePart")
+	bow.Anchored = true
+	bow.Size = V3(12, 7, 9)
+	bow.CFrame = cf * CF(0, 3.5, -19.5)
+	bow.Color = wood
+	bow.Material = M.WoodPlanks
+	bow.Parent = currentFolder
+	part({ Size = V3(12, 5, 8), CFrame = cf * CF(0, 9.5, 11), Color = wood, Material = M.WoodPlanks })
+	for _, mz in ipairs({ -6, 4 }) do
+		local mh = 26
+		part({ Shape = CYL, Size = V3(mh, 1.2, 1.2), CFrame = cf * CF(0, 7 + mh / 2, mz) * ROT_UP, Color = dark, Material = M.Wood })
+		part({ Size = V3(13, 10, 0.4), CFrame = cf * CF(0, 18, mz - 0.6), Color = RGB(25, 25, 30), Material = M.Fabric })
+		-- череп и кости
+		part({ Shape = BALL, Size = V3(3.2, 3.2, 3.2), CFrame = cf * CF(0, 19, mz - 0.9), Color = Color3.new(1, 1, 1), CanCollide = false })
+		for sx = -1, 1, 2 do
+			part({ Shape = BALL, Size = V3(0.8, 0.8, 0.8), CFrame = cf * CF(sx * 0.7, 19.3, mz - 2.3), Color = RGB(20, 20, 20), CanCollide = false })
+			part({ Size = V3(7, 0.8, 0.2), CFrame = cf * CF(0, 16, mz - 0.9) * CFrame.Angles(0, 0, sx * 0.6), Color = Color3.new(1, 1, 1), CanCollide = false })
+		end
+		local flag = part({ Size = V3(0.1, 2.2, 3.6), CFrame = cf * CF(0, 7 + mh + 1, mz + 1.8), Color = RGB(20, 20, 20), CanCollide = false })
+		flag:SetAttribute("Wave", true)
+	end
+	for i = -2, 2 do
+		part({ Shape = CYL, Size = V3(2, 1, 1), CFrame = cf * CF(6.3, 4.5, i * 4) * CFrame.Angles(0, 0, 0), Color = RGB(30, 30, 35), Material = M.Metal })
+	end
+end
+
+-- 🛝 водяная горка-труба вокруг башни
+local function waterSlide(base, h)
+	part({ Size = V3(8, h, 8), CFrame = base * CF(0, h / 2, 0), Color = RGB(80, 170, 255) })
+	part({ Size = V3(10, 1, 10), CFrame = base * CF(0, h + 0.5, 0), Color = Color3.new(1, 1, 1) })
+	local turns, segs = 2.2, 44
+	local prev
+	for i = 0, segs do
+		local t = i / segs
+		local a = t * turns * 2 * PI
+		local pt = (base * CF(math.cos(a) * 11, h - t * (h - 3), math.sin(a) * 11)).Position
+		if prev then
+			part({ Shape = CYL, Size = V3((pt - prev).Magnitude + 0.6, 5, 5), CFrame = CFrame.lookAt((pt + prev) / 2, pt) * CFrame.Angles(0, PI / 2, 0), Color = RGB(190, 120, 255), Material = M.Glass, Transparency = 0.35, CanCollide = false })
+		end
+		prev = pt
+	end
+	part({ Shape = CYL, Size = V3(1, 18, 18), CFrame = base * CF(11, 0.6, 0) * ROT_UP, Color = RGB(70, 170, 255), Material = M.Glass, Transparency = 0.15, CanCollide = false })
+end
+
+-- 🎠 большая карусель
+local function bigCarousel(base)
+	part({ Shape = CYL, Size = V3(2.4, 34, 34), CFrame = base * CF(0, 1.2, 0) * ROT_UP, Color = RGB(255, 190, 220) })
+	part({ Shape = CYL, Size = V3(0.6, 35, 35), CFrame = base * CF(0, 2.5, 0) * ROT_UP, Color = GOLD, Material = M.Foil })
+	part({ Shape = CYL, Size = V3(16, 3, 3), CFrame = base * CF(0, 10, 0) * ROT_UP, Color = GOLD, Material = M.Foil })
+	for i = 0, 5 do
+		local d = 38 * (1 - i / 6)
+		part({ Shape = CYL, Size = V3(1.8, d, d), CFrame = base * CF(0, 18.5 + i * 1.8, 0) * ROT_UP, Color = (i % 2 == 0) and RGB(255, 110, 190) or Color3.new(1, 1, 1) })
+	end
+	part({ Shape = BALL, Size = V3(3, 3, 3), CFrame = base * CF(0, 30, 0), Color = GOLD, Material = M.Neon })
+	for i = 0, 23 do
+		local a = i / 24 * 2 * PI
+		part({ Shape = BALL, Size = V3(1, 1, 1), CFrame = base * CF(math.cos(a) * 18.6, 18, math.sin(a) * 18.6), Color = (i % 2 == 0) and RGB(255, 230, 120) or RGB(255, 120, 220), Material = M.Neon, CanCollide = false })
+	end
+	local stand = base * CF(0, 2.5, 0)
+	for i = 0, 11 do
+		local a = i / 12 * 2 * PI
+		local hp = stand * CFrame.Angles(0, a, 0) * CF(0, 0, -12)
+		local col = PARTY[(i % #PARTY) + 1]
+		rotor(part({ Size = V3(0.4, 15, 0.4), CFrame = hp * CF(0, 7.5, 0), Color = GOLD, Material = M.Foil }), stand, "y", 0.45)
+		rotor(part({ Size = V3(1.6, 2.2, 4.4), CFrame = hp * CF(0, 5, 0), Color = Color3.new(1, 1, 1) }), stand, "y", 0.45)
+		rotor(part({ Size = V3(1.4, 2.4, 1.6), CFrame = hp * CF(0, 6.6, -2.2) * CFrame.Angles(-0.4, 0, 0), Color = Color3.new(1, 1, 1) }), stand, "y", 0.45)
+		rotor(part({ Size = V3(0.5, 1.8, 2), CFrame = hp * CF(0, 6.8, -1), Color = col }), stand, "y", 0.45)
+		rotor(part({ Size = V3(1.7, 0.6, 1.6), CFrame = hp * CF(0, 6.2, 0.3), Color = col }), stand, "y", 0.45)
+	end
+end
+
+-- 🎈 воздушный шар
+local function hotAirBalloon(cf, rng)
+	local c1, c2 = pick(rng, PARTY), pick(rng, PARTY)
+	for i = 0, 5 do
+		local a = i / 6 * PI
+		local p = part({ Size = V3(16, 18, 3), CFrame = cf * CFrame.Angles(0, a, 0), Color = (i % 2 == 0) and c1 or c2, CanCollide = false, CastShadow = false })
+		local m = Instance.new("SpecialMesh")
+		m.MeshType = Enum.MeshType.Sphere
+		m.Parent = p
+	end
+	part({ Size = V3(4, 3, 4), CFrame = cf * CF(0, -14, 0), Color = RGB(150, 100, 60), Material = M.Wood, CanCollide = false })
+	for sx = -1, 1, 2 do
+		for sz = -1, 1, 2 do
+			local a = (cf * CF(sx * 1.8, -12.5, sz * 1.8)).Position
+			local b = (cf * CF(sx * 4, -7, sz * 4)).Position
+			part({ Size = V3(0.12, 0.12, (b - a).Magnitude), CFrame = CFrame.lookAt((a + b) / 2, b), Color = RGB(80, 60, 40), CanCollide = false })
+		end
+	end
+end
+
+-- остров под достопримечательность (трава + скалы до лавы)
+local function parkIsland(pos, w, d, top, rng, faceCf)
+	local cf = faceCf or CF(pos.X, top, pos.Z)
+	part({ Size = V3(w, 2, d), CFrame = cf * CF(0, -1, 0), Color = RGB(115, 210, 85) })
+	part({ Size = V3(w + 0.6, 1.2, d + 0.6), CFrame = cf * CF(0, -2.2, 0), Color = RGB(90, 180, 70), CanCollide = false })
+	local h = top - 2 - LAVA_BOTTOM
+	part({ Size = V3(w * 0.94, h, d * 0.94), CFrame = cf * CF(0, LAVA_BOTTOM + h / 2 - top, 0), Color = PARK_CLIFF[1], Material = M.Slate })
+	for i = 1, 6 do
+		local sx, sz = rng:NextNumber(-w / 2, w / 2), rng:NextNumber(-d / 2, d / 2)
+		part({ Size = V3(rng:NextNumber(4, 8), rng:NextNumber(6, 12), rng:NextNumber(4, 8)), CFrame = CF(pos.X + sx, top - 8, pos.Z + sz) * CFrame.Angles(0, rng:NextNumber(0, PI), 0), Color = PARK_CLIFF[2], Material = M.Slate })
+	end
+	addPath(pos)
+	return cf
+end
+
+local function buildParkScenery(C, rng)
+	local T, LY = PARK.top, PARK.lavaY
+	local function polar(a, r)
+		return V3(C.X + math.cos(a) * r, 0, C.Z + math.sin(a) * r)
+	end
+	local function faceCenter(pos, y)
+		return CFrame.lookAt(V3(pos.X, y, pos.Z), V3(C.X, y, C.Z))
+	end
+	-- лавовое озеро внутри острова
+	local lava = part({ Name = "ParkLava", Shape = CYL, Size = V3(4, PARK.R * 2, PARK.R * 2), CFrame = CF(C.X, LY - 2, C.Z) * ROT_UP, Color = RGB(255, 100, 10), Material = M.CrackedLava })
+	tag(lava, "Lava")
+	local glow = part({ Shape = CYL, Size = V3(0.3, PARK.R * 2 - 2, PARK.R * 2 - 2), CFrame = CF(C.X, LY + 0.05, C.Z) * ROT_UP, Color = RGB(255, 150, 30), Material = M.Neon, Transparency = 0.55, CanCollide = false, CanQuery = false })
+	tag(glow, "Lava")
+	-- каменный обод острова с травой, деревьями и водопадами
+	local segs = 60
+	for i = 0, segs - 1 do
+		local a = i / segs * 2 * PI
+		local p = polar(a, PARK.R + 14)
+		local cf = faceCenter(p, T - 4)
+		local wSeg = 2 * PI * (PARK.R + 14) / segs + 1
+		part({ Size = V3(wSeg, 2, 30), CFrame = cf * CF(0, -1, 0), Color = RGB(115, 210, 85) })
+		part({ Size = V3(wSeg, 40, 28), CFrame = cf * CF(0, -22, 1), Color = PARK_CLIFF[(i % 2) + 1], Material = M.Slate })
+		part({ Size = V3(wSeg * 0.8, 30, 20), CFrame = cf * CF(rng:NextNumber(-2, 2), -55, 4), Color = PARK_CLIFF[((i + 1) % 2) + 1], Material = M.Slate })
+		if rng:NextNumber() < 0.55 then
+			blockyTree(cf * CF(rng:NextNumber(-wSeg / 3, wSeg / 3), 0, rng:NextNumber(0, 10)), rng, rng:NextNumber(1, 1.6), pick(rng, { RGB(80, 190, 70), RGB(255, 160, 210), RGB(100, 210, 80) }))
+		end
+		if rng:NextNumber() < 0.35 then
+			bush(cf * CF(rng:NextNumber(-wSeg / 3, wSeg / 3), 0, rng:NextNumber(-8, 8)), rng)
+		end
+		if i % 6 == 0 then
+			local top = (cf * CF(0, 0, 14)).Position
+			waterfallFx(top + V3(0, -1, 0), top + V3(0, -110, 0), 7)
+			pond(cf * CF(0, 0, 6), 4)
+		end
+		if i % 4 == 0 then
+			lamp(cf * CF(0, 0, -12))
+		end
+	end
+	-- облака под островом и вокруг
+	for _ = 1, 40 do
+		local a = rng:NextNumber(0, 2 * PI)
+		local r = rng:NextNumber(200, 540)
+		local s = rng:NextNumber(30, 60)
+		part({ Shape = BALL, Size = V3(s, s, s), CFrame = CF(C.X + math.cos(a) * r, LY - rng:NextNumber(70, 130), C.Z + math.sin(a) * r), Color = Color3.new(1, 1, 1), CanCollide = false, CastShadow = false, CanQuery = false, CanTouch = false })
+	end
+	-- смертельная зона далеко внизу (если упал с острова)
+	local kill = part({ Name = "ParkVoid", Size = V3(2000, 4, 2000), CFrame = CF(C.X, LY - 140, C.Z), Transparency = 1, CanCollide = false, CanQuery = false })
+	tag(kill, "Lava")
+
+	-- 🎠 центр: карусель, вулкан и башня
+	local cIsl = parkIsland(V3(C.X, 0, C.Z), 52, 52, T - 2, rng)
+	bigCarousel(cIsl)
+	for i = 0, 7 do
+		local a = i / 8 * 2 * PI
+		lamp(cIsl * CF(math.cos(a) * 23, 0, math.sin(a) * 23))
+	end
+	local vPos = polar(PI / 2, 62)
+	bigVolcano(CF(vPos.X, LY - 2, vPos.Z), 32, 85)
+	local dPos = polar(PI / 2 + 1.05, 62)
+	local dIsl = parkIsland(dPos, 22, 22, T - 2, rng)
+	dropTower(dIsl, 95)
+	local d2 = parkIsland(polar(-PI / 2 + 0.6, 70), 26, 26, T - 3, rng)
+	for k = 1, 4 do
+		blockyTree(d2 * CF(rng:NextNumber(-9, 9), 0, rng:NextNumber(-9, 9)), rng, 1.3, pick(rng, { RGB(255, 160, 210), RGB(90, 200, 80) }))
+	end
+	umbrellaTable(d2, rng)
+
+	-- достопримечательности у края острова (не мешают трассе)
+	local function landmarkSpot(a, r, radius)
+		for _ = 1, 8 do
+			local p = polar(a, r)
+			if farFromPath(p, radius + 10) then
+				return p
+			end
+			r += 6
+		end
+		return polar(a, r)
+	end
+	-- ⭐ колесо обозрения
+	local fwPos = landmarkSpot(0.25, 262, 30)
+	parkIsland(fwPos, 56, 26, T - 3, rng, faceCenter(fwPos, T - 3))
+	giantFerrisWheel(faceCenter(fwPos, T - 3), 48)
+	-- 🏰 замок
+	local cPos = landmarkSpot(PI * 0.85, 262, 34)
+	local cIsl2 = parkIsland(cPos, 64, 52, T - 2, rng, faceCenter(cPos, T - 2))
+	parkCastle(faceCenter(cPos, T - 2))
+	local _ = cIsl2
+	-- 🏴‍☠️ пиратский корабль в пруду у края, водопад
+	local sPos = landmarkSpot(PI * 1.12, 266, 26)
+	local sCf = faceCenter(sPos, T - 3)
+	parkIsland(sPos, 46, 46, T - 3, rng, sCf)
+	part({ Shape = CYL, Size = V3(1, 40, 40), CFrame = sCf * CF(0, 0.2, 0) * ROT_UP, Color = RGB(70, 170, 255), Material = M.Glass, Transparency = 0.15, CanCollide = false })
+	pirateShip(sCf * CF(0, -2, 0) * CFrame.Angles(0, PI / 2, 0))
+	-- 🛝 водяная горка
+	local wPos = landmarkSpot(-0.45, 262, 22)
+	local wIsl = parkIsland(wPos, 40, 40, T - 3, rng, faceCenter(wPos, T - 3))
+	waterSlide(wIsl * CF(-6, 0, 0), 34)
+	-- 🎢 горки вдоль северной части края
+	parkCoaster(C, PI * 0.28, PI * 0.78, PARK.R - 6, T, T - 4)
+	-- 🎈 воздушные шары и парящие островки в небе
+	for i = 0, 4 do
+		local a = rng:NextNumber(0, 2 * PI)
+		local p = polar(a, rng:NextNumber(120, 340))
+		hotAirBalloon(CF(p.X, T + rng:NextNumber(70, 120), p.Z), rng)
+	end
+	for i = 0, 9 do
+		local a = i / 10 * 2 * PI + rng:NextNumber(-0.2, 0.2)
+		local p = polar(a, rng:NextNumber(380, 480))
+		local icf = CF(p.X, T + rng:NextNumber(-10, 60), p.Z)
+		floatingIsland(icf, rng, rng:NextNumber(18, 30), pick(rng, { RGB(110, 205, 80), RGB(255, 170, 215) }))
+		blockyTree(icf, rng, 1.3, pick(rng, { RGB(90, 200, 80), RGB(255, 160, 210) }))
+		if i % 3 == 0 then
+			waterfallFx(icf.Position + V3(8, -1, 0), icf.Position + V3(8, -60, 0), 3)
+		end
+	end
+end
+
+-- ============ ВХОД И ВЫХОД МИРОВ ============
+-- 🎡 Вход в парк: большая площадь с аркой «THE FLOOR IS LAVA», ларьки, магазин
+local function parkEntrance(ctx, first)
+	local top = ctx.y
+	local size = 64
+	parkPlateau(ctx, first, 0, top, 0, size, false)
+	local rng = Random.new(Config.MAP_SEED + 1001)
+	-- точка прибытия (со стороны края острова), смотрит на арку
+	info.spawnCF[first] = L(ctx, -24, top + 3.5, 0) * CFrame.Angles(0, -PI / 2, 0)
+	portalGate(L(ctx, -29, top + 7, 0) * CFrame.Angles(0, -PI / 2, 0), 6, RGB(150, 80, 230), RGB(255, 140, 220), RGB(200, 120, 255))
+	-- клетчатая линия старта
+	for ix = 0, 3 do
+		for iz = 0, 9 do
+			part({ Size = V3(1, 0.12, 1.8), CFrame = L(ctx, -15.5 + ix, top + 0.1, -8.1 + iz * 1.8), Color = ((ix + iz) % 2 == 0) and Color3.new(1, 1, 1) or RGB(25, 25, 30), CanCollide = false })
+		end
+	end
+	-- арка с огнём
+	local stone = RGB(150, 145, 160)
+	for _, sz in ipairs({ -11, 11 }) do
+		part({ Size = V3(6, 22, 6), CFrame = L(ctx, -13, top + 11, sz), Color = stone, Material = M.Slate })
+		part({ Size = V3(0.4, 9, 3.6), CFrame = L(ctx, -16.1, top + 9, sz), Color = RGB(255, 120, 20), Material = M.Neon })
+		local fire = part({ Size = V3(1, 1, 1), CFrame = L(ctx, -16.5, top + 7, sz), Transparency = 1, CanCollide = false })
+		local f = Instance.new("Fire")
+		f.Size = 5
+		f.Heat = 8
+		f.Parent = fire
+		lamp(L(ctx, -13, top + 22, sz))
+	end
+	part({ Size = V3(7, 6, 30), CFrame = L(ctx, -13, top + 25, 0), Color = stone, Material = M.Slate })
+	makeSign(L(ctx, -16.7, top + 25, 0), V3(0.6, 5.4, 27), "sign_park_title", RGB(60, 45, 70), RGB(255, 170, 40), Enum.NormalId.Left)
+	part({ Size = V3(0.4, 6, 29), CFrame = L(ctx, -16.5, top + 25, 0), Color = RGB(255, 130, 30), Material = M.Neon, Transparency = 0.5, CanCollide = false })
+	-- ларьки и магазин вокруг площади
+	local shop = { -0.5, 0.15, 0.85, 1.6, 2.3 }
+	for i, a in ipairs(shop) do
+		local px, pz = math.cos(a) * 24, math.sin(a) * 24
+		local cf = CFrame.lookAt(L(ctx, px, top, pz).Position, L(ctx, 0, top, 0).Position)
+		if i == 3 then
+			marketStall(cf, rng, RGB(60, 120, 230))
+			local counter = part({ Size = V3(6, 0.6, 1), CFrame = cf * CF(0, 3.6, -2.2), Color = RGB(255, 220, 60), Material = M.Neon })
+			prompt(counter, "prompt_open", "prompt_shop", "OpenShop", "trails")
+			makeSign(cf * CF(0, 11, 0), V3(7, 2.4, 0.5), "sign_shop", RGB(60, 120, 230), Color3.new(1, 1, 1), Enum.NormalId.Front)
+		elseif i % 2 == 0 then
+			marketStall(cf, rng)
+		else
+			popcornStand(cf, rng)
+		end
+	end
+	for _, a in ipairs({ -1.0, 0.5, 1.2, 1.95, 2.7 }) do
+		local p = L(ctx, math.cos(a) * 17, top, math.sin(a) * 17)
+		local cf = CFrame.lookAt(p.Position, L(ctx, 0, top, 0).Position)
+		if rng:NextNumber() < 0.5 then
+			umbrellaTable(cf, rng)
+		else
+			bench(cf)
+		end
+	end
+	balloonCart(L(ctx, 10, top, -18), rng)
+	ctx.x, ctx.y, ctx.z = 0, top, size / 2
+end
+
+-- Вход в мир 2–5: площадка с аркой мира и порталом прибытия
+local function worldEntry(ctx, w, first)
+	local top = ctx.y
+	local size = 36
+	local pad = part({ Name = "Checkpoint" .. first, Size = V3(size, 2, size), CFrame = L(ctx, 0, top - 1, 0), Color = darker(ACCENT[w], 0.6) })
+	pad:SetAttribute("Stage", first)
+	tag(pad, "Checkpoint")
+	info.checkpoints[first] = pad
+	part({ Shape = CYL, Size = V3(0.2, 16, 16), CFrame = L(ctx, 0, top + 0.05, 0) * ROT_UP, Color = ACCENT[w], Material = M.Neon, CanCollide = false })
+	if w ~= 5 then
+		column(ctx, 0, 0, LAVA_BOTTOM, top - 2, size - 4, size - 4, darker(ACCENT[w], 0.4), M.Slate)
+	end
+	info.spawnCF[first] = L(ctx, 0, top + 3.5, -10)
+	portalGate(L(ctx, 0, top + 7, -16), 6, ACCENT[w], Color3.new(1, 1, 1), ACCENT[w])
+	ctx.x, ctx.y, ctx.z = 0, top, size / 2
+	zoneGate(ctx, w)
+	addPath(L(ctx, 0, top, 0).Position)
+end
+
+-- Конец мира 2–4: площадка без чекпоинта
+local function worldEndPad(ctx, x, top, zc, size)
+	part({ Size = V3(size, 2, size), CFrame = L(ctx, x, top - 1, zc), Color = RGB(255, 210, 80), Material = M.Foil })
+	if not ctx.sky then
+		column(ctx, x, zc, LAVA_BOTTOM, top - 2, size - 4, size - 4, RGB(150, 120, 60), M.Slate)
+	end
+	addPath(L(ctx, x, top, zc).Position)
+end
+
+-- Портал «мир пройден → в лобби»
+local function worldFinishPortal(ctx, w)
+	local top = ctx.y
+	local z = ctx.z - 5
+	portalGate(L(ctx, 0, top + 8.6, z), 7, RGB(255, 200, 50), RGB(255, 120, 40), RGB(255, 220, 90), "WorldFinish", w)
+	makeSign(L(ctx, 0, top + 19, z), V3(22, 6, 1), "sign_world_done", RGB(60, 30, 90), RGB(255, 215, 80), Enum.NormalId.Back)
+	makeChest(L(ctx, -8, top, z - 4) * CFrame.Angles(0, PI, 0), "deco_w" .. w, "DecoChest")
+	makeChest(L(ctx, 8, top, z - 4) * CFrame.Angles(0, PI, 0), "deco2_w" .. w, "DecoChest")
+	local rainbow = { RGB(255, 70, 70), RGB(255, 170, 40), RGB(255, 240, 60), RGB(80, 220, 90), RGB(70, 150, 255), RGB(170, 90, 255) }
+	for i, c in ipairs(rainbow) do
+		local pe = part({ Size = V3(1, 1, 1), CFrame = L(ctx, -12 + (i - 1) * 4.8, top + 0.5, -8), Transparency = 1, CanCollide = false })
+		local em = Instance.new("ParticleEmitter")
+		em.Color = ColorSequence.new(c)
+		em.LightEmission = 0.8
+		em.Size = NumberSequence.new(0.5)
+		em.Speed = NumberRange.new(22, 30)
+		em.SpreadAngle = Vector2.new(15, 15)
+		em.Acceleration = V3(0, -20, 0)
+		em.Lifetime = NumberRange.new(2, 3)
+		em.Rate = 10
+		em.EmissionDirection = Enum.NormalId.Top
+		em.Parent = pe
+	end
+end
+
 -- ============ ГЛАВНАЯ ФУНКЦИЯ ============
 function MapBuilder.Build()
 	info = {
@@ -2804,13 +3550,14 @@ function MapBuilder.Build()
 		sky = false,
 		flat = false,
 	}
+	LAVA_BOTTOM = -2
 	buildLobby(ctx)
 
 	local stageFrames = {}
 	local prevPlan = {}
-	local pattern = { -1, -1, 1, 1 } -- направо, направо, налево, налево — «змейка»
 
-	for s = 1, TOTAL do
+	-- Один этап: препятствия + следующий чекпоинт (или конец мира)
+	local function buildStage(s, first, last)
 		local folder = Instance.new("Folder")
 		folder.Name = string.format("Stage_%02d", s)
 		folder.Parent = map
@@ -2844,8 +3591,7 @@ function MapBuilder.Build()
 				local name
 				for _ = 1, 20 do
 					name = pool[r:NextInteger(1, #pool)]
-					local tooHigh = CLIMBING[name] and ctx.y > 60 * ctx.zone
-					-- без повторов внутри этапа и с прошлым этапом — так карта разнообразнее
+					local tooHigh = CLIMBING[name] and (ctx.y - (ctx.baseY or 12)) > 60
 					if not used[name] and not prevPlan[name] and not tooHigh then
 						break
 					end
@@ -2854,7 +3600,6 @@ function MapBuilder.Build()
 				used[name] = true
 			end
 		end
-
 		prevPlan = {}
 		for _, name in ipairs(plan) do
 			prevPlan[name] = true
@@ -2866,14 +3611,25 @@ function MapBuilder.Build()
 			end
 		end
 
-		-- следующий чекпоинт
+		local isWorldEnd = s == last
+		local isFinish = isWorldEnd and last == TOTAL
 		local nextStage = s + 1
-		local isFinish = nextStage == TOTAL + 1
-		local padSize = isFinish and 30 or 14
+		local padSize
+		if ctx.park then
+			padSize = isWorldEnd and 44 or r:NextInteger(28, 34)
+		else
+			padSize = isWorldEnd and 30 or 14
+		end
 		local padTop = ctx.y + lowered
 		local padZc = ctx.z + 4.5 + padSize / 2
 		local padX = ctx.x
-		checkpointPad(ctx, nextStage, padX, padTop, padZc, padSize, isFinish)
+		if ctx.park then
+			parkPlateau(ctx, nextStage, padX, padTop, padZc, padSize, isWorldEnd)
+		elseif isWorldEnd and not isFinish then
+			worldEndPad(ctx, padX, padTop, padZc, padSize)
+		else
+			checkpointPad(ctx, nextStage, padX, padTop, padZc, padSize, isFinish)
+		end
 
 		-- 🍫 шоколадная река под фабрикой сладостей (смертельная, как лава)
 		if ctx.zone == 2 then
@@ -2886,17 +3642,6 @@ function MapBuilder.Build()
 				Reflectance = 0.12,
 			})
 			tag(river, "Lava")
-			for i = 1, 4 do
-				local bub = part({ Size = V3(40, 0.5, 40), CFrame = L(ctx, ctx.rng:NextNumber(-50, 50), 1.6, ctx.rng:NextNumber(0, padZc)), Transparency = 1, CanCollide = false, CanTouch = false, CanQuery = false })
-				local em = Instance.new("ParticleEmitter")
-				em.Color = ColorSequence.new(RGB(150, 90, 50), RGB(90, 45, 20))
-				em.Size = NumberSequence.new(1.2, 0)
-				em.Speed = NumberRange.new(1, 3)
-				em.Lifetime = NumberRange.new(1, 2)
-				em.Rate = 6
-				em.EmissionDirection = Enum.NormalId.Top
-				em.Parent = bub
-			end
 		end
 
 		-- волна лавы в зоне 4
@@ -2912,27 +3657,102 @@ function MapBuilder.Build()
 
 		table.insert(stageFrames, { F = stageFrame, len = padZc, y = stageStartY, zone = ctx.zone, pStart = pStart, pEnd = #info.pathPoints })
 
-		local turn = 0
-		if not isFinish and nextStage % 5 == 1 then
-			local k = (nextStage - 1) / 5
-			turn = pattern[((k - 1) % 4) + 1] * PI / 2
+		-- поворот: в парке трасса идёт кольцом вокруг центра, в других мирах — один поворот
+		if ctx.park then
+			local C = ctx.parkCenter
+			local pp = (ctx.F * CF(padX, 0, -padZc)).Position
+			local a = math.atan2(pp.Z - C.Z, pp.X - C.X)
+			local prog = (s - first + 1) / (last - first + 1)
+			local rr = PARK.ring + PARK.ringGrow * prog -- спираль: каждый этап дальше от центра
+			local tgt = V3(C.X + math.cos(a + 0.5) * rr, 0, C.Z + math.sin(a + 0.5) * rr)
+			ctx.F = CFrame.lookAt(V3(pp.X, 0, pp.Z), tgt)
+		else
+			local turn = (not isWorldEnd and (s - first + 1) == 5) and -PI / 2 or 0
+			ctx.F = ctx.F * CF(padX, 0, -padZc) * CFrame.Angles(0, turn, 0)
 		end
-		ctx.F = ctx.F * CF(padX, 0, -padZc) * CFrame.Angles(0, turn, 0)
 		ctx.x, ctx.y, ctx.z = 0, padTop, padSize / 2
-		info.spawnCF[nextStage] = ctx.F * CF(0, padTop + 3.5, 0)
+		if not isWorldEnd or isFinish then
+			info.spawnCF[nextStage] = ctx.F * CF(0, padTop + 3.5, 0)
+		end
 
 		if isFinish then
 			buildFinish(ctx)
+		elseif isWorldEnd then
+			worldFinishPortal(ctx, ctx.zone)
+		elseif Specials[nextStage] and not ctx.park then
+			Specials[nextStage](ctx)
+		end
+	end
+
+	-- 🌍 миры: каждый на своём месте, вход из лобби через портал
+	info.worldOrigins = {}
+	local snakePoints = {}
+	for w = 1, #Config.Zones do
+		local first = (w - 1) * PER_ZONE + 1
+		local last = math.min(w * PER_ZONE, TOTAL)
+		local origin = V3(Config.WORLD_SPACING * w, 0, 0)
+		info.worldOrigins[w] = origin
+		local wf = Instance.new("Folder")
+		wf.Name = "World_" .. w
+		wf.Parent = map
+		currentFolder = wf
+		ctx.zone = w
+		ctx.sky = w == 5
+		ctx.flat = w == 4
+		ctx.stage = first
+		ctx.rng = Random.new(Config.MAP_SEED + w * 101)
+		prevPlan = {}
+		local pFirst = #info.pathPoints + 1
+		if w == 1 then
+			LAVA_BOTTOM = PARK.lavaY - 1
+			ctx.park = true
+			ctx.parkCenter = origin
+			ctx.baseY = PARK.top
+			local a0 = -PI / 2
+			local p0 = V3(origin.X + math.cos(a0) * PARK.ring, 0, origin.Z + math.sin(a0) * PARK.ring)
+			local tgt = V3(origin.X + math.cos(a0 + 0.5) * PARK.ring, 0, origin.Z + math.sin(a0 + 0.5) * PARK.ring)
+			ctx.F = CFrame.lookAt(p0, tgt)
+			ctx.x, ctx.y, ctx.z = 0, PARK.top, 0
+			parkEntrance(ctx, first)
 		else
-			if nextStage % PER_ZONE == 1 then
-				zoneGate(ctx, Config.ZoneOfStage(nextStage))
+			LAVA_BOTTOM = -2
+			ctx.park = false
+			ctx.baseY = 12
+			ctx.F = CF(origin)
+			ctx.x, ctx.y, ctx.z = 0, 12, 0
+			worldEntry(ctx, w, first)
+		end
+		for s = first, last do
+			buildStage(s, first, last)
+		end
+		if w == 1 then
+			local pf = Instance.new("Folder")
+			pf.Name = "ParkScenery"
+			pf.Parent = map
+			currentFolder = pf
+			buildParkScenery(origin, Random.new(Config.MAP_SEED + 4242))
+			-- 🦆 уточка №2: островок рядом с площадкой этапа 6 (два прыжка над лавой)
+			local cp = info.checkpoints[6]
+			if cp then
+				local pp = cp.Position
+				local rad = cp.Size.Y / 2
+				local topY = pp.Y + 1
+				for _, sgn in ipairs({ 1, -1 }) do
+					local dir = V3(origin.X - pp.X, 0, origin.Z - pp.Z).Unit * sgn
+					local islPos = pp + dir * (rad + 10)
+					if farFromPath(V3(islPos.X, 0, islPos.Z), 5) then
+						local rockPos = pp + dir * (rad + 3.6)
+						part({ Size = V3(3, 1, 3), CFrame = CF(rockPos.X, topY - 0.5, rockPos.Z), Color = PARK_CLIFF[1], Material = M.Slate })
+						part({ Size = V3(6, 1, 6), CFrame = CF(islPos.X, topY + 0.5, islPos.Z), Color = RGB(115, 210, 85) })
+						makeDuck(CF(islPos.X, topY + 2.5, islPos.Z), 2)
+						break
+					end
+				end
 			end
-			if Specials[nextStage] then
-				local saveZone = ctx.zone
-				ctx.zone = Config.ZoneOfStage(nextStage)
-				ctx.sky = ctx.zone == 5
-				Specials[nextStage](ctx)
-				ctx.zone = saveZone
+			ctx.park = false
+		else
+			for i = pFirst, #info.pathPoints do
+				table.insert(snakePoints, { w = w, p = info.pathPoints[i] })
 			end
 		end
 	end
@@ -2945,6 +3765,9 @@ function MapBuilder.Build()
 	local drng = Random.new(Config.MAP_SEED + 99)
 	local decorSpots = {}
 	for _, sf in ipairs(stageFrames) do
+		if sf.zone == 1 then
+			continue -- у парка свой декор
+		end
 		for _ = 1, 9 do
 			if sf.zone == 3 then
 				break -- в пещере дальние объекты не видны, там свой декор
@@ -2985,6 +3808,9 @@ function MapBuilder.Build()
 	sceneFolder.Parent = map
 	currentFolder = sceneFolder
 	for _, sf in ipairs(stageFrames) do
+		if sf.zone == 1 then
+			continue
+		end
 		local minY, maxY = math.huge, -math.huge
 		for i = sf.pStart, sf.pEnd do
 			local p = info.pathPoints[i]
@@ -3106,22 +3932,30 @@ function MapBuilder.Build()
 		end
 	end
 
-	-- границы карты
-	local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
-	for _, p in ipairs(info.pathPoints) do
-		minX = math.min(minX, p.X)
-		maxX = math.max(maxX, p.X)
-		minZ = math.min(minZ, p.Z)
-		maxZ = math.max(maxZ, p.Z)
-	end
-
+	-- лава и вулкан под мирами 2–5 (у парка своя лава внутри острова)
 	local world = Instance.new("Folder")
 	world.Name = "World"
 	world.Parent = map
 	currentFolder = world
-	buildVolcano(V3(minX - 400, 0, (minZ + maxZ) / 2))
-	buildLavaSea(minX - 800, maxX + 400, minZ - 400, maxZ + 400)
-	buildEmbers(drng)
+	LAVA_BOTTOM = -2
+	for w = 2, #Config.Zones do
+		local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
+		for _, sp in ipairs(snakePoints) do
+			if sp.w == w then
+				minX = math.min(minX, sp.p.X)
+				maxX = math.max(maxX, sp.p.X)
+				minZ = math.min(minZ, sp.p.Z)
+				maxZ = math.max(maxZ, sp.p.Z)
+			end
+		end
+		if minX < math.huge then
+			buildLavaSea(minX - 500, maxX + 500, minZ - 500, maxZ + 500)
+			if w == 4 then
+				buildVolcano(V3(minX - 380, 0, (minZ + maxZ) / 2))
+			end
+		end
+	end
+	buildEmbers(Random.new(Config.MAP_SEED + 99))
 	setupLighting()
 
 	info.totalStages = TOTAL

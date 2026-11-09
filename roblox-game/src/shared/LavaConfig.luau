@@ -12,6 +12,10 @@ Config.TIME_LEADERBOARD_KEY = "LavaObby_Time_v1" -- лучшее время пр
 Config.TOTAL_STAGES = 50 -- игровых этапов; чекпоинт 51 = финиш
 Config.STAGES_PER_ZONE = 10
 Config.MAP_SEED = 2026 -- поменяй число — получишь другую карту
+Config.WORLD_SPACING = 3000 -- миры стоят далеко друг от друга, у каждого своё место
+Config.WORLD_REWARD = 300 -- награда за прохождение мира
+-- В каком мире есть поднимающаяся лава (в парке опасность — лавовые реки)
+Config.WorldRisingLava = { false, true, true, true, true }
 
 -- 🌋 МИР ПЛАВИТСЯ! Пять миров по 10 этапов. Названия — в LavaText (zone_1 … zone_5).
 Config.Zones = {
@@ -43,6 +47,7 @@ Config.Products = {
 	Coins2500 = 3729634408, -- 💰 2 500 монет
 	Coins10000 = 0, -- 💰 10 000 монет
 	LavaToWater = 0, -- 🌊 Лава → вода для всего сервера
+	UnlockWorld = 0, -- 🔓 Открыть следующий мир сразу
 }
 
 -- Бейджи (необязательно). 0 = не выдавать.
@@ -56,7 +61,7 @@ Config.Badges = {
 
 -- Порядок товаров в магазине. Названия и описания — в скрипте LavaText.
 Config.ShopPasses = { "VIP", "Speed", "SuperJump", "DoubleCoins", "SkinPack", "DragonPet" }
-Config.ShopProducts = { "SkipStage", "SkipZone", "LavaShield", "Coins500", "Coins2500", "Coins10000", "LavaToWater" }
+Config.ShopProducts = { "UnlockWorld", "SkipStage", "SkipZone", "LavaShield", "Coins500", "Coins2500", "Coins10000", "LavaToWater" }
 
 Config.CoinPacks = { Coins500 = 500, Coins2500 = 2500, Coins10000 = 10000 }
 
