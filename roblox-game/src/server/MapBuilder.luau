@@ -1399,7 +1399,7 @@ local function buildLobby(ctx)
 	end
 
 	-- 🔥 светящиеся линии на полу: кольцо вокруг статуи и лучи к порталам
-	local ringR = 18
+	local ringR = 24
 	for i = 0, 35 do
 		local a0, a1 = i / 36 * 2 * PI, (i + 1) / 36 * 2 * PI
 		local p0, p1 = L(ctx, math.cos(a0) * ringR, top + 0.08, math.sin(a0) * ringR).Position, L(ctx, math.cos(a1) * ringR, top + 0.08, math.sin(a1) * ringR).Position
@@ -1409,11 +1409,11 @@ local function buildLobby(ctx)
 
 	-- 🗿 статуя на лавовой скале
 	for i = 0, 3 do
-		local w = 14 - i * 3
-		part({ Size = V3(w, 2.2, w), CFrame = L(ctx, 0, top + 1.1 + i * 2.2, 0) * CFrame.Angles(0, i * 0.4, 0), Color = RGB(90, 70, 65), Material = M.Basalt })
-		part({ Size = V3(w + 0.2, 0.3, 0.6), CFrame = L(ctx, 0, top + 1.6 + i * 2.2, 0) * CFrame.Angles(0, i * 0.4 + 0.7, 0), Color = RGB(255, 110, 0), Material = M.Neon, CanCollide = false })
+		local w = 34 - i * 5
+		part({ Size = V3(w, 3, w), CFrame = L(ctx, 0, top + 1.5 + i * 3, 0) * CFrame.Angles(0, i * 0.4, 0), Color = RGB(90, 70, 65), Material = M.Basalt })
+		part({ Size = V3(w + 0.2, 0.4, 0.8), CFrame = L(ctx, 0, top + 2.2 + i * 3, 0) * CFrame.Angles(0, i * 0.4 + 0.7, 0), Color = RGB(255, 110, 0), Material = M.Neon, CanCollide = false })
 	end
-	giantTrophy(L(ctx, 0, top + 8.8, 0), 1.7)
+	giantTrophy(L(ctx, 0, top + 12, 0), 3.2) -- огромный кубок, видно отовсюду
 
 	-- 🧍 точка появления (спереди), смотрит на порталы
 	local spawn = Instance.new("SpawnLocation")
@@ -1492,7 +1492,7 @@ local function buildLobby(ctx)
 	cf0.Size = 18
 	cf0.Parent = crater
 	-- логотип
-	local logo = part({ Size = V3(70, 26, 1), CFrame = L(ctx, 0, top + wallH + 20, wallZ - 6), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+	local logo = part({ Size = V3(130, 48, 1), CFrame = L(ctx, 0, top + wallH + 30, wallZ - 6), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
 	local lsg = Instance.new("SurfaceGui")
 	lsg.Face = Enum.NormalId.Back
 	lsg.LightInfluence = 0
@@ -1745,7 +1745,7 @@ local function buildLobby(ctx)
 		if math.abs(x) < 10 and z < -20 then
 			return false -- проход от точки появления
 		end
-		if x * x + z * z < 26 * 26 then
+		if x * x + z * z < 30 * 30 then
 			return false
 		end
 		if z > 30 then
@@ -1760,8 +1760,8 @@ local function buildLobby(ctx)
 		return math.abs(x) < 70 and z > -72
 	end
 	local placed = 0
-	for _ = 1, 500 do
-		if placed >= 55 then
+	for _ = 1, 1600 do
+		if placed >= 150 then
 			break
 		end
 		local x, z = rng:NextNumber(-70, 70), rng:NextNumber(-72, 30)
@@ -3021,7 +3021,7 @@ end
 -- R — радиус острова, ring — радиус спирали трассы в начале (растёт к краю на ringGrow)
 -- lavaY — уровень земли парка (лава течёт по ней реками), top — верх площадок.
 -- R — радиус острова; трасса идёт по краю (ring) и чуть закручивается внутрь (ringGrow < 0).
-local PARK = { lavaY = 70, top = 84, R = 270, ring = 212, ringGrow = -42, plateaus = {} }
+local PARK = { lavaY = 70, top = 84, R = 390, ring = 305, ringGrow = -55, plateaus = {} }
 local PARK_STONE = RGB(185, 180, 195)
 local PARK_CLIFF = { RGB(135, 125, 150), RGB(115, 105, 130) }
 
@@ -3499,10 +3499,10 @@ local function parkSkyline(C, rng, GY)
 		return CFrame.lookAt(V3(pos.X, y, pos.Z), V3(C.X, y, C.Z))
 	end
 	-- 🌋 гигантский вулкан из облаков
-	local vp = polar(PI / 2, 640)
+	local vp = polar(PI / 2, 760)
 	bigVolcano(CF(vp.X, GY - 160, vp.Z), 120, 320)
 	-- ⭐ гигантское колесо обозрения на острове
-	local fp = polar(0.3, 600)
+	local fp = polar(0.3, 720)
 	local fcf = faceCenter(fp, GY + 10)
 	floatingIsland(fcf, rng, 170, RGB(110, 205, 80))
 	giantFerrisWheel(fcf, 95)
@@ -3510,7 +3510,7 @@ local function parkSkyline(C, rng, GY)
 		blockyTree(fcf * CF(rng:NextNumber(-70, 70), 0, rng:NextNumber(20, 70)), rng, rng:NextNumber(3, 4.5), pick(rng, { RGB(255, 160, 210), RGB(90, 200, 80) }))
 	end
 	-- 🏰 гигантский замок на острове
-	local cp = polar(PI * 0.82, 600)
+	local cp = polar(PI * 0.82, 720)
 	local ccf = faceCenter(cp, GY + 20)
 	floatingIsland(ccf, rng, 180, RGB(110, 205, 80))
 	local castle = Instance.new("Model")
@@ -3526,7 +3526,7 @@ local function parkSkyline(C, rng, GY)
 	for i = 0, 7 do
 		local a = i / 8 * 2 * PI + 0.2
 		if math.abs(a - PI / 2) > 0.4 and math.abs(a - 0.3) > 0.4 and math.abs(a - PI * 0.82) > 0.4 then
-			local p = polar(a, rng:NextNumber(620, 780))
+			local p = polar(a, rng:NextNumber(760, 900))
 			local icf = CF(p.X, GY + rng:NextNumber(-20, 90), p.Z)
 			local size = rng:NextNumber(90, 140)
 			floatingIsland(icf, rng, size, pick(rng, { RGB(110, 205, 80), RGB(255, 170, 215) }))
@@ -3598,7 +3598,7 @@ local function buildParkScenery(C, rng, stageFrames)
 	tag(kill, "Lava")
 
 	-- 🏞 каменный обод с деревьями и водопадами в облака
-	local segs = 60
+	local segs = 84
 	for i = 0, segs - 1 do
 		local a = i / segs * 2 * PI
 		local p = polar(a, PARK.R + 8)
@@ -3623,9 +3623,9 @@ local function buildParkScenery(C, rng, stageFrames)
 
 	-- 🛤 сеть дорожек внутри парка: кольцо + лучи к центру
 	local stone = PARK_STONE
-	local ringR = 118
-	for i = 0, 39 do
-		local a0, a1 = i / 40 * 2 * PI, (i + 1) / 40 * 2 * PI
+	local ringR = 175
+	for i = 0, 59 do
+		local a0, a1 = i / 60 * 2 * PI, (i + 1) / 60 * 2 * PI
 		local p0, p1 = polar(a0, ringR), polar(a1, ringR)
 		part({ Size = V3(9, 0.3, (p1 - p0).Magnitude + 1), CFrame = CFrame.lookAt(V3((p0.X + p1.X) / 2, GY + 0.1, (p0.Z + p1.Z) / 2), V3(p1.X, GY + 0.1, p1.Z)), Color = stone, Material = M.Cobblestone, CanCollide = false })
 	end
@@ -3648,55 +3648,120 @@ local function buildParkScenery(C, rng, stageFrames)
 		lamp(CF(C.X + math.cos(a) * 24, GY, C.Z + math.sin(a) * 24))
 	end
 	-- ⭐ колесо обозрения
-	local fw = polar(0.5, 82)
-	giantFerrisWheel(faceCenter(fw, GY), 40)
-	reserve(fw, 44)
+	-- помощник: построить группу и увеличить её целиком
+	local function bigger(k, pivot, fn)
+		local m = Instance.new("Model")
+		m.Parent = currentFolder
+		local prev = currentFolder
+		currentFolder = m
+		fn()
+		currentFolder = prev
+		m.WorldPivot = pivot
+		m:ScaleTo(k)
+	end
+	local fw = polar(0.45, 135)
+	giantFerrisWheel(faceCenter(fw, GY), 64)
+	reserve(fw, 70)
 	-- 🌋 вулкан сзади + лавовый ручей от него
-	local vp = polar(PI / 2, 92)
-	bigVolcano(CF(vp.X, GY, vp.Z), 26, 75)
-	reserve(vp, 30)
+	local vp = polar(PI / 2, 150)
+	bigVolcano(CF(vp.X, GY, vp.Z), 44, 140)
+	reserve(vp, 48)
 	-- 🗼 башня свободного падения
-	local dp = polar(1.05, 52)
-	dropTower(CF(dp.X, GY, dp.Z), 85)
-	reserve(dp, 10)
+	local dp = polar(1.0, 85)
+	dropTower(CF(dp.X, GY, dp.Z), 130)
+	reserve(dp, 12)
 	-- 🏰 замок на холме
-	local cp = polar(PI * 0.82, 84)
+	local cp = polar(PI * 0.82, 140)
 	local cCf = faceCenter(cp, GY)
-	part({ Size = V3(60, 4, 50), CFrame = cCf * CF(0, 2, 0), Color = RGB(115, 210, 85) })
-	part({ Size = V3(58, 4, 48), CFrame = cCf * CF(0, -0.2, 0), Color = PARK_CLIFF[1], Material = M.Slate })
-	parkCastle(cCf * CF(0, 4, 4))
-	reserve(cp, 36)
+	bigger(1.7, cCf, function()
+		part({ Size = V3(60, 4, 50), CFrame = cCf * CF(0, 2, 0), Color = RGB(115, 210, 85) })
+		part({ Size = V3(58, 4, 48), CFrame = cCf * CF(0, -0.2, 0), Color = PARK_CLIFF[1], Material = M.Slate })
+		parkCastle(cCf * CF(0, 4, 4))
+	end)
+	reserve(cp, 58)
 	-- 🏴‍☠️ пиратский корабль в пруду
-	local sp = polar(PI * 1.22, 84)
+	local sp = polar(PI * 1.22, 140)
 	local sCf = faceCenter(sp, GY)
-	part({ Shape = CYL, Size = V3(1, 50, 50), CFrame = sCf * CF(0, 0.3, 0) * ROT_UP, Color = RGB(70, 170, 255), Material = M.Glass, Transparency = 0.15, CanCollide = false })
-	part({ Shape = CYL, Size = V3(0.8, 54, 54), CFrame = sCf * CF(0, 0.2, 0) * ROT_UP, Color = stone, Material = M.Cobblestone })
-	pirateShip(sCf * CF(0, -1.5, 0) * CFrame.Angles(0, PI / 2, 0))
-	reserve(sp, 28)
+	bigger(1.6, sCf, function()
+		part({ Shape = CYL, Size = V3(1, 50, 50), CFrame = sCf * CF(0, 0.3, 0) * ROT_UP, Color = RGB(70, 170, 255), Material = M.Glass, Transparency = 0.15, CanCollide = false })
+		part({ Shape = CYL, Size = V3(0.8, 54, 54), CFrame = sCf * CF(0, 0.2, 0) * ROT_UP, Color = stone, Material = M.Cobblestone })
+		pirateShip(sCf * CF(0, -1.5, 0) * CFrame.Angles(0, PI / 2, 0))
+	end)
+	reserve(sp, 44)
 	-- 🛝 водяная горка
-	local wp = polar(-0.18, 84)
-	waterSlide(faceCenter(wp, GY), 32)
-	reserve(wp, 24)
+	local wp = polar(-0.2, 140)
+	bigger(1.6, faceCenter(wp, GY), function()
+		waterSlide(faceCenter(wp, GY), 32)
+	end)
+	reserve(wp, 36)
 	-- 🎢 горки: дуга по внутреннему кольцу (южная часть)
-	parkCoaster(C, PI * 1.38, PI * 1.82, 100, GY + 6, GY)
+	parkCoaster(C, PI * 1.38, PI * 1.82, 165, GY + 10, GY)
 	for t = 0, 1, 0.1 do
-		reserve(polar(PI * 1.38 + (PI * 0.44) * t, 100), 12)
+		reserve(polar(PI * 1.38 + (PI * 0.44) * t, 165), 14)
 	end
 	-- 🎪 шатёр цирка и карусель-чашки
-	local tp = polar(PI * 1.55, 52)
-	circusTent(CF(tp.X, GY, tp.Z), rng, 24)
-	reserve(tp, 18)
-	local cup = polar(PI * 0.2, 46)
+	local tp = polar(PI * 1.55, 88)
+	bigger(1.5, CF(tp.X, GY, tp.Z), function()
+		circusTent(CF(tp.X, GY, tp.Z), rng, 24)
+	end)
+	reserve(tp, 26)
+
+	-- 🗼 смотровая башня с винтовой лестницей (можно забраться наверх)
+	local lp = polar(-PI / 2 + 0.45, 215)
+	local lcf = CF(lp.X, GY, lp.Z)
+	local lh = 52
+	part({ Shape = CYL, Size = V3(lh, 9, 9), CFrame = lcf * CF(0, lh / 2, 0) * ROT_UP, Color = RGB(200, 190, 215), Material = M.Cobblestone })
+	local steps = 44
+	for i = 0, steps - 1 do
+		local a = i / steps * 4 * PI
+		local y = (i + 1) * (lh / steps)
+		part({ Size = V3(7, 1, 3.2), CFrame = lcf * CFrame.Angles(0, a, 0) * CF(7.6, y - 0.5, 0), Color = PARTY[(i % #PARTY) + 1] })
+	end
+	-- верхняя площадка из секторов, с проёмом там, где выходит лестница
+	local aLast = ((steps - 1) / steps * 4 * PI) % (2 * PI)
+	for i = 0, 15 do
+		local a = i / 16 * 2 * PI
+		local da = math.abs(((a - aLast + PI) % (2 * PI)) - PI)
+		if da > 0.45 then
+			part({ Size = V3(10, 1.5, 5.6), CFrame = lcf * CFrame.Angles(0, a, 0) * CF(9, lh + 0.75, 0), Color = RGB(255, 210, 60) })
+			part({ Size = V3(0.6, 3.5, 5.2), CFrame = lcf * CFrame.Angles(0, a, 0) * CF(13.6, lh + 3.2, 0), Color = Color3.new(1, 1, 1) })
+		end
+	end
+	local lflag = part({ Size = V3(0.2, 3, 5), CFrame = lcf * CF(0, lh + 14, 2.5), Color = RGB(230, 50, 80), CanCollide = false })
+	lflag:SetAttribute("Wave", true)
+	part({ Size = V3(0.4, 12, 0.4), CFrame = lcf * CF(0, lh + 7.5, 0), Color = RGB(80, 80, 90) })
+	reserve(lp, 18)
+
+	-- 🦘 площадка с батутами: прыгай по парящим платформам
+	local jp = polar(-PI / 2 + 0.8, 215)
+	local jcf = CFrame.lookAt(V3(jp.X, GY, jp.Z), V3(C.X, GY, C.Z))
+	for i = 0, 3 do
+		local pcf = jcf * CF((i - 1.5) * 12, 0, 0)
+		local pad = part({ Shape = CYL, Size = V3(0.8, 7, 7), CFrame = pcf * CF(0, 0.4, 0) * ROT_UP, Color = PARTY[i + 1], Material = M.Neon })
+		pad:SetAttribute("Launch", V3(0, 85, 0))
+		tag(pad, "Bounce")
+		part({ Shape = CYL, Size = V3(0.6, 8.4, 8.4), CFrame = pcf * CF(0, 0.3, 0) * ROT_UP, Color = RGB(40, 40, 50) })
+	end
+	for i = 0, 6 do
+		local h = 10 + i * 4
+		local a = i / 7 * 2 * PI
+		part({ Size = V3(7, 1, 7), CFrame = jcf * CF(math.cos(a) * 10, h, -18 + math.sin(a) * 10), Color = PARTY[(i % #PARTY) + 1] })
+	end
+	part({ Size = V3(12, 1, 12), CFrame = jcf * CF(0, 40, -18), Color = GOLD, Material = M.Foil })
+	coinAt(jcf * CF(0, 43, -18))
+	reserve(jp, 32)
+
+	local cup = polar(PI * 0.2, 75)
 	teacupRide(CF(cup.X, GY, cup.Z), rng)
 	reserve(cup, 9)
 
 	-- 🌳 плотное заполнение: деревья, ларьки, клумбы, лавочки, фонари
 	local placed = 0
-	for gx = -PARK.R, PARK.R, 8 do
-		for gz = -PARK.R, PARK.R, 8 do
+	for gx = -PARK.R, PARK.R, 9 do
+		for gz = -PARK.R, PARK.R, 9 do
 			local x, z = gx + rng:NextNumber(-3, 3), gz + rng:NextNumber(-3, 3)
 			local r = math.sqrt(x * x + z * z)
-			if r < PARK.R - 6 and r > 28 and rng:NextNumber() < 0.6 then
+			if r < PARK.R - 6 and r > 28 and rng:NextNumber() < 0.55 then
 				local pos = V3(C.X + x, 0, C.Z + z)
 				local nearRing = math.abs(r - ringR) < 6
 				if not nearRing and farFromPath(pos, riverW / 2 + 6) and isFree(pos, 4) then
@@ -3741,7 +3806,7 @@ local function buildParkScenery(C, rng, stageFrames)
 	end
 	for i = 0, 9 do
 		local a = i / 10 * 2 * PI + rng:NextNumber(-0.2, 0.2)
-		local p = polar(a, rng:NextNumber(340, 440))
+		local p = polar(a, rng:NextNumber(470, 560))
 		local icf = CF(p.X, T + rng:NextNumber(-10, 60), p.Z)
 		floatingIsland(icf, rng, rng:NextNumber(18, 30), pick(rng, { RGB(110, 205, 80), RGB(255, 170, 215) }))
 		blockyTree(icf, rng, 1.3, pick(rng, { RGB(90, 200, 80), RGB(255, 160, 210) }))
@@ -3817,7 +3882,7 @@ local function parkEntrance(ctx, first)
 			popcornStand(cf, rng)
 		end
 	end
-	for _, a in ipairs({ -0.7, 0.2, 0.7, -1.3, -2.0 }) do
+	for _, a in ipairs({ -0.75, 0.75, -1.3, -2.0 }) do
 		local p = L(ctx, math.cos(a) * 17, top, math.sin(a) * 17)
 		local cf = CFrame.lookAt(p.Position, L(ctx, 0, top, 0).Position)
 		if rng:NextNumber() < 0.5 then
@@ -3827,6 +3892,23 @@ local function parkEntrance(ctx, first)
 		end
 	end
 	balloonCart(L(ctx, 10, top, -18), rng)
+	-- 🌉 мост и лестница внутрь парка: там можно гулять, на трассу оттуда не попасть
+	local bx0, bx1 = size / 2 - 2, size / 2 + 36
+	part({ Size = V3(bx1 - bx0, 1, 10), CFrame = L(ctx, (bx0 + bx1) / 2, top - 0.5, 0), Color = RGB(165, 115, 70), Material = M.WoodPlanks })
+	for _, sz in ipairs({ -4.8, 4.8 }) do
+		part({ Size = V3(bx1 - bx0, 0.4, 0.4), CFrame = L(ctx, (bx0 + bx1) / 2, top + 2.6, sz), Color = RGB(120, 80, 50), Material = M.Wood })
+		for i = 0, 6 do
+			part({ Size = V3(0.5, 2.8, 0.5), CFrame = L(ctx, bx0 + i * (bx1 - bx0) / 6, top + 1.4, sz), Color = RGB(120, 80, 50), Material = M.Wood })
+		end
+	end
+	local nSteps = math.ceil(top - PARK.lavaY)
+	for i = 1, nSteps do
+		local h = top - i
+		part({ Size = V3(1.6, math.max(h - PARK.lavaY, 0.2), 10), CFrame = L(ctx, bx1 + (i - 0.5) * 1.6, (h + PARK.lavaY) / 2, 0), Color = PARK_STONE, Material = M.Cobblestone })
+	end
+	part({ Size = V3(0.5, 6, 0.5), CFrame = L(ctx, bx0, top + 3, 6.5), Color = RGB(120, 80, 50), Material = M.Wood })
+	makeSign(L(ctx, bx0, top + 6.6, 6.5), V3(0.4, 2.4, 9), "sign_walk_park", RGB(60, 150, 90), Color3.new(1, 1, 1), Enum.NormalId.Left)
+
 	-- 👉 стрелки: от точки появления через арку к центру и дальше к началу трассы
 	arrowTrail(L(ctx, -21, top, 0).Position, L(ctx, -4, top, 0).Position, 4)
 	arrowTrail(L(ctx, 0, top, 4).Position, L(ctx, 0, top, size / 2 - 2).Position, 4)
