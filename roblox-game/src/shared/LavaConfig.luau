@@ -35,8 +35,8 @@ Config.Zones = {
 -- покажет сообщение «ещё не настроено».
 Config.GamePasses = {
 	VIP = 1464490994, -- 👑 VIP (самый важный!)
-	Speed = 0, -- ⚡ Скорость x1.5
-	SuperJump = 0, -- 🚀 Супер-прыжок
+	Speed = 0, -- ⚡ Скорость x2
+	SuperJump = 0, -- 🚀 Прыжок x2
 	DoubleCoins = 0, -- 💰 x2 монеты
 	SkinPack = 0, -- 🌈 Эксклюзивные скины
 	DragonPet = 0, -- 🐉 Питомец Дракончик
@@ -107,9 +107,9 @@ Config.DAILY_CHEST_TRAIL_CHANCE = 0.15 -- шанс найти в сундуке 
 
 -- ============ НАГРАДЫ ============
 Config.NORMAL_WALKSPEED = 16
-Config.SPEED_WALKSPEED = 24
+Config.SPEED_WALKSPEED = 32 -- x2
 Config.NORMAL_JUMP = 7.2
-Config.SUPER_JUMP = 11
+Config.SUPER_JUMP = 14.4 -- x2
 Config.SHIELD_DURATION = 60
 
 -- 🔥 Поднимающаяся лава: после чекпоинта лава начинает подниматься к игроку.
@@ -279,6 +279,10 @@ function Config.UnlockMet(unlock, getAttr)
 	elseif unlock == "rebirth3" then
 		return (getAttr("Rebirths") or 0) >= 3
 	elseif type(unlock) == "string" and string.sub(unlock, 1, 5) == "pass:" then
+		-- в Studio эксклюзивы открыты, чтобы можно было всё проверить
+		if game:GetService("RunService"):IsStudio() then
+			return true
+		end
 		return getAttr("Pass" .. string.sub(unlock, 6)) == true
 	end
 	return false

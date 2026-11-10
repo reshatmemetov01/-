@@ -1431,11 +1431,11 @@ end)
 -- ============ ОСВЕЩЕНИЕ КАЖДОГО МИРА ============
 local Lighting = game:GetService("Lighting")
 local LIGHT = {
-	{ ClockTime = 14.5, Brightness = 2.6, Ambient = Color3.fromRGB(130, 120, 140), Outdoor = Color3.fromRGB(170, 160, 180), Atmo = Color3.fromRGB(200, 225, 255), Density = 0.22, Haze = 0.4, Tint = Color3.fromRGB(255, 252, 245), Sat = 0.3 },
-	{ ClockTime = 13, Brightness = 2.8, Ambient = Color3.fromRGB(160, 130, 150), Outdoor = Color3.fromRGB(200, 170, 190), Atmo = Color3.fromRGB(255, 205, 235), Density = 0.25, Haze = 0.8, Tint = Color3.fromRGB(255, 240, 248), Sat = 0.4 },
-	{ ClockTime = 21.5, Brightness = 1.2, Ambient = Color3.fromRGB(70, 60, 120), Outdoor = Color3.fromRGB(90, 80, 150), Atmo = Color3.fromRGB(90, 70, 170), Density = 0.42, Haze = 2, Tint = Color3.fromRGB(225, 225, 255), Sat = 0.35 },
-	{ ClockTime = 17.6, Brightness = 2, Ambient = Color3.fromRGB(120, 80, 70), Outdoor = Color3.fromRGB(170, 110, 90), Atmo = Color3.fromRGB(255, 140, 90), Density = 0.35, Haze = 1.6, Tint = Color3.fromRGB(255, 232, 215), Sat = 0.25 },
-	{ ClockTime = 12, Brightness = 3, Ambient = Color3.fromRGB(150, 150, 170), Outdoor = Color3.fromRGB(190, 195, 215), Atmo = Color3.fromRGB(215, 235, 255), Density = 0.15, Haze = 0.2, Tint = Color3.fromRGB(255, 255, 250), Sat = 0.25 },
+	{ ClockTime = 14.5, Brightness = 2.6, Ambient = Color3.fromRGB(130, 120, 140), Outdoor = Color3.fromRGB(170, 160, 180), Atmo = Color3.fromRGB(200, 225, 255), Density = 0.12, Haze = 0.14, Tint = Color3.fromRGB(255, 252, 245), Sat = 0.3 },
+	{ ClockTime = 13, Brightness = 2.8, Ambient = Color3.fromRGB(160, 130, 150), Outdoor = Color3.fromRGB(200, 170, 190), Atmo = Color3.fromRGB(255, 205, 235), Density = 0.14, Haze = 0.28, Tint = Color3.fromRGB(255, 240, 248), Sat = 0.4 },
+	{ ClockTime = 21.5, Brightness = 1.2, Ambient = Color3.fromRGB(70, 60, 120), Outdoor = Color3.fromRGB(90, 80, 150), Atmo = Color3.fromRGB(90, 70, 170), Density = 0.23, Haze = 0.7, Tint = Color3.fromRGB(225, 225, 255), Sat = 0.35 },
+	{ ClockTime = 17.6, Brightness = 2, Ambient = Color3.fromRGB(120, 80, 70), Outdoor = Color3.fromRGB(170, 110, 90), Atmo = Color3.fromRGB(255, 140, 90), Density = 0.19, Haze = 0.56, Tint = Color3.fromRGB(255, 232, 215), Sat = 0.25 },
+	{ ClockTime = 12, Brightness = 3, Ambient = Color3.fromRGB(150, 150, 170), Outdoor = Color3.fromRGB(190, 195, 215), Atmo = Color3.fromRGB(215, 235, 255), Density = 0.08, Haze = 0.07, Tint = Color3.fromRGB(255, 255, 250), Sat = 0.25 },
 }
 local NIGHT = { ClockTime = 0.5, Brightness = 0.4, Ambient = Color3.fromRGB(25, 25, 45), Outdoor = Color3.fromRGB(35, 35, 70), Atmo = Color3.fromRGB(30, 30, 70), Density = 0.4, Haze = 1.5, Tint = Color3.fromRGB(190, 200, 255), Sat = 0.1 }
 

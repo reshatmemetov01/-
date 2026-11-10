@@ -3238,27 +3238,31 @@ local function setupLighting()
 	Lighting.EnvironmentDiffuseScale = 1
 	Lighting.EnvironmentSpecularScale = 1
 	Lighting.GlobalShadows = true
+	Lighting.ShadowSoftness = 0.15 -- чёткие тени
+	pcall(function()
+		Lighting.Technology = Enum.Technology.Future -- самый чёткий свет (если Roblox разрешит из скрипта)
+	end)
 	local atmo = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere")
-	atmo.Density = 0.22
+	atmo.Density = 0.12
 	atmo.Offset = 0
 	atmo.Color = RGB(200, 225, 255)
 	atmo.Decay = RGB(255, 200, 170)
-	atmo.Glare = 0.2
-	atmo.Haze = 0.4
+	atmo.Glare = 0
+	atmo.Haze = 0.1
 	atmo.Parent = Lighting
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect") or Instance.new("BloomEffect")
-	bloom.Intensity = 0.5
-	bloom.Size = 20
-	bloom.Threshold = 1.6
+	bloom.Intensity = 0.25
+	bloom.Size = 12
+	bloom.Threshold = 2.2
 	bloom.Parent = Lighting
 	local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Instance.new("ColorCorrectionEffect")
-	cc.Saturation = 0.3
-	cc.Contrast = 0.08
-	cc.Brightness = 0.03
+	cc.Saturation = 0.2
+	cc.Contrast = 0.14
+	cc.Brightness = 0
 	cc.TintColor = RGB(255, 252, 245)
 	cc.Parent = Lighting
 	local rays = Lighting:FindFirstChildOfClass("SunRaysEffect") or Instance.new("SunRaysEffect")
-	rays.Intensity = 0.06
+	rays.Intensity = 0.02
 	rays.Spread = 0.6
 	rays.Parent = Lighting
 end
