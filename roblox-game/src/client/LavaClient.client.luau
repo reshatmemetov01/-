@@ -350,7 +350,7 @@ local list = new("ScrollingFrame", {
 	AutomaticCanvasSize = Enum.AutomaticSize.Y,
 	ZIndex = 6,
 }, shop)
-new("UIGridLayout", { CellSize = UDim2.fromOffset(172, 180), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, list)
+new("UIGridLayout", { CellSize = UDim2.fromOffset(172, 252), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, list)
 
 local currentTab = "trails"
 
@@ -380,8 +380,155 @@ local function ownsItem(category, item)
 	return csvSet(player:GetAttribute(CAT_ATTR[category][1]))[item.id] == true
 end
 
-local function card(order, title, desc, colors, btnText, btnColor, onClick, rarity)
+-- ============ КАРТИНКИ ТОВАРОВ (3D-превью в карточках) ============
+local spinning = {} -- модели в превью, которые плавно покачиваются
+local PERK_ICONS = { swift = "⚡", fastgift = "🎁", lucky = "🍀", shieldplus = "🛡️", magnet = "🧲", doublejump = "⏫" }
+
+local function previewPart(model, size, cf, color, mat, extra)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.Size = size
+	p.CFrame = cf
+	p.Color = color
+	p.Material = mat or Enum.Material.SmoothPlastic
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if extra then
+		for k, v in pairs(extra) do
+			p[k] = v
+		end
+	end
+	p.Parent = model
+	return p
+end
+
+-- кубический человечек (лицом к камере, в сторону -Z)
+local function mannequin(model, color, mat, colors)
+	local idx = 0
+	local function col()
+		idx += 1
+		return colors and colors[((idx - 1) % #colors) + 1] or color
+	end
+	previewPart(model, Vector3.new(2, 2, 1), CFrame.new(0, 0, 0), col(), mat)
+	previewPart(model, Vector3.new(1.25, 1.25, 1.25), CFrame.new(0, 1.65, 0), col(), mat)
+	previewPart(model, Vector3.new(1, 2, 1), CFrame.new(-1.5, 0, 0), col(), mat)
+	previewPart(model, Vector3.new(1, 2, 1), CFrame.new(1.5, 0, 0), col(), mat)
+	previewPart(model, Vector3.new(1, 2, 1), CFrame.new(-0.5, -2, 0), col(), mat)
+	previewPart(model, Vector3.new(1, 2, 1), CFrame.new(0.5, -2, 0), col(), mat)
+	for sx = -1, 1, 2 do
+		previewPart(model, Vector3.new(0.2, 0.3, 0.05), CFrame.new(sx * 0.25, 1.75, -0.64), Color3.fromRGB(25, 25, 30))
+	end
+	previewPart(model, Vector3.new(0.5, 0.1, 0.05), CFrame.new(0, 1.35, -0.64), Color3.fromRGB(25, 25, 30))
+end
+
+local function buildPreviewModel(category, item)
+	local model = Instance.new("Model")
+	if category == "pets" then
+		local folder = ReplicatedStorage:FindFirstChild("LavaPetPreviews")
+		local src = folder and folder:FindFirstChild(item.id)
+		if src then
+			src:Clone().Parent = model
+		else
+			previewPart(model, Vector3.new(1.6, 1.6, 1.6), CFrame.new(), item.color or Color3.new(1, 1, 1), nil, { Shape = Enum.PartType.Ball })
+		end
+	elseif category == "skins" then
+		local mat = Enum.Material[item.material or "SmoothPlastic"] or Enum.Material.SmoothPlastic
+		if mat == Enum.Material.ForceField then
+			mat = Enum.Material.Neon
+		end
+		mannequin(model, item.color or Color3.new(1, 1, 1), mat, item.colors)
+	elseif category == "auras" then
+		mannequin(model, Color3.fromRGB(200, 195, 205), Enum.Material.SmoothPlastic)
+		local cols = item.colors or { Color3.new(1, 1, 1) }
+		previewPart(model, Vector3.new(5.2, 6.6, 5.2), CFrame.new(0, -0.2, 0), cols[1], Enum.Material.Neon, { Shape = Enum.PartType.Ball, Transparency = 0.82 })
+		for i = 0, 13 do
+			local a = i / 14 * math.pi * 2
+			local y = -2.6 + (i % 7) * 0.8
+			local sz = (item.kind == "smoke") and 0.9 or 0.45
+			previewPart(model, Vector3.new(sz, sz, sz), CFrame.new(math.cos(a) * 2.3, y, math.sin(a) * 2.3), cols[(i % #cols) + 1], item.kind == "smoke" and Enum.Material.SmoothPlastic or Enum.Material.Neon, { Shape = Enum.PartType.Ball, Transparency = item.kind == "smoke" and 0.3 or 0 })
+		end
+		if item.kind == "fire" then
+			for i = 0, 7 do
+				local a = i / 8 * math.pi * 2
+				previewPart(model, Vector3.new(0.6, 1.6, 0.6), CFrame.new(math.cos(a) * 1.6, -2.6, math.sin(a) * 1.6) * CFrame.Angles(0, a, 0.3), cols[(i % #cols) + 1], Enum.Material.Neon)
+			end
+		end
+	elseif category == "trails" then
+		local cols = item.colors or { Color3.new(1, 1, 1) }
+		local n = 12
+		for i = 0, n - 1 do
+			local t = i / (n - 1)
+			local seg = t * (#cols - 1)
+			local k = math.min(#cols - 1, math.floor(seg))
+			local c = (#cols == 1) and cols[1] or cols[k + 1]:Lerp(cols[k + 2] or cols[k + 1], seg - k)
+			local x0, x1 = -3 + t * 6, -3 + (i + 1) / (n - 1) * 6
+			local y0, y1 = math.sin(t * math.pi * 1.6) * 1.1, math.sin((i + 1) / (n - 1) * math.pi * 1.6) * 1.1
+			local a, b = Vector3.new(x0, y0, 0), Vector3.new(x1, y1, 0)
+			local w = 0.35 + t * 0.9
+			previewPart(model, Vector3.new(0.2, w, (b - a).Magnitude + 0.05), CFrame.lookAt((a + b) / 2, b), c, Enum.Material.Neon, { Transparency = 0.55 - t * 0.55 })
+		end
+		previewPart(model, Vector3.new(0.9, 0.9, 0.9), CFrame.new(3.1, math.sin(math.pi * 1.6) * 1.1, 0), cols[#cols], Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+	else
+		return nil
+	end
+	return model
+end
+
+local function addPreview(c, category, item)
+	if category == "perks" then
+		local l = new("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(8, 42),
+			Size = UDim2.new(1, -16, 0, 88),
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			Text = PERK_ICONS[item.id] or "⭐",
+			ZIndex = 7,
+		}, c)
+		return l
+	end
+	local model = buildPreviewModel(category, item)
+	if not model then
+		return nil
+	end
+	local vp = new("ViewportFrame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(8, 42),
+		Size = UDim2.new(1, -16, 0, 88),
+		Ambient = Color3.fromRGB(190, 185, 200),
+		LightColor = Color3.new(1, 1, 1),
+		LightDirection = Vector3.new(-0.6, -1, 0.8),
+		ZIndex = 7,
+	}, c)
+	model.Parent = vp
+	local cf, size = model:GetBoundingBox()
+	local center = cf.Position
+	local cam = Instance.new("Camera")
+	cam.FieldOfView = 35
+	local dist = math.max(size.X, size.Y, size.Z) * 1.75 + 1
+	cam.CFrame = CFrame.lookAt(center + Vector3.new(0, size.Y * 0.12, -dist), center)
+	cam.Parent = vp
+	vp.CurrentCamera = cam
+	model.WorldPivot = CFrame.new(center)
+	table.insert(spinning, { model = model, center = center, phase = #spinning * 0.7 })
+	return vp
+end
+
+RunService.RenderStepped:Connect(function()
+	if #spinning == 0 then
+		return
+	end
+	local t = os.clock()
+	for _, sp in ipairs(spinning) do
+		if sp.model.Parent then
+			sp.model:PivotTo(CFrame.new(sp.center) * CFrame.Angles(0, math.sin(t * 1.2 + sp.phase) * 0.7, 0))
+		end
+	end
+end)
+
+local function card(order, title, desc, colors, btnText, btnColor, onClick, rarity, category, item)
 	local c = new("Frame", { BackgroundColor3 = Color3.fromRGB(60, 45, 52), LayoutOrder = order, ZIndex = 6 }, list)
+	local shift = (category and item and addPreview(c, category, item)) and 92 or 0
 	corner(c, 12)
 	local rarityColor = rarity and Config.Rarities[rarity]
 	if rarityColor then
@@ -417,7 +564,7 @@ local function card(order, title, desc, colors, btnText, btnColor, onClick, rari
 	end
 	local t = new("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(8, 40),
+		Position = UDim2.fromOffset(8, 40 + shift),
 		Size = UDim2.new(1, -16, 0, 26),
 		Font = Enum.Font.GothamBlack,
 		TextScaled = true,
@@ -428,8 +575,8 @@ local function card(order, title, desc, colors, btnText, btnColor, onClick, rari
 	textStroke(t)
 	new("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(8, 68),
-		Size = UDim2.new(1, -16, 0, 58),
+		Position = UDim2.fromOffset(8, 68 + shift),
+		Size = UDim2.new(1, -16, 0, shift > 0 and 40 or 58),
 		Font = Enum.Font.Gotham,
 		TextWrapped = true,
 		TextSize = 13,
@@ -443,6 +590,7 @@ local function card(order, title, desc, colors, btnText, btnColor, onClick, rari
 end
 
 local function clearList()
+	table.clear(spinning)
 	for _, c in ipairs(list:GetChildren()) do
 		if c:IsA("Frame") then
 			c:Destroy()
@@ -531,7 +679,7 @@ local function refreshShop()
 					toast("🔒 " .. desc)
 				end
 			end
-			card(i, tr("item_" .. category .. "_" .. item.id), desc, colors, btnText, btnColor, action, item.rarity)
+			card(i, tr("item_" .. category .. "_" .. item.id), desc, colors, btnText, btnColor, action, item.rarity, category, item)
 		end
 	else
 		local order = 0

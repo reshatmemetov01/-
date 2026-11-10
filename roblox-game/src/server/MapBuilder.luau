@@ -1538,7 +1538,8 @@ local function buildLobby(ctx)
 	for i = 0, 35 do
 		local a0, a1 = i / 36 * 2 * PI, (i + 1) / 36 * 2 * PI
 		local p0, p1 = L(ctx, math.cos(a0) * ringR, top + 0.08, math.sin(a0) * ringR).Position, L(ctx, math.cos(a1) * ringR, top + 0.08, math.sin(a1) * ringR).Position
-		part({ Size = V3(0.8, 0.1, (p1 - p0).Magnitude + 0.2), CFrame = CFrame.lookAt((p0 + p1) / 2, p1), Color = RGB(255, 150, 40), Material = M.Neon, CanCollide = false, CanQuery = false })
+		-- аккуратный каменный бортик вместо жёлтой неоновой полосы
+		part({ Size = V3(1.2, 0.35, (p1 - p0).Magnitude + 0.25), CFrame = CFrame.lookAt((p0 + p1) / 2, p1) * CF(0, 0.1, 0), Color = RGB(150, 135, 165), Material = M.Slate, CanQuery = false })
 	end
 	part({ Shape = CYL, Size = V3(0.15, ringR * 2 - 2, ringR * 2 - 2), CFrame = L(ctx, 0, top + 0.06, 0) * ROT_UP, Color = RGB(235, 90, 20), Material = M.CrackedLava, CanCollide = false })
 

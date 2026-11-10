@@ -1046,6 +1046,20 @@ local function buildPet(pet)
 	return model
 end
 
+-- 🖼 готовые модели всех питомцев для картинок в магазине (клиент берёт их в ViewportFrame)
+do
+	local previews = Instance.new("Folder")
+	previews.Name = "LavaPetPreviews"
+	for _, pet in ipairs(Config.Pets) do
+		local ok, model = pcall(buildPet, pet)
+		if ok and model then
+			model.Name = pet.id
+			model.Parent = previews
+		end
+	end
+	previews.Parent = ReplicatedStorage
+end
+
 local function applyPet(player)
 	local s = sessions[player]
 	for _, m in ipairs(petFolder:GetChildren()) do
@@ -2114,6 +2128,10 @@ local function onPlayerAdded(player)
 		notify(player, "n_load_fail", Color3.fromRGB(255, 120, 80))
 	end
 	giveDaily(player, s)
+	-- 💰 в Studio у тестера всегда много денег (настройка Config.TEST_COINS)
+	if RunService:IsStudio() and (Config.TEST_COINS or 0) > 0 then
+		s.data.coins = math.max(s.data.coins, Config.TEST_COINS)
+	end
 	syncAttributes(player)
 	syncChallenges(player)
 	if s.data.dcDay ~= today() then
@@ -2607,6 +2625,13 @@ local function onChat(player, msg)
 	local name = string.match(msg, "^/event%s+(%w+)")
 	if name and Config.Events[name] then
 		task.spawn(runEvent, name)
+	end
+	-- /money 500000 — выдать себе монеты (только владелец игры или Studio)
+	local amount = tonumber(string.match(msg, "^/money%s+(%d+)"))
+	local ms = sessions[player]
+	if amount and ms and ms.loaded then
+		ms.data.coins = math.min(ms.data.coins + amount, 1e9)
+		syncAttributes(player)
 	end
 	-- /world 3 — открыть миры до 3-го и перенестись туда (для проверки)
 	local wn = tonumber(string.match(msg, "^/world%s+(%d+)"))
