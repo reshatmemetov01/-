@@ -2214,9 +2214,14 @@ for _, disc in ipairs(CollectionService:GetTagged("WorldPortal")) do
 		s.lastPortal = now
 		local d = s.data
 		local first, last = worldRange(w)
-		if d.maxStage < first then
+		-- в Studio (и при Config.UNLOCK_ALL_WORLDS) все порталы открыты для проверки
+		local allOpen = RunService:IsStudio() or Config.UNLOCK_ALL_WORLDS
+		if d.maxStage < first and not allOpen then
 			notify(player, "n_portal_locked", Color3.fromRGB(255, 160, 80), w - 1)
 			return
+		end
+		if allOpen and d.maxStage < first then
+			d.maxStage = first
 		end
 		-- продолжаем с самого дальнего этапа в этом мире; пройденный мир — заново с начала
 		if d.maxStage <= last then

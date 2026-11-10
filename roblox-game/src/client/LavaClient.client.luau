@@ -250,8 +250,14 @@ local function toast(text, color)
 	end)
 end
 
+local showBanner
 NotifyRE.OnClientEvent:Connect(function(key, color, args)
-	toast(Text.Format(LANG, key, args), color)
+	local text = Text.Format(LANG, key, args)
+	if key == "n_portal_locked" and showBanner then
+		showBanner(text, color) -- важное сообщение — крупно сверху
+	else
+		toast(text, color)
+	end
 end)
 
 -- ============ БОЛЬШОЙ БАННЕР ============
@@ -268,7 +274,7 @@ local banner = new("TextLabel", {
 }, gui)
 local bannerStroke = new("UIStroke", { Thickness = 2.5, Color = Color3.new(0, 0, 0), Transparency = 1 }, banner)
 
-local function showBanner(text, color)
+function showBanner(text, color)
 	banner.Text = text
 	banner.TextColor3 = color or Color3.new(1, 1, 1)
 	banner.TextTransparency = 0
@@ -701,7 +707,7 @@ local function refreshHud()
 	-- замки на порталах
 	for _, lock in ipairs(CollectionService:GetTagged("PortalLock")) do
 		local lw = lock:GetAttribute("World") or 1
-		local open = mx >= (lw - 1) * Config.STAGES_PER_ZONE + 1
+		local open = mx >= (lw - 1) * Config.STAGES_PER_ZONE + 1 or RunService:IsStudio() or Config.UNLOCK_ALL_WORLDS
 		lock.Transparency = open and 1 or 0.15
 		local sg = lock:FindFirstChildOfClass("SurfaceGui")
 		if sg then

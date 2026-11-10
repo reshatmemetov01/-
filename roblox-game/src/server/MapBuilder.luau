@@ -1234,7 +1234,7 @@ local function portalGate(cf, R, colA, colB, discColor, tagName, worldNum)
 	for sx = -1, 1, 2 do
 		part({ Size = V3(2.6, R * 0.6, 2.6), CFrame = cf * CF(sx * R * 0.82, -R + R * 0.3, 0), Color = colA })
 	end
-	local disc = part({ Shape = CYL, Size = V3(0.5, 2 * R - 1.2, 2 * R - 1.2), CFrame = cf * CFrame.Angles(0, PI / 2, 0), Color = discColor, Material = M.Neon, Transparency = 0.3, CanCollide = false })
+	local disc = part({ Shape = CYL, Size = V3(tagName and 3 or 0.5, 2 * R - 1.2, 2 * R - 1.2), CFrame = cf * CFrame.Angles(0, PI / 2, 0), Color = discColor, Material = M.Neon, Transparency = 0.3, CanCollide = false })
 	local pe = Instance.new("ParticleEmitter")
 	pe.Color = ColorSequence.new(Color3.new(1, 1, 1), discColor)
 	pe.LightEmission = 1
@@ -1539,7 +1539,7 @@ local function buildLobby(ctx)
 		local zinfo = Config.Zones[w]
 		makeSign(gate * CF(0, 14.5, -1.6), V3(20, 5, 0.6), "sign_world", col, Color3.new(1, 1, 1), Enum.NormalId.Back, nil, { tostring(w), zinfo.emoji, "@zone_" .. w })
 		local first = (w - 1) * PER_ZONE + 1
-		makeSign(gate * CF(0, -6.6, -1.6), V3(9, 1.6, 0.3), "sign_stages", RGB(40, 30, 60), Color3.new(1, 1, 1), Enum.NormalId.Back, nil, { tostring(first), tostring(first + PER_ZONE - 1) })
+		makeSign(gate * CF(0, 10.5, -1.7), V3(14, 2.4, 0.3), "sign_stages", RGB(40, 30, 60), Color3.new(1, 1, 1), Enum.NormalId.Back, nil, { tostring(first), tostring(first + PER_ZONE - 1) })
 		-- замок (клиент прячет, если мир открыт)
 		local lock = part({ Name = "PortalLock", Size = V3(9, 9, 0.6), CFrame = gate * CF(0, 0, -0.8), Color = RGB(40, 35, 55), Transparency = 0.15, CanCollide = false, CanTouch = false })
 		lock:SetAttribute("World", w)
@@ -1757,11 +1757,15 @@ local function buildLobby(ctx)
 				return false
 			end
 		end
+		-- только по краям площади: центр и дороги остаются свободными
+		if math.abs(x) < 58 and z > -62 then
+			return false
+		end
 		return math.abs(x) < 70 and z > -72
 	end
 	local placed = 0
-	for _ = 1, 1600 do
-		if placed >= 150 then
+	for _ = 1, 900 do
+		if placed >= 34 then
 			break
 		end
 		local x, z = rng:NextNumber(-70, 70), rng:NextNumber(-72, 30)
@@ -1769,9 +1773,9 @@ local function buildLobby(ctx)
 			placed += 1
 			local cf = L(ctx, x, top, z)
 			local roll = rng:NextNumber()
-			if roll < 0.35 then
-				blockyTree(cf, rng, rng:NextNumber(1, 1.5), pick(rng, { LOBBY_PINK, LOBBY_PINK, RGB(90, 200, 80) }))
-			elseif roll < 0.6 then
+			if roll < 0.2 then
+				blockyTree(cf, rng, rng:NextNumber(1, 1.4), pick(rng, { LOBBY_PINK, LOBBY_PINK, RGB(90, 200, 80) }))
+			elseif roll < 0.5 then
 				lobbyCrystal(cf, rng, rng:NextNumber(0.9, 1.5))
 			elseif roll < 0.78 then
 				bush(cf, rng)
@@ -1782,10 +1786,26 @@ local function buildLobby(ctx)
 			end
 		end
 	end
+	-- 🛣 широкая аллея: точка появления → кубок → порталы, и дорожки к магазинам
+	local AVENUE = RGB(225, 215, 235)
+	local EDGE = RGB(255, 170, 60)
+	part({ Size = V3(18, 0.12, 44), CFrame = L(ctx, 0, top + 0.07, -50), Color = AVENUE, Material = M.Cobblestone, CanQuery = false })
+	part({ Size = V3(18, 0.12, 14), CFrame = L(ctx, 0, top + 0.07, 33), Color = AVENUE, Material = M.Cobblestone, CanQuery = false })
+	part({ Size = V3(116, 0.12, 10), CFrame = L(ctx, 0, top + 0.07, 34), Color = AVENUE, Material = M.Cobblestone, CanQuery = false })
+	for sx = -1, 1, 2 do
+		part({ Size = V3(0.6, 0.16, 44), CFrame = L(ctx, sx * 9.3, top + 0.09, -50), Color = EDGE, Material = M.Neon, CanCollide = false, CanQuery = false })
+		-- боковые дорожки к постройкам (слева магазин/питомцы, справа награды/перерождение)
+		for _, zz in ipairs({ -10, 20 }) do
+			part({ Size = V3(26, 0.12, 7), CFrame = L(ctx, sx * 40, top + 0.07, zz), Color = AVENUE, Material = M.Cobblestone, CanQuery = false })
+		end
+		for i = 0, 3 do
+			lamp(L(ctx, sx * 11, top, -68 + i * 12))
+		end
+	end
 	for _, p in ipairs({ { -30, -10 }, { 30, -10 }, { -30, 20 }, { 30, 20 } }) do
 		bench(facing(p[1], p[2]))
 	end
-	for _, p in ipairs({ { -14, -40 }, { 14, -40 }, { -24, 8 }, { 24, 8 }, { -40, 34 }, { 40, 34 }, { -14, -66 }, { 14, -66 } }) do
+	for _, p in ipairs({ { -24, 8 }, { 24, 8 }, { -40, 34 }, { 40, 34 } }) do
 		lamp(L(ctx, p[1], top, p[2]))
 	end
 	fence(L(ctx, -74, top, -74).Position, L(ctx, -12, top, -74).Position)
@@ -3761,14 +3781,16 @@ local function buildParkScenery(C, rng, stageFrames)
 		for gz = -PARK.R, PARK.R, 9 do
 			local x, z = gx + rng:NextNumber(-3, 3), gz + rng:NextNumber(-3, 3)
 			local r = math.sqrt(x * x + z * z)
-			if r < PARK.R - 6 and r > 28 and rng:NextNumber() < 0.55 then
-				local pos = V3(C.X + x, 0, C.Z + z)
+			local pos = V3(C.X + x, 0, C.Z + z)
+			local ent = PARK.plateaus[1] and PARK.plateaus[1].pos
+			local nearEntrance = ent and (V3(ent.X, 0, ent.Z) - pos).Magnitude < 70
+			if r < PARK.R - 6 and r > 28 and not nearEntrance and rng:NextNumber() < 0.4 then
 				local nearRing = math.abs(r - ringR) < 6
 				if not nearRing and farFromPath(pos, riverW / 2 + 6) and isFree(pos, 4) then
 					local cf = CF(pos.X, GY, pos.Z) * CFrame.Angles(0, rng:NextNumber(0, 2 * PI), 0)
 					local roll = rng:NextNumber()
 					placed += 1
-					if roll < 0.38 then
+					if roll < 0.2 then
 						blockyTree(cf, rng, rng:NextNumber(0.9, 1.5), pick(rng, { RGB(80, 190, 70), RGB(100, 210, 80), RGB(255, 160, 210), RGB(60, 170, 60) }))
 					elseif roll < 0.55 then
 						bush(cf, rng)
