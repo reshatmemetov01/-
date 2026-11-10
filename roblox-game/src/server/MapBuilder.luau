@@ -1266,6 +1266,141 @@ local function bench(cf)
 	end
 end
 
+-- ============ КРАСИВЫЕ ДОМИКИ ЛОББИ ============
+local function wedgeAt(size, cf, color, mat)
+	local w = Instance.new("WedgePart")
+	w.Anchored = true
+	w.TopSurface = Enum.SurfaceType.Smooth
+	w.BottomSurface = Enum.SurfaceType.Smooth
+	w.Material = mat or M.SmoothPlastic
+	w.Size = size
+	w.CFrame = cf
+	w.Color = color
+	w.Parent = currentFolder
+	return w
+end
+
+local function neonLine(a, b, color, thick)
+	thick = thick or 0.3
+	return part({ Size = V3(thick, thick, (b - a).Magnitude), CFrame = CFrame.lookAt((a + b) / 2, b), Color = color, Material = M.Neon, CanCollide = false, CanQuery = false })
+end
+
+-- двускатная крыша с полосками «черепицы», коньком и неоновыми краями
+local function gableRoof(base, w, d, rh, colA, colB, glow)
+	local W, D = w + 2.4, d / 2 + 1.4
+	local n = math.max(3, math.floor(W / 2.6))
+	local seg = W / n
+	for side = -1, 1, 2 do
+		for i = 0, n - 1 do
+			local cf = base * CF(-W / 2 + seg * (i + 0.5), rh / 2, side * D / 2)
+			if side == 1 then
+				cf = cf * CFrame.Angles(0, PI, 0)
+			end
+			wedgeAt(V3(seg + 0.02, rh, D), cf, (i % 2 == 0) and colA or colB)
+		end
+		-- торцевые неоновые линии
+		for sx = -1, 1, 2 do
+			neonLine((base * CF(sx * W / 2, 0.15, side * D)).Position, (base * CF(sx * W / 2, rh + 0.15, 0)).Position, glow)
+		end
+		neonLine((base * CF(-W / 2, 0.1, side * D)).Position, (base * CF(W / 2, 0.1, side * D)).Position, glow)
+	end
+	part({ Size = V3(W + 0.6, 0.9, 0.9), CFrame = base * CF(0, rh + 0.2, 0), Color = darker(colA, 0.7) })
+	for sx = -1, 1, 2 do
+		part({ Shape = BALL, Size = V3(1.4, 1.4, 1.4), CFrame = base * CF(sx * (W / 2 + 0.3), rh + 0.3, 0), Color = glow, Material = M.Neon })
+	end
+end
+
+-- Нарядное здание: цоколь, двухцветные стены, колонны, витрины, полосатый навес,
+-- фонарики, ящики с цветами, крыша с черепицей и вывеска в рамке с лампочками.
+-- Фасад смотрит в сторону -Z (к центру площади). Возвращает дверь.
+local function prettyBuilding(cf, o)
+	local w, d, h = o.w, o.d, o.h
+	local F = -d / 2
+	local trim = o.trim or Color3.new(1, 1, 1)
+	part({ Size = V3(w + 2, 0.5, d + 2), CFrame = cf * CF(0, 0.25, 0), Color = RGB(150, 140, 165), Material = M.Cobblestone })
+	part({ Size = V3(w, h, d), CFrame = cf * CF(0, 0.5 + h / 2, 0), Color = o.wall })
+	part({ Size = V3(w + 0.3, 2.2, d + 0.3), CFrame = cf * CF(0, 1.6, 0), Color = o.band, Material = M.Brick })
+	part({ Size = V3(w + 0.4, 0.4, d + 0.4), CFrame = cf * CF(0, 2.8, 0), Color = trim })
+	-- углы-колонны
+	for sx = -1, 1, 2 do
+		for sz = -1, 1, 2 do
+			part({ Size = V3(1.4, h + 0.4, 1.4), CFrame = cf * CF(sx * w / 2, 0.5 + h / 2, sz * d / 2), Color = trim })
+		end
+	end
+	-- карниз + неоновая полоска
+	part({ Size = V3(w + 1.2, 0.9, d + 1.2), CFrame = cf * CF(0, 0.5 + h, 0), Color = trim })
+	part({ Size = V3(w + 1.25, 0.25, 0.25), CFrame = cf * CF(0, 0.5 + h - 0.2, F - 0.62), Color = o.glow, Material = M.Neon, CanCollide = false })
+	-- дверь в рамке
+	part({ Size = V3(5, 7.2, 0.4), CFrame = cf * CF(0, 0.5 + 3.6, F - 0.1), Color = trim })
+	local door = part({ Size = V3(3.8, 6.4, 0.4), CFrame = cf * CF(0, 0.5 + 3.2, F - 0.25), Color = o.door, Material = M.WoodPlanks })
+	part({ Size = V3(3, 1.6, 0.2), CFrame = cf * CF(0, 0.5 + 5.2, F - 0.45), Color = RGB(170, 230, 255), Material = M.Neon, Transparency = 0.2, CanCollide = false })
+	part({ Shape = BALL, Size = V3(0.5, 0.5, 0.5), CFrame = cf * CF(1.3, 0.5 + 3, F - 0.5), Color = GOLD, Material = M.Foil })
+	part({ Size = V3(6, 0.5, 1.6), CFrame = cf * CF(0, 0.25, F - 1.8), Color = RGB(200, 190, 215), Material = M.Cobblestone })
+	-- витрины по бокам двери
+	local winW, winH = math.max(3, w * 0.27), math.min(5, h * 0.42)
+	for sx = -1, 1, 2 do
+		local wx = sx * (w * 0.28 + 0.6)
+		local wy = 0.5 + 3.4 + winH / 2
+		part({ Size = V3(winW + 0.8, winH + 0.8, 0.4), CFrame = cf * CF(wx, wy, F - 0.1), Color = trim })
+		part({ Size = V3(winW, winH, 0.3), CFrame = cf * CF(wx, wy, F - 0.2), Color = o.glass or RGB(150, 225, 255), Material = M.Neon, Transparency = 0.15, CanCollide = false })
+		part({ Size = V3(0.25, winH, 0.3), CFrame = cf * CF(wx, wy, F - 0.35), Color = trim, CanCollide = false })
+		part({ Size = V3(winW, 0.25, 0.3), CFrame = cf * CF(wx, wy, F - 0.35), Color = trim, CanCollide = false })
+		-- ящик с цветами под окном
+		part({ Size = V3(winW + 0.6, 0.9, 1.1), CFrame = cf * CF(wx, wy - winH / 2 - 0.7, F - 0.6), Color = o.band, Material = M.WoodPlanks, CanCollide = false })
+		for i = 0, 4 do
+			local fx = wx - winW / 2 + (i + 0.5) * winW / 5
+			part({ Shape = BALL, Size = V3(0.8, 0.8, 0.8), CFrame = cf * CF(fx, wy - winH / 2 - 0.05, F - 0.6), Color = PARTY[(i % #PARTY) + 1], CanCollide = false })
+		end
+		-- фонарик у двери
+		part({ Size = V3(0.3, 0.3, 0.9), CFrame = cf * CF(sx * 3.1, 0.5 + 5.6, F - 0.5), Color = RGB(40, 40, 50), Material = M.Metal, CanCollide = false })
+		local lan = part({ Size = V3(0.8, 1.1, 0.8), CFrame = cf * CF(sx * 3.1, 0.5 + 5.1, F - 0.95), Color = RGB(255, 220, 130), Material = M.Neon, CanCollide = false })
+		local pl = Instance.new("PointLight")
+		pl.Color = RGB(255, 210, 140)
+		pl.Range = 10
+		pl.Parent = lan
+	end
+	-- окна второго этажа со ставнями
+	local upY = 0.5 + h - 2
+	for i = -1, 1 do
+		local ux = i * w * 0.3
+		part({ Size = V3(2.4, 2.2, 0.3), CFrame = cf * CF(ux, upY, F - 0.15), Color = RGB(255, 230, 150), Material = M.Neon, CanCollide = false })
+		part({ Size = V3(3, 0.35, 0.6), CFrame = cf * CF(ux, upY - 1.25, F - 0.3), Color = trim, CanCollide = false })
+		for sx = -1, 1, 2 do
+			part({ Size = V3(0.9, 2.4, 0.25), CFrame = cf * CF(ux + sx * 1.75, upY, F - 0.2), Color = o.roofA, CanCollide = false })
+		end
+	end
+	-- полосатый навес над витринами
+	local n = math.floor(w / 2.4)
+	local seg = (w + 1) / n
+	for i = 0, n - 1 do
+		local x = -(w + 1) / 2 + seg * (i + 0.5)
+		local col = (i % 2 == 0) and o.awnA or o.awnB
+		wedgeAt(V3(seg + 0.02, 1.8, 3.2), cf * CF(x, upY - 3.1, F - 1.6), col)
+		part({ Shape = BALL, Size = V3(seg * 0.9, seg * 0.9, 0.4), CFrame = cf * CF(x, upY - 4.05, F - 3.15), Color = col, CanCollide = false })
+	end
+	-- крыша
+	local rh = math.min(w, d) * 0.45
+	gableRoof(cf * CF(0, 0.95 + h, 0), w, d, rh, o.roofA, o.roofB, o.glow)
+	-- труба
+	if o.chimney ~= false then
+		part({ Size = V3(2, rh + 1, 2), CFrame = cf * CF(w * 0.3, 0.95 + h + rh * 0.55, d * 0.22), Color = RGB(170, 90, 70), Material = M.Brick })
+		part({ Size = V3(2.6, 0.6, 2.6), CFrame = cf * CF(w * 0.3, 0.95 + h + rh * 1.05 + 0.3, d * 0.22), Color = RGB(60, 55, 65) })
+	end
+	-- вывеска в рамке с лампочками (стоит на карнизе перед крышей)
+	local sw, sh = o.signW or w * 0.75, 4.4
+	local scf = cf * CF(0, 0.95 + h + sh / 2 + 0.3, F - 1.9)
+	part({ Size = V3(sw + 1.2, sh + 1.2, 0.5), CFrame = scf * CF(0, 0, 0.45), Color = o.signFrame or GOLD, Material = M.Foil })
+	makeSign(scf, V3(sw, sh, 0.6), o.signKey, o.signBg, o.signFg or Color3.new(1, 1, 1), Enum.NormalId.Front)
+	local bulbs = math.floor(sw / 1.6)
+	for i = 0, bulbs do
+		local x = -sw / 2 - 0.3 + i * (sw + 0.6) / bulbs
+		for sy = -1, 1, 2 do
+			part({ Shape = BALL, Size = V3(0.45, 0.45, 0.45), CFrame = scf * CF(x, sy * (sh / 2 + 0.3), -0.1), Color = RGB(255, 240, 180), Material = M.Neon, CanCollide = false, CanQuery = false })
+		end
+	end
+	return door, rh
+end
+
 -- ============ ЛОББИ (как на картинке: амфитеатр с порталами, вулканом и статуей) ============
 local LOBBY_PURPLE = RGB(185, 170, 205)
 local LOBBY_PINK = RGB(255, 160, 210)
@@ -1623,36 +1758,93 @@ local function buildLobby(ctx)
 	sg.Parent = dboard
 	prompt(dboard, "prompt_open", "prompt_tasks", "OpenTasks", true)
 
-	-- 🛒 магазин с подарком на крыше
-	local shopCf = facing(-54, -8)
-	house(shopCf, 20, 12, 9, RGB(255, 225, 180), RGB(150, 60, 200))
-	for i = 0, 6 do
-		local w = Instance.new("WedgePart")
-		w.Anchored = true
-		w.Size = V3(2.9, 2.4, 5)
-		w.CFrame = shopCf * CF(-8.7 + i * 2.9, 8, -8.4)
-		w.Color = (i % 2 == 0) and RGB(230, 50, 60) or Color3.new(1, 1, 1)
-		w.Parent = currentFolder
-	end
-	local counter = part({ Size = V3(16, 3, 2.5), CFrame = shopCf * CF(0, 1.5, -8), Color = RGB(170, 115, 70), Material = M.WoodPlanks })
+	-- 🛒 магазин: нарядная лавка с навесом, прилавком и подарком на крыше
+	local shopCf = facing(-56, -8)
+	local _, shopRh = prettyBuilding(shopCf, {
+		w = 22, d = 14, h = 12,
+		wall = RGB(255, 236, 200), band = RGB(190, 90, 70), trim = Color3.new(1, 1, 1),
+		roofA = RGB(150, 60, 200), roofB = RGB(185, 100, 235), glow = RGB(255, 120, 230),
+		awnA = RGB(230, 50, 60), awnB = Color3.new(1, 1, 1), door = RGB(150, 60, 200),
+		signKey = "sign_shop", signBg = RGB(150, 60, 200), signW = 15,
+	})
+	local counter = part({ Size = V3(16, 3, 2.6), CFrame = shopCf * CF(0, 1.5, -12.5), Color = RGB(170, 115, 70), Material = M.WoodPlanks })
+	part({ Size = V3(16.6, 0.4, 3), CFrame = shopCf * CF(0, 3.2, -12.5), Color = RGB(255, 236, 200) })
 	prompt(counter, "prompt_open", "prompt_shop", "OpenShop", "trails")
-	makeSign(shopCf * CF(0, 14, -6.6), V3(16, 4.5, 0.8), "sign_shop", RGB(150, 60, 200), Color3.new(1, 1, 1), Enum.NormalId.Front)
-	local giftCf = shopCf * CF(0, 18.5, 0)
+	-- товары на прилавке
+	for i = 0, 6 do
+		local gx = -6.6 + i * 2.2
+		if i % 3 == 0 then
+			part({ Size = V3(1.3, 1.3, 1.3), CFrame = shopCf * CF(gx, 4.05, -12.5) * CFrame.Angles(0, 0.4, 0), Color = PARTY[(i % #PARTY) + 1] })
+			part({ Size = V3(1.35, 1.35, 0.3), CFrame = shopCf * CF(gx, 4.05, -12.5) * CFrame.Angles(0, 0.4, 0), Color = GOLD })
+		elseif i % 3 == 1 then
+			part({ Shape = BALL, Size = V3(1.3, 1.3, 1.3), CFrame = shopCf * CF(gx, 4.05, -12.5), Color = PARTY[(i % #PARTY) + 1], Material = M.Neon })
+			part({ Size = V3(0.5, 0.6, 0.5), CFrame = shopCf * CF(gx, 4.9, -12.5), Color = RGB(150, 100, 60) })
+		else
+			part({ Shape = CYL, Size = V3(1.6, 1.2, 1.2), CFrame = shopCf * CF(gx, 4.2, -12.5) * ROT_UP, Color = RGB(130, 220, 255), Material = M.Glass, Transparency = 0.2 })
+		end
+	end
+	-- полосатый зонтик над прилавком
+	for sx = -1, 1, 2 do
+		part({ Size = V3(0.5, 7, 0.5), CFrame = shopCf * CF(sx * 7.6, 3.5, -13.6), Color = Color3.new(1, 1, 1) })
+	end
+	for i = 0, 7 do
+		wedgeAt(V3(2.15, 1.4, 3.6), shopCf * CF(-7.55 + i * 2.15, 7.3, -12.8), (i % 2 == 0) and RGB(230, 50, 60) or Color3.new(1, 1, 1))
+	end
+	-- подарок на крыше
+	local giftCf = shopCf * CF(-4, 12.95 + shopRh + 1.5, 0)
 	part({ Size = V3(6, 5, 6), CFrame = giftCf, Color = RGB(230, 50, 60) })
 	part({ Size = V3(6.1, 5.1, 1.2), CFrame = giftCf, Color = GOLD })
 	part({ Size = V3(1.2, 5.1, 6.1), CFrame = giftCf, Color = GOLD })
-	part({ Shape = BALL, Size = V3(2.4, 2.4, 2.4), CFrame = giftCf * CF(0, 3, 0), Color = GOLD })
-
-	-- 🐾 питомцы
-	local petsCf = facing(-52, -36)
-	house(petsCf, 16, 12, 10, RGB(150, 90, 230), RGB(90, 50, 160))
-	makeSign(petsCf * CF(0, 14.5, -6.6), V3(13, 4.5, 0.8), "sign_petshop", RGB(80, 160, 255), Color3.new(1, 1, 1), Enum.NormalId.Front)
-	local petsDoor = part({ Size = V3(5, 6, 0.4), CFrame = petsCf * CF(0, 3, -6.3), Color = RGB(200, 120, 255), Material = M.Neon, Transparency = 0.2, CanCollide = false })
-	prompt(petsDoor, "prompt_open", "prompt_petshop", "OpenShop", "pets")
-	for i = -1, 1 do
-		part({ Shape = CYL, Size = V3(1.6, 2.4, 2.4), CFrame = petsCf * CF(i * 4.5, 0.8, -10) * ROT_UP, Color = PARTY[i + 3] })
-		part({ Shape = BALL, Size = V3(1.6, 1.6, 1.6), CFrame = petsCf * CF(i * 4.5, 2.4, -10), Color = PARTY[i + 4], Material = M.Neon })
+	for sx = -1, 1, 2 do
+		part({ Shape = BALL, Size = V3(2.2, 2.2, 2.2), CFrame = giftCf * CF(sx * 1, 3.1, 0), Color = GOLD })
 	end
+	-- бочки и ящики у стены
+	for i, off in ipairs({ { -13, -4 }, { -13.5, 0 }, { 13, -3 } }) do
+		if i == 3 then
+			part({ Size = V3(2.4, 2.4, 2.4), CFrame = shopCf * CF(off[1], 1.2, off[2]) * CFrame.Angles(0, 0.3, 0), Color = RGB(170, 115, 70), Material = M.WoodPlanks })
+		else
+			part({ Shape = CYL, Size = V3(3, 2.4, 2.4), CFrame = shopCf * CF(off[1], 1.5, off[2]) * ROT_UP, Color = RGB(150, 95, 55), Material = M.Wood })
+			part({ Shape = CYL, Size = V3(0.3, 2.5, 2.5), CFrame = shopCf * CF(off[1], 2.3, off[2]) * ROT_UP, Color = RGB(60, 60, 70), Material = M.Metal })
+		end
+	end
+
+	-- 🐾 зоомагазин: домик с лапкой на крыше, будкой и загончиком
+	local petsCf = facing(-54, -38)
+	local _, petsRh = prettyBuilding(petsCf, {
+		w = 18, d = 13, h = 11,
+		wall = RGB(200, 225, 255), band = RGB(90, 120, 200), trim = Color3.new(1, 1, 1),
+		roofA = RGB(255, 140, 60), roofB = RGB(255, 175, 90), glow = RGB(120, 220, 255),
+		awnA = RGB(80, 160, 255), awnB = Color3.new(1, 1, 1), door = RGB(90, 120, 200),
+		glass = RGB(200, 160, 255), signKey = "sign_petshop", signBg = RGB(80, 160, 255), signW = 13,
+	})
+	local petsDoor = part({ Size = V3(5, 6.6, 0.4), CFrame = petsCf * CF(0, 3.8, -7.1), Color = RGB(200, 120, 255), Material = M.Neon, Transparency = 0.4, CanCollide = false })
+	prompt(petsDoor, "prompt_open", "prompt_petshop", "OpenShop", "pets")
+	-- лапка на коньке крыши
+	local paw = petsCf * CF(-3, 11.95 + petsRh + 2.6, 0)
+	part({ Shape = BALL, Size = V3(3.2, 3.2, 1.2), CFrame = paw, Color = RGB(255, 120, 180), Material = M.Neon })
+	for i = -1, 1 do
+		part({ Shape = BALL, Size = V3(1.4, 1.4, 1), CFrame = paw * CF(i * 1.4, 2.1 - math.abs(i) * 0.4, 0), Color = RGB(255, 120, 180), Material = M.Neon })
+	end
+	-- загончик с питомцами перед домиком
+	local pen = petsCf * CF(0, 0, -13)
+	part({ Size = V3(16, 0.3, 6), CFrame = pen * CF(0, 0.15, 0), Color = RGB(120, 210, 90) })
+	for _, e in ipairs({ { -8, 0, 0.2, 6 }, { 8, 0, 0.2, 6 } }) do
+		part({ Size = V3(e[3] + 0.3, 1.6, e[4]), CFrame = pen * CF(e[1], 0.8, e[2]), Color = Color3.new(1, 1, 1), Material = M.WoodPlanks })
+	end
+	for sx = -1, 1, 2 do
+		part({ Size = V3(5.5, 1.6, 0.3), CFrame = pen * CF(sx * 5.25, 0.8, -3), Color = Color3.new(1, 1, 1), Material = M.WoodPlanks })
+	end
+	for i = -1, 1 do
+		part({ Shape = CYL, Size = V3(1.6, 2.4, 2.4), CFrame = pen * CF(i * 4.5, 0.8, 0) * ROT_UP, Color = PARTY[i + 3] })
+		part({ Shape = BALL, Size = V3(1.6, 1.6, 1.6), CFrame = pen * CF(i * 4.5, 2.4, 0), Color = PARTY[i + 4], Material = M.Neon })
+	end
+	-- будка
+	local kennel = petsCf * CF(12.5, 0, -2) * CFrame.Angles(0, -0.5, 0)
+	part({ Size = V3(4, 3, 4), CFrame = kennel * CF(0, 1.5, 0), Color = RGB(230, 70, 70), Material = M.WoodPlanks })
+	part({ Size = V3(1.8, 2, 0.2), CFrame = kennel * CF(0, 1, -2.05), Color = RGB(40, 30, 30) })
+	wedgeAt(V3(4.6, 1.6, 2.4), kennel * CF(0, 3.8, -1.2), RGB(255, 175, 90))
+	wedgeAt(V3(4.6, 1.6, 2.4), kennel * CF(0, 3.8, 1.2) * CFrame.Angles(0, PI, 0), RGB(255, 175, 90))
+	part({ Shape = CYL, Size = V3(0.4, 1.4, 1.4), CFrame = kennel * CF(0, 0.2, -3.2) * ROT_UP, Color = RGB(80, 160, 255) })
 
 	-- 👑 VIP на скале слева сзади
 	local vx, vz = -64, 40
@@ -1680,6 +1872,39 @@ local function buildLobby(ctx)
 	for i = 0, 4 do
 		local a = i / 5 * 2 * PI
 		part({ Shape = BALL, Size = V3(1.2, 1.2, 1.2), CFrame = crownCf * CF(math.cos(a) * 2.6, 1.6, math.sin(a) * 2.6), Color = (i % 2 == 0) and RGB(255, 60, 80) or RGB(80, 160, 255), Material = M.Neon })
+	end
+	-- нарядный вход: колонны, портик с фронтоном, ковровая дорожка, кадки с кустами
+	local MARBLE = RGB(250, 245, 255)
+	local pz = -hd / 2 - 3.2
+	for sx = -1, 1, 2 do
+		part({ Size = V3(2, 0.6, 2), CFrame = vipCf * CF(sx * 3.6, 0.3, pz), Color = GOLD, Material = M.Foil })
+		part({ Shape = CYL, Size = V3(hh - 0.6, 1.3, 1.3), CFrame = vipCf * CF(sx * 3.6, hh / 2, pz) * ROT_UP, Color = MARBLE, Material = M.Marble })
+		part({ Size = V3(2, 0.6, 2), CFrame = vipCf * CF(sx * 3.6, hh - 0.3, pz), Color = GOLD, Material = M.Foil })
+		-- кадка с кустом
+		part({ Size = V3(2, 1.6, 2), CFrame = vipCf * CF(sx * 6.2, 0.8, pz - 0.6), Color = GOLD, Material = M.Foil })
+		part({ Shape = BALL, Size = V3(2.6, 2.6, 2.6), CFrame = vipCf * CF(sx * 6.2, 2.5, pz - 0.6), Color = RGB(90, 200, 80) })
+		-- окна по бокам
+		part({ Size = V3(0.3, 3.4, 4), CFrame = vipCf * CF(sx * (hw / 2 + 0.55), hh * 0.55, 0), Color = RGB(130, 210, 255), Material = M.Neon, CanCollide = false })
+		part({ Size = V3(0.4, 0.5, 4.8), CFrame = vipCf * CF(sx * (hw / 2 + 0.6), hh * 0.55 - 1.9, 0), Color = MARBLE, CanCollide = false })
+	end
+	part({ Size = V3(10, 0.9, 5), CFrame = vipCf * CF(0, hh + 0.05, pz + 0.6), Color = MARBLE, Material = M.Marble })
+	for sx = -1, 1, 2 do
+		wedgeAt(V3(0.8, 2.6, 5), vipCf * CF(sx * 2.5, hh + 1.8, pz - 1.5) * CFrame.Angles(0, sx * -PI / 2, 0), MARBLE, M.Marble)
+	end
+	part({ Shape = BALL, Size = V3(1.6, 1.6, 0.6), CFrame = vipCf * CF(0, hh + 1.6, pz - 1.95), Color = RGB(255, 60, 80), Material = M.Neon })
+	part({ Size = V3(3.2, 0.12, 6), CFrame = vipCf * CF(0, 0.06, pz + 0.2), Color = RGB(200, 30, 50), Material = M.Fabric, CanCollide = false })
+	-- неоновый контур крыши и башенки по углам
+	local rw, rd = (hw + 2) / 2, (hd + 2) / 2
+	for _, e in ipairs({ { -rw, -rd, rw, -rd }, { rw, -rd, rw, rd }, { rw, rd, -rw, rd }, { -rw, rd, -rw, -rd } }) do
+		neonLine((vipCf * CF(e[1], hh + 1.05, e[2])).Position, (vipCf * CF(e[3], hh + 1.05, e[4])).Position, RGB(255, 120, 230), 0.35)
+	end
+	for sx = -1, 1, 2 do
+		for sz = -1, 1, 2 do
+			local tcf = vipCf * CF(sx * (rw - 0.8), hh + 1, sz * (rd - 0.8))
+			part({ Shape = CYL, Size = V3(3.4, 2.2, 2.2), CFrame = tcf * CF(0, 1.7, 0) * ROT_UP, Color = GOLD, Material = M.Foil })
+			part({ Shape = BALL, Size = V3(2.6, 2.6, 2.6), CFrame = tcf * CF(0, 3.6, 0), Color = RGB(150, 60, 200) })
+			part({ Shape = BALL, Size = V3(0.8, 0.8, 0.8), CFrame = tcf * CF(0, 5, 0), Color = GOLD, Material = M.Neon })
+		end
 	end
 	makeChest(vipCf * CF(3.5, 0, 3) * CFrame.Angles(0, PI, 0), "vip", "VipChest")
 	makeSign(vipCf * CF(-hw / 2 + 0.6, 5, 0), V3(0.4, 3, 8), "sign_vipchest", RGB(70, 25, 100), GOLD, Enum.NormalId.Right)
@@ -1751,7 +1976,7 @@ local function buildLobby(ctx)
 		if z > 30 then
 			return false -- терраса с порталами
 		end
-		local zones = { { -52, 22, 16 }, { -54, -8, 15 }, { -52, -36, 13 }, { -64, 40, 18 }, { 54, 22, 16 }, { 54, -10, 12 }, { 50, -38, 10 }, { 26, -58, 10 } }
+		local zones = { { -52, 22, 16 }, { -56, -8, 19 }, { -54, -38, 18 }, { -64, 40, 18 }, { 54, 22, 16 }, { 54, -10, 12 }, { 50, -38, 10 }, { 26, -58, 10 } }
 		for _, zz in ipairs(zones) do
 			if (x - zz[1]) ^ 2 + (z - zz[2]) ^ 2 < zz[3] ^ 2 then
 				return false
@@ -1795,7 +2020,7 @@ local function buildLobby(ctx)
 	for sx = -1, 1, 2 do
 		part({ Size = V3(0.6, 0.16, 44), CFrame = L(ctx, sx * 9.3, top + 0.09, -50), Color = EDGE, Material = M.Neon, CanCollide = false, CanQuery = false })
 		-- боковые дорожки к постройкам (слева магазин/питомцы, справа награды/перерождение)
-		for _, zz in ipairs({ -10, 20 }) do
+		for _, zz in ipairs({ -38, -10, 20 }) do
 			part({ Size = V3(26, 0.12, 7), CFrame = L(ctx, sx * 40, top + 0.07, zz), Color = AVENUE, Material = M.Cobblestone, CanQuery = false })
 		end
 		for i = 0, 3 do
