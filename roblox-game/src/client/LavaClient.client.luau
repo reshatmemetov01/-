@@ -122,14 +122,77 @@ corner(barFill, 4)
 local prevBtn = button({ text = "◀", size = UDim2.fromOffset(50, 50), position = UDim2.new(0, -58, 0, 10), color = Color3.fromRGB(80, 60, 70) }, top)
 local nextBtn = button({ text = "▶", size = UDim2.fromOffset(50, 50), position = UDim2.new(1, 8, 0, 10), color = Color3.fromRGB(80, 60, 70) }, top)
 
--- ============ ЛЕВАЯ КОЛОНКА: КНОПКИ ============
-local left = scaled(new("Frame", {
+-- ============ КНОПКА МЕНЮ СЛЕВА: нажал — выезжает панель со всеми кнопками ============
+local menuBtn = scaled(new("TextButton", {
 	AnchorPoint = Vector2.new(0, 0.5),
 	Position = UDim2.new(0, 10, 0.45, 0),
-	Size = UDim2.fromOffset(160, 460),
-	BackgroundTransparency = 1,
+	Size = UDim2.fromOffset(74, 74),
+	BackgroundColor3 = Color3.fromRGB(255, 120, 40),
+	AutoButtonColor = true,
+	Text = "",
 }, gui))
-new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, left)
+corner(menuBtn, 18)
+outline(menuBtn, Color3.new(0, 0, 0), 2.5)
+new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 170, 70), Color3.fromRGB(235, 80, 30)) }, menuBtn)
+local menuIcon = new("TextLabel", {
+	BackgroundTransparency = 1,
+	Size = UDim2.new(1, 0, 0.62, 0),
+	Position = UDim2.fromScale(0, 0.04),
+	Font = Enum.Font.GothamBlack,
+	TextScaled = true,
+	TextColor3 = Color3.new(1, 1, 1),
+	Text = "☰",
+}, menuBtn)
+textStroke(menuIcon)
+local menuText = new("TextLabel", {
+	BackgroundTransparency = 1,
+	Size = UDim2.new(1, -8, 0.28, 0),
+	Position = UDim2.new(0, 4, 0.66, 0),
+	Font = Enum.Font.GothamBlack,
+	TextScaled = true,
+	TextColor3 = Color3.new(1, 1, 1),
+	Text = LANG == "ru" and "МЕНЮ" or "MENU",
+}, menuBtn)
+textStroke(menuText)
+-- красная точка: подарок готов
+local menuBadge = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.new(1, -4, 0, 4),
+	Size = UDim2.fromOffset(20, 20),
+	BackgroundColor3 = Color3.fromRGB(255, 40, 60),
+	Visible = false,
+}, menuBtn)
+corner(menuBadge, 10)
+outline(menuBadge, Color3.new(1, 1, 1), 2)
+
+local left = scaled(new("Frame", {
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(0, 94, 0.45, 0),
+	Size = UDim2.fromOffset(340, 0),
+	AutomaticSize = Enum.AutomaticSize.Y,
+	BackgroundColor3 = DARK,
+	BackgroundTransparency = 0.12,
+	Visible = false,
+}, gui))
+corner(left, 16)
+outline(left, Color3.fromRGB(255, 120, 40), 2)
+new("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, left)
+new("UIGridLayout", { CellSize = UDim2.fromOffset(155, 46), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, left)
+local function setMenu(open)
+	left.Visible = open
+	menuIcon.Text = open and "✕" or "☰"
+end
+menuBtn.Activated:Connect(function()
+	setMenu(not left.Visible)
+end)
+-- после нажатия любой кнопки в меню оно закрывается
+left.ChildAdded:Connect(function(c)
+	if c:IsA("TextButton") then
+		c.Activated:Connect(function()
+			task.defer(setMenu, false)
+		end)
+	end
+end)
 local shopBtn = button({ text = tr("ui_shop"), color = Color3.fromRGB(60, 170, 90), order = 1 }, left)
 local vipBtn = button({ text = tr("ui_vip"), color = Color3.fromRGB(230, 170, 20), order = 2 }, left)
 local giftBtn = button({ text = "🎁 5:00", color = Color3.fromRGB(150, 90, 200), order = 3 }, left)
@@ -145,9 +208,9 @@ rebirthBtn.Visible = false
 
 -- ============ ПРАВАЯ КОЛОНКА: СЧЁТЧИКИ ============
 local right = scaled(new("Frame", {
-	AnchorPoint = Vector2.new(1, 0.5),
-	Position = UDim2.new(1, -10, 0.4, 0),
-	Size = UDim2.fromOffset(160, 260),
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -10, 0, 10),
+	Size = UDim2.fromOffset(180, 140),
 	BackgroundTransparency = 1,
 }, gui))
 new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Right }, right)
@@ -168,8 +231,13 @@ local function counter(text, order)
 	return f
 end
 local coinsLabel = counter("💰 0", 1)
+coinsLabel.Size = UDim2.new(1, 0, 0, 44)
+coinsLabel.TextColor3 = GOLD
+outline(coinsLabel, GOLD, 2)
 local ducksLabel = counter("🦆 0/" .. Config.DUCK_COUNT, 2)
+ducksLabel.Size = UDim2.fromOffset(130, 32)
 local multLabel = counter("x1", 3)
+multLabel.Size = UDim2.fromOffset(130, 32)
 
 -- ============ КРУГЛЫЙ ТАЙМЕР ЩИТА (наверху) ============
 local shieldCircle = scaled(new("Frame", {
@@ -905,9 +973,11 @@ task.spawn(function()
 			if leftSec <= 0 then
 				giftBtn.Text = tr("ui_gift_ready")
 				giftBtn.BackgroundColor3 = Color3.fromRGB(255, 180, 30)
+				menuBadge.Visible = true
 			else
 				giftBtn.Text = string.format("🎁 %d:%02d", math.floor(leftSec / 60), leftSec % 60)
 				giftBtn.BackgroundColor3 = Color3.fromRGB(150, 90, 200)
+				menuBadge.Visible = false
 			end
 		end
 		task.wait(0.5)

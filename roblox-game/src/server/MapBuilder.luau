@@ -956,9 +956,129 @@ local function island(ctx)
 	ctx.z = zc + size / 2
 end
 
+-- ============ 🍬 КОНФЕТНЫЕ ПРЕПЯТСТВИЯ (мир 2) ============
+local MACARON = { RGB(255, 150, 200), RGB(170, 230, 210), RGB(200, 160, 255), RGB(255, 220, 140), RGB(140, 200, 255) }
+
+-- макарун-платформа: две «крышечки» и крем
+local function macaronPad(ctx, x, top, z, dia, col)
+	local walk = part({ Shape = CYL, Size = V3(1.3, dia, dia), CFrame = L(ctx, x, top - 0.65, z) * ROT_UP, Color = col })
+	part({ Shape = CYL, Size = V3(0.3, dia + 0.25, dia + 0.25), CFrame = L(ctx, x, top - 1.35, z) * ROT_UP, Color = col:Lerp(Color3.new(1, 1, 1), 0.25), CanCollide = false })
+	part({ Shape = CYL, Size = V3(0.7, dia - 0.5, dia - 0.5), CFrame = L(ctx, x, top - 1.75, z) * ROT_UP, Color = RGB(255, 248, 235) })
+	part({ Shape = CYL, Size = V3(1.3, dia, dia), CFrame = L(ctx, x, top - 2.75, z) * ROT_UP, Color = col })
+	stripedColumn(ctx, x, z, LAVA_BOTTOM, top - 3.4, 1.4, col, Color3.new(1, 1, 1), 1.5)
+	addPath(L(ctx, x, top, z).Position)
+	return walk
+end
+
+-- лесенка из макарунов зигзагом вверх
+function Obstacles.macarons(ctx)
+	local r = ctx.rng
+	local n = r:NextInteger(4, 6)
+	local side = r:NextNumber() < 0.5 and -1 or 1
+	for i = 1, n do
+		local dia = r:NextNumber(7.5 - 1.5 * ctx.diff, 8.5 - 1.5 * ctx.diff)
+		local rise = r:NextNumber(0.4, 1.8)
+		local gap = r:NextNumber(2.5, 3 + 1.5 * ctx.diff)
+		local x = side * r:NextNumber(2, 3.5)
+		side = -side
+		local top = ctx.y + rise
+		local zc = ctx.z + gap + dia / 2
+		macaronPad(ctx, x, top, zc, dia, MACARON[((i - 1) % #MACARON) + 1])
+		maybeCoin(ctx, x, top, zc)
+		ctx.x, ctx.y, ctx.z = x, top, zc + dia / 2
+	end
+end
+
+-- круглый леденец-площадка
+local function lollipopPad(ctx, x, top, z, dia)
+	part({ Shape = CYL, Size = V3(1, dia, dia), CFrame = L(ctx, x, top - 0.5, z) * ROT_UP, Color = Color3.new(1, 1, 1) })
+	for k = 1, 3 do
+		local d = dia * (1 - k * 0.25)
+		part({ Shape = CYL, Size = V3(1.02 + k * 0.01, d, d), CFrame = L(ctx, x, top - 0.5, z) * ROT_UP, Color = (k % 2 == 1) and RGB(255, 80, 150) or Color3.new(1, 1, 1), CanCollide = false })
+	end
+	stripedColumn(ctx, x, z, LAVA_BOTTOM, top - 1, 1.2, Color3.new(1, 1, 1), RGB(255, 80, 150), 1.5)
+	addPath(L(ctx, x, top, z).Position)
+end
+
+-- бревно-балансир из полосатой карамельной трости между леденцами
+function Obstacles.canes(ctx)
+	local r = ctx.rng
+	local segs = r:NextInteger(2, 3)
+	local width = math.max(1.6, 2.6 - 0.9 * ctx.diff)
+	local top = ctx.y
+	local jx, jz = ctx.x, ctx.z + 3 + 2.5
+	lollipopPad(ctx, jx, top, jz, 5)
+	local side = r:NextNumber() < 0.5 and -1 or 1
+	for _ = 1, segs do
+		local nx = math.clamp(jx + side * r:NextNumber(5, 8), -12, 12)
+		local nz = jz + r:NextNumber(11, 14)
+		local a = L(ctx, jx, top - width / 2, jz).Position
+		local b = L(ctx, nx, top - width / 2, nz).Position
+		local len = (b - a).Magnitude
+		local n = math.max(4, math.floor(len / 1.6))
+		for k = 0, n - 1 do
+			local p = a:Lerp(b, (k + 0.5) / n)
+			part({ Shape = CYL, Size = V3(len / n + 0.02, width, width), CFrame = CFrame.lookAt(p, b) * CFrame.Angles(0, PI / 2, 0), Color = (k % 2 == 0) and RGB(230, 30, 50) or Color3.new(1, 1, 1) })
+		end
+		addPath((a + b) / 2)
+		jx, jz = nx, nz
+		lollipopPad(ctx, jx, top, jz, 5)
+		maybeCoin(ctx, jx, top, jz, 0.5)
+		side = -side
+	end
+	-- крючок трости над последним леденцом (декор)
+	for i = 0, 7 do
+		local a = i / 7 * PI
+		part({ Shape = BALL, Size = V3(1.3, 1.3, 1.3), CFrame = L(ctx, jx + math.cos(a) * 2.2 + 2.2, top + 4 + math.sin(a) * 2.2, jz + 2.5), Color = (i % 2 == 0) and RGB(230, 30, 50) or Color3.new(1, 1, 1), CanCollide = false })
+	end
+	ctx.x, ctx.y, ctx.z = jx, top, jz + 2.5
+end
+
+-- лежащий пончик: приземляйся на кольцо, дырка посередине — в лаву
+local function donutPad(ctx, x, top, zc, R, icing)
+	local ringW = 3
+	local rr = R - ringW / 2
+	local segs = 16
+	local center = L(ctx, x, top, zc).Position
+	for i = 0, segs - 1 do
+		local a0, a1 = i / segs * 2 * PI, (i + 1) / segs * 2 * PI
+		local p0 = L(ctx, x + math.cos(a0) * rr, top - 0.8, zc + math.sin(a0) * rr).Position
+		local p1 = L(ctx, x + math.cos(a1) * rr, top - 0.8, zc + math.sin(a1) * rr).Position
+		local mid = (p0 + p1) / 2
+		local chord = (p1 - p0).Magnitude + 0.4
+		part({ Size = V3(ringW, 1.6, chord), CFrame = CFrame.lookAt(mid, p1), Color = RGB(215, 160, 95) })
+		local ic = part({ Size = V3(ringW - 0.4, 0.3, chord - 0.1), CFrame = CFrame.lookAt(mid, p1) * CF(0, 0.9, 0), Color = icing, CanCollide = false })
+		if i % 2 == 0 then
+			part({ Size = V3(0.5, 0.15, 0.15), CFrame = ic.CFrame * CF(0.4, 0.2, 0) * CFrame.Angles(0, i, 0), Color = PARTY[(i % #PARTY) + 1], CanCollide = false })
+		end
+		if i % 4 == 0 then
+			local base = L(ctx, x + math.cos(a0) * rr, top - 1.6, zc + math.sin(a0) * rr)
+			part({ Shape = CYL, Size = V3(top - 1.6 - LAVA_BOTTOM, 1, 1), CFrame = base * CF(0, -(top - 1.6 - LAVA_BOTTOM) / 2, 0) * ROT_UP, Color = Color3.new(1, 1, 1) })
+		end
+	end
+	addPath(center)
+	addPath(L(ctx, x, top, zc - R).Position)
+	addPath(L(ctx, x, top, zc + R).Position)
+end
+
+function Obstacles.donuts(ctx)
+	local r = ctx.rng
+	local n = r:NextInteger(3, 4)
+	for _ = 1, n do
+		local R = r:NextNumber(5.5, 6.5)
+		local gap = r:NextNumber(2.5, 3.2 + 1.2 * ctx.diff)
+		local x = math.clamp(ctx.x + r:NextNumber(-4, 4), -10, 10)
+		local top = ctx.y + r:NextNumber(-0.5, 1.2)
+		local zc = ctx.z + gap + R
+		donutPad(ctx, x, top, zc, R, pick(r, CANDY))
+		maybeCoin(ctx, x, top, zc - R + 1.5)
+		ctx.x, ctx.y, ctx.z = x, top, zc + R
+	end
+end
+
 local POOLS = {
 	{ "jumps", "stripes", "climb", "rope", "posts", "vanish", "movers", "bounce", "pendulum", "balloons", "pushers", "disks", "spinner" },
-	{ "jumps", "conveyor", "spinner", "bounce", "climb", "rope", "movers", "stripes", "pushers", "lasers", "geysers", "disks" },
+	{ "macarons", "canes", "donuts", "macarons", "canes", "donuts", "jumps", "bounce", "conveyor", "spinner", "pushers", "movers", "disks" },
 	{ "jumps", "cave", "vanish", "posts", "climb", "rope", "disks", "geysers", "lasers", "pendulum" },
 	{ "jumps", "movers", "spinner", "vanish", "disks", "posts", "conveyor", "stripes", "geysers", "lasers", "pushers" },
 	{ "jumps", "bounce", "rope", "movers", "vanish", "disks", "posts", "balloons", "pendulum", "pushers" },
@@ -2014,12 +2134,11 @@ local function buildLobby(ctx)
 	end
 	-- 🛣 широкая аллея: точка появления → кубок → порталы, и дорожки к магазинам
 	local AVENUE = RGB(225, 215, 235)
-	local EDGE = RGB(255, 170, 60)
 	part({ Size = V3(18, 0.12, 44), CFrame = L(ctx, 0, top + 0.07, -50), Color = AVENUE, Material = M.Cobblestone, CanQuery = false })
 	part({ Size = V3(18, 0.12, 14), CFrame = L(ctx, 0, top + 0.07, 33), Color = AVENUE, Material = M.Cobblestone, CanQuery = false })
 	part({ Size = V3(116, 0.12, 10), CFrame = L(ctx, 0, top + 0.07, 34), Color = AVENUE, Material = M.Cobblestone, CanQuery = false })
 	for sx = -1, 1, 2 do
-		part({ Size = V3(0.6, 0.16, 44), CFrame = L(ctx, sx * 9.3, top + 0.09, -50), Color = EDGE, Material = M.Neon, CanCollide = false, CanQuery = false })
+		part({ Size = V3(0.8, 0.3, 44), CFrame = L(ctx, sx * 9.3, top + 0.15, -50), Color = RGB(200, 185, 215), Material = M.Slate, CanQuery = false })
 		-- боковые дорожки к постройкам (слева магазин/питомцы, справа награды/перерождение)
 		for _, zz in ipairs({ -38, -10, 20 }) do
 			part({ Size = V3(26, 0.12, 7), CFrame = L(ctx, sx * 40, top + 0.07, zz), Color = AVENUE, Material = M.Cobblestone, CanQuery = false })
@@ -4221,6 +4340,662 @@ local function worldFinishPortal(ctx, w)
 	end
 end
 
+-- ============ МИР 2: CANDY LAND (огромное лавовое озеро, трасса змейкой) ============
+-- Трасса идёт «змейкой»: туда-обратно четырьмя рядами через лавовое озеро,
+-- в конце — розовый замок. Вокруг озера — берега с гигантскими сладостями.
+local CANDYLAND = { lavaY = 40, top = 54, plateaus = {}, entrance = nil, castle = nil }
+local FROST = { RGB(255, 245, 250), RGB(255, 170, 210), RGB(175, 235, 215), RGB(110, 65, 40), RGB(210, 180, 255) }
+local SPONGE = RGB(240, 205, 150)
+local CHOC = RGB(105, 60, 35)
+local WHITE = Color3.new(1, 1, 1)
+
+-- 🎂 капли глазури по краю прямоугольника (cf — центр верхней грани)
+local function icingDrips(cf, w, d, color, rng, maxLen)
+	for _, side in ipairs({ { 0, -1, w }, { 0, 1, w }, { -1, 0, d }, { 1, 0, d } }) do
+		local len = side[3]
+		local n = math.floor(len / 2.6)
+		for i = 0, n - 1 do
+			local t = -len / 2 + (i + 0.5) * len / n
+			local h = rng:NextNumber(0.8, maxLen or 3.5)
+			local x = side[1] ~= 0 and side[1] * (w / 2 + 0.2) or t
+			local z = side[2] ~= 0 and side[2] * (d / 2 + 0.2) or t
+			local sx = side[1] ~= 0 and 0.5 or len / n + 0.05
+			local sz = side[2] ~= 0 and 0.5 or len / n + 0.05
+			part({ Size = V3(sx, h, sz), CFrame = cf * CF(x, -h / 2, z), Color = color, CanCollide = false, CanQuery = false })
+			if i % 2 == 0 then
+				part({ Shape = BALL, Size = V3(1, 1, 1), CFrame = cf * CF(x, -h, z), Color = color, CanCollide = false, CanQuery = false })
+			end
+		end
+	end
+end
+
+local function sprinkles(cf, w, d, n, rng)
+	for _ = 1, n do
+		part({ Size = V3(0.7, 0.12, 0.22), CFrame = cf * CF(rng:NextNumber(-w / 2 + 0.8, w / 2 - 0.8), 0.06, rng:NextNumber(-d / 2 + 0.8, d / 2 - 0.8)) * CFrame.Angles(0, rng:NextNumber(0, PI), 0), Color = pick(rng, PARTY), CanCollide = false, CanQuery = false })
+	end
+end
+
+-- 🍓 клубничка / вишенка
+local function berry(cf, k, cherry)
+	part({ Shape = BALL, Size = V3(2 * k, 2.2 * k, 2 * k), CFrame = cf * CF(0, 1.1 * k, 0), Color = cherry and RGB(200, 20, 40) or RGB(235, 40, 60) })
+	if cherry then
+		part({ Size = V3(0.15 * k, 1.6 * k, 0.15 * k), CFrame = cf * CF(0.2 * k, 2.8 * k, 0) * CFrame.Angles(0, 0, -0.3), Color = RGB(80, 140, 50), CanCollide = false })
+	else
+		for i = 0, 4 do
+			part({ Size = V3(0.9 * k, 0.15 * k, 0.35 * k), CFrame = cf * CF(0, 2.15 * k, 0) * CFrame.Angles(0, i / 5 * 2 * PI, 0) * CF(0.35 * k, 0, 0), Color = RGB(80, 170, 60), CanCollide = false })
+		end
+	end
+end
+
+-- 🍦 завиток взбитых сливок
+local function creamSwirl(cf, k, col)
+	col = col or WHITE
+	for i = 0, 4 do
+		local d = (3.2 - i * 0.6) * k
+		part({ Shape = CYL, Size = V3(0.9 * k, d, d), CFrame = cf * CF(0, (0.45 + i * 0.75) * k, 0) * CFrame.Angles(0, i * 0.7, 0) * ROT_UP, Color = col, CanCollide = false })
+	end
+	part({ Shape = BALL, Size = V3(0.7 * k, 0.9 * k, 0.7 * k), CFrame = cf * CF(0, 4.3 * k, 0), Color = col, CanCollide = false })
+end
+
+-- 🍭 леденец на палочке (стоит вертикально), k — масштаб
+local function lollipop(cf, k, c1, c2)
+	c1, c2 = c1 or RGB(255, 80, 150), c2 or WHITE
+	local h = 9 * k
+	part({ Shape = CYL, Size = V3(h, 0.6 * k, 0.6 * k), CFrame = cf * CF(0, h / 2, 0) * ROT_UP, Color = WHITE })
+	local head = cf * CF(0, h + 2.6 * k, 0)
+	part({ Shape = CYL, Size = V3(1 * k, 5.6 * k, 5.6 * k), CFrame = head * CFrame.Angles(0, PI / 2, 0), Color = c2 })
+	for i = 1, 3 do
+		local d = 5.6 * k * (1 - i * 0.24)
+		part({ Shape = CYL, Size = V3(1.02 * k + i * 0.02, d, d), CFrame = head * CFrame.Angles(0, PI / 2, 0), Color = (i % 2 == 1) and c1 or c2, CanCollide = false })
+	end
+	-- спираль из шариков
+	for i = 0, 11 do
+		local a = i / 12 * 2 * PI * 1.5
+		local rr = (0.4 + i / 12 * 2.1) * k
+		part({ Shape = BALL, Size = V3(0.5 * k, 0.5 * k, 0.5 * k), CFrame = head * CF(math.cos(a) * rr, math.sin(a) * rr, -0.55 * k), Color = c1:Lerp(WHITE, 0.2), CanCollide = false })
+	end
+end
+
+-- 🧁 капкейк
+local function cupcake(cf, k, frost)
+	frost = frost or RGB(255, 170, 210)
+	local n = 14
+	for i = 0, n - 1 do
+		local a = i / n * 2 * PI
+		part({ Size = V3(1.4 * k, 4 * k, 0.6 * k), CFrame = cf * CFrame.Angles(0, a, 0) * CF(0, 2 * k, -2.6 * k) * CFrame.Angles(-0.12, 0, 0), Color = (i % 2 == 0) and RGB(255, 120, 170) or RGB(255, 200, 220) })
+	end
+	part({ Shape = CYL, Size = V3(4 * k, 5 * k, 5 * k), CFrame = cf * CF(0, 2 * k, 0) * ROT_UP, Color = SPONGE })
+	for i = 0, 3 do
+		local d = (6.4 - i * 1.3) * k
+		part({ Shape = CYL, Size = V3(1.4 * k, d, d), CFrame = cf * CF(0, (4.4 + i * 1.1) * k, 0) * ROT_UP, Color = frost })
+	end
+	berry(cf * CF(0, 8.2 * k, 0), k * 0.8, true)
+	for i = 0, 9 do
+		local a = i / 10 * 2 * PI
+		part({ Size = V3(0.5 * k, 0.15 * k, 0.2 * k), CFrame = cf * CF(math.cos(a) * 2.6 * k, 5.2 * k + (i % 3) * 0.6 * k, math.sin(a) * 2.6 * k) * CFrame.Angles(0, a, 0.4), Color = PARTY[(i % #PARTY) + 1], CanCollide = false })
+	end
+end
+
+-- 🍩 огромный пончик (стоит на ребре)
+local function giantDonut(cf, R, icing)
+	local tube = R * 0.36
+	local n = 28
+	for i = 0, n - 1 do
+		local a = i / n * 2 * PI
+		local p = cf * CF(math.cos(a) * R, R + tube + math.sin(a) * R, 0)
+		part({ Shape = BALL, Size = V3(tube * 2, tube * 2, tube * 2), CFrame = p, Color = RGB(220, 165, 100), CastShadow = false })
+		part({ Shape = BALL, Size = V3(tube * 1.7, tube * 1.7, tube * 1.7), CFrame = p * CF(0, 0, -tube * 0.4), Color = icing, CastShadow = false })
+		if i % 2 == 0 then
+			part({ Size = V3(tube * 0.4, tube * 0.12, tube * 0.12), CFrame = p * CF(tube * 0.3, tube * 0.2, -tube * 1.2) * CFrame.Angles(0, 0, i), Color = PARTY[(i % #PARTY) + 1], CanCollide = false })
+			part({ Size = V3(tube * 0.4, tube * 0.12, tube * 0.12), CFrame = p * CF(-tube * 0.35, -tube * 0.25, -tube * 1.15) * CFrame.Angles(0, 0, -i), Color = PARTY[((i + 2) % #PARTY) + 1], CanCollide = false })
+		end
+	end
+end
+
+-- 🍬 автомат с жвачкой
+local function gumballMachine(cf, k)
+	part({ Size = V3(10 * k, 3 * k, 10 * k), CFrame = cf * CF(0, 1.5 * k, 0), Color = RGB(220, 30, 40) })
+	part({ Size = V3(8 * k, 9 * k, 8 * k), CFrame = cf * CF(0, 7.5 * k, 0), Color = RGB(230, 40, 50) })
+	part({ Size = V3(3 * k, 3 * k, 0.6 * k), CFrame = cf * CF(0, 6 * k, -4.2 * k), Color = RGB(200, 200, 210), Material = M.Metal })
+	part({ Shape = CYL, Size = V3(0.8 * k, 2 * k, 2 * k), CFrame = cf * CF(0, 9 * k, -4.3 * k) * CFrame.Angles(0, PI / 2, 0), Color = GOLD, Material = M.Foil })
+	local globe = cf * CF(0, 18 * k, 0)
+	part({ Shape = BALL, Size = V3(17 * k, 17 * k, 17 * k), CFrame = globe, Color = RGB(220, 240, 255), Material = M.Glass, Transparency = 0.55, CastShadow = false })
+	local grng = Random.new(77)
+	for _ = 1, 40 do
+		local v = V3(grng:NextNumber(-1, 1), grng:NextNumber(-1, 0.5), grng:NextNumber(-1, 1))
+		if v.Magnitude > 0 then
+			v = v.Unit * grng:NextNumber(0, 6 * k)
+			part({ Shape = BALL, Size = V3(2.4 * k, 2.4 * k, 2.4 * k), CFrame = globe * CF(v), Color = pick(grng, PARTY), CanCollide = false, CastShadow = false })
+		end
+	end
+	part({ Shape = CYL, Size = V3(2 * k, 6 * k, 6 * k), CFrame = cf * CF(0, 26.5 * k, 0) * ROT_UP, Color = RGB(220, 30, 40) })
+	part({ Shape = BALL, Size = V3(2.4 * k, 2.4 * k, 2.4 * k), CFrame = cf * CF(0, 28.5 * k, 0), Color = RGB(220, 30, 40) })
+end
+
+-- 🍭 гигантская карамельная трость (арка)
+local function giantCane(cf, k)
+	local h = 30 * k
+	local n = math.floor(h / (2 * k))
+	for i = 0, n - 1 do
+		part({ Shape = CYL, Size = V3(h / n + 0.05, 3 * k, 3 * k), CFrame = cf * CF(0, (i + 0.5) * h / n, 0) * ROT_UP, Color = (i % 2 == 0) and RGB(230, 30, 50) or WHITE })
+	end
+	for i = 0, 10 do
+		local a = i / 10 * PI
+		local p = cf * CF(4 * k - math.cos(a) * 4 * k, h + math.sin(a) * 4 * k, 0)
+		part({ Shape = BALL, Size = V3(3.1 * k, 3.1 * k, 3.1 * k), CFrame = p, Color = (i % 2 == 0) and RGB(230, 30, 50) or WHITE, CanCollide = false })
+	end
+end
+
+-- 🍦 рожок мороженого
+local function iceCream(cf, k)
+	for i = 0, 5 do
+		local d = (1 + i * 1.1) * k
+		part({ Shape = CYL, Size = V3(2.2 * k, d, d), CFrame = cf * CF(0, (1 + i * 2) * k, 0) * ROT_UP, Color = (i % 2 == 0) and RGB(225, 165, 90) or RGB(205, 140, 70) })
+	end
+	local cols = { RGB(255, 170, 210), RGB(175, 235, 215), RGB(255, 245, 230) }
+	for i, c in ipairs(cols) do
+		part({ Shape = BALL, Size = V3(7 * k, 6.4 * k, 7 * k), CFrame = cf * CF(0, (13 + (i - 1) * 4.6) * k, 0), Color = c })
+	end
+	berry(cf * CF(0, 24.5 * k, 0), k, true)
+end
+
+-- 🌸 сахарная вата на палочке (дерево)
+local function cottonTree(cf, rng, k)
+	part({ Shape = CYL, Size = V3(8 * k, 0.9 * k, 0.9 * k), CFrame = cf * CF(0, 4 * k, 0) * ROT_UP, Color = RGB(250, 245, 235) })
+	local col = pick(rng, { RGB(255, 175, 215), RGB(190, 220, 255), RGB(220, 190, 255) })
+	for _ = 1, 6 do
+		local s = rng:NextNumber(3.5, 5.5) * k
+		part({ Shape = BALL, Size = V3(s, s, s), CFrame = cf * CF(rng:NextNumber(-2, 2) * k, rng:NextNumber(8.5, 11.5) * k, rng:NextNumber(-2, 2) * k), Color = col, CanCollide = false })
+	end
+end
+
+-- 🏠 пряничный домик
+local function gingerHouse(cf, k)
+	local gb = RGB(185, 110, 60)
+	part({ Size = V3(10 * k, 8 * k, 9 * k), CFrame = cf * CF(0, 4 * k, 0), Color = gb })
+	for side = -1, 1, 2 do
+		local w = Instance.new("WedgePart")
+		w.Anchored = true
+		w.Size = V3(11.5 * k, 5 * k, 5.4 * k)
+		w.CFrame = cf * CF(0, 10.5 * k, side * 2.7 * k) * (side == 1 and CFrame.Angles(0, PI, 0) or CFrame.new())
+		w.Color = WHITE
+		w.Parent = currentFolder
+	end
+	part({ Size = V3(2.6 * k, 4.4 * k, 0.4 * k), CFrame = cf * CF(0, 2.2 * k, -4.6 * k), Color = RGB(230, 40, 60) })
+	for sx = -1, 1, 2 do
+		part({ Size = V3(2 * k, 2 * k, 0.3 * k), CFrame = cf * CF(sx * 3 * k, 5 * k, -4.6 * k), Color = RGB(255, 230, 140), Material = M.Neon })
+		part({ Size = V3(0.5 * k, 8 * k, 0.4 * k), CFrame = cf * CF(sx * 5 * k, 4 * k, -4.6 * k), Color = WHITE, CanCollide = false })
+	end
+	for i = -2, 2 do
+		part({ Shape = BALL, Size = V3(1 * k, 1 * k, 1 * k), CFrame = cf * CF(i * 2 * k, 8.2 * k, -4.7 * k), Color = PARTY[i + 3], CanCollide = false })
+	end
+end
+
+-- 🍫 водопад из «лавы-карамели» (светящийся)
+local function caramelFall(top, bottom, width)
+	local fall = waterfallFx(top, bottom, width)
+	fall.Color = RGB(255, 170, 40)
+	return fall
+end
+
+-- 🎂 площадка-торт: глазурь, бисквит, крем; на углах — ягоды, сливки и леденцы
+local function candyPlateau(ctx, stageNum, padX, padTop, padZc, size, isEnd, noProps)
+	local rng = Random.new(Config.MAP_SEED + stageNum * 53)
+	local cf = L(ctx, padX, padTop, padZc)
+	table.insert(CANDYLAND.plateaus, { pos = cf.Position, size = size })
+	local frost = FROST[(stageNum % #FROST) + 1]
+	local topPart = part({ Name = "Checkpoint" .. stageNum, Size = V3(size, 1.6, size), CFrame = cf * CF(0, -0.8, 0), Color = frost })
+	if not isEnd then
+		topPart:SetAttribute("Stage", stageNum)
+		tag(topPart, "Checkpoint")
+		info.checkpoints[stageNum] = topPart
+	end
+	icingDrips(cf * CF(0, -0.8, 0), size, size, frost, rng, 4)
+	-- слои торта
+	part({ Size = V3(size - 0.6, 4, size - 0.6), CFrame = cf * CF(0, -3.6, 0), Color = SPONGE })
+	part({ Size = V3(size - 0.4, 1.2, size - 0.4), CFrame = cf * CF(0, -6.2, 0), Color = (frost == CHOC) and WHITE or RGB(255, 210, 230) })
+	part({ Size = V3(size - 0.6, 4, size - 0.6), CFrame = cf * CF(0, -8.8, 0), Color = CHOC })
+	local bottom = padTop - 10.8
+	if bottom > LAVA_BOTTOM then
+		part({ Size = V3(size * 0.75, bottom - LAVA_BOTTOM, size * 0.75), CFrame = CF(cf.Position.X, (bottom + LAVA_BOTTOM) / 2, cf.Position.Z) * (cf - cf.Position), Color = RGB(215, 160, 95), Material = M.WoodPlanks })
+	end
+	sprinkles(cf, size, size, math.floor(size * 0.9), rng)
+	-- дорожка из «пастилы» через центр
+	part({ Size = V3(7, 0.12, size - 2), CFrame = cf * CF(0, 0.06, 0), Color = RGB(255, 225, 240), CanCollide = false })
+	if not isEnd then
+		local glow = part({ Shape = CYL, Size = V3(0.25, 7, 7), CFrame = cf * CF(0, 0.14, 0) * ROT_UP, Color = RGB(255, 120, 200), Material = M.Neon, CanCollide = false })
+		local sg = Instance.new("SurfaceGui")
+		sg.Face = Enum.NormalId.Right
+		sg.LightInfluence = 0
+		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		sg.PixelsPerStud = 40
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.fromScale(1, 1)
+		lbl.BackgroundTransparency = 1
+		lbl.TextScaled = true
+		lbl.Font = Enum.Font.GothamBlack
+		lbl.TextColor3 = WHITE
+		lbl.Text = tostring(stageNum)
+		lbl.Parent = sg
+		sg.Parent = glow
+	end
+	-- угловые украшения (центр и дорожки свободны)
+	if not noProps then
+		local c = size / 2 - 3.2
+		local corners = { { -c, -c }, { c, -c }, { -c, c }, { c, c } }
+		for i, p in ipairs(corners) do
+			local pcf = cf * CF(p[1], 0, p[2])
+			local roll = (i + stageNum) % 4
+			if roll == 0 then
+				berry(pcf, 1.3, false)
+			elseif roll == 1 then
+				creamSwirl(pcf, 1.1)
+			elseif roll == 2 then
+				lollipop(pcf, 0.55, pick(rng, { RGB(255, 80, 150), RGB(90, 170, 255), RGB(140, 220, 90) }))
+			else
+				cupcake(pcf, 0.45)
+			end
+		end
+	end
+	for sx = -1, 1, 2 do
+		lamp(cf * CF(sx * 5, 0, size / 2 - 2.5))
+	end
+	if not isEnd then
+		arrowSign(cf * CF(6.5, 0, size / 2 - 1.5))
+	end
+	local h = size / 2
+	for _, p in ipairs({ { -h, -h }, { h, -h }, { -h, h }, { h, h }, { 0, 0 } }) do
+		addPath((cf * CF(p[1], 0, p[2])).Position)
+	end
+	return topPart, cf
+end
+
+-- 🍭 Вход в Candy Land: площадь-торт, арка из карамельных тростей с вывеской
+local function candyEntrance(ctx, first)
+	local top = ctx.y
+	local size = 60
+	candyPlateau(ctx, first, 0, top, 0, size, false, true)
+	CANDYLAND.entrance = { cf = L(ctx, 0, top, 0), size = size, top = top }
+	info.spawnCF[first] = L(ctx, 0, top + 3.5, -20)
+	portalGate(L(ctx, 0, top + 7, -25), 6, RGB(255, 90, 170), WHITE, RGB(255, 140, 220))
+	-- арка: две трости и шоколадная вывеска с глазурью
+	local archZ = -6
+	for sx = -1, 1, 2 do
+		local base = L(ctx, sx * 13, top, archZ)
+		local n = 12
+		for i = 0, n - 1 do
+			part({ Shape = CYL, Size = V3(2.2, 4.2, 4.2), CFrame = base * CF(0, 1.1 + i * 2.2, 0) * ROT_UP, Color = (i % 2 == 0) and RGB(230, 30, 50) or WHITE })
+		end
+		creamSwirl(base * CF(0, 26.4, 0), 1.3)
+		lamp(L(ctx, sx * 18, top, archZ - 4))
+		lollipop(L(ctx, sx * 22, top, archZ + 6), 1.1, sx < 0 and RGB(255, 80, 150) or RGB(90, 170, 255))
+	end
+	local boardCf = L(ctx, 0, top + 24, archZ)
+	part({ Size = V3(32, 13, 2.5), CFrame = boardCf, Color = CHOC })
+	icingDrips(boardCf * CF(0, 6.5, 0), 32, 2.5, WHITE, Random.new(5), 3)
+	part({ Size = V3(32.4, 1.4, 2.9), CFrame = boardCf * CF(0, 6.2, 0), Color = WHITE })
+	makeSign(boardCf * CF(0, 1.6, -1.35), V3(29, 6, 0.3), "sign_candy_logo", CHOC, RGB(255, 200, 60), Enum.NormalId.Back)
+	makeSign(boardCf * CF(0, 1.6, 1.35), V3(29, 6, 0.3), "sign_candy_logo", CHOC, RGB(255, 200, 60), Enum.NormalId.Front)
+	local ribbon = boardCf * CF(0, -5.5, 0)
+	makeSign(ribbon * CF(0, 0, -1.5), V3(26, 4.4, 0.4), "sign_candy_land", RGB(255, 90, 170), WHITE, Enum.NormalId.Back)
+	makeSign(ribbon * CF(0, 0, 1.5), V3(26, 4.4, 0.4), "sign_candy_land", RGB(255, 90, 170), WHITE, Enum.NormalId.Front)
+	for _, sx in ipairs({ -1, 1 }) do
+		berry(boardCf * CF(sx * 14, 6.9, 0), 1.2, false)
+	end
+	-- клумбы-конфеты по бокам площади (проход свободен)
+	local rng = Random.new(Config.MAP_SEED + 2002)
+	for _, p in ipairs({ { -22, -18 }, { 22, -18 }, { -24, 12 }, { 24, 12 }, { -20, 24 }, { 20, 24 } }) do
+		local roll = rng:NextNumber()
+		local pcf = L(ctx, p[1], top, p[2])
+		if roll < 0.35 then
+			cupcake(pcf, 0.7)
+		elseif roll < 0.65 then
+			cottonTree(pcf, rng, 0.9)
+		else
+			iceCream(pcf, 0.4)
+		end
+	end
+	for _, sx in ipairs({ -1, 1 }) do
+		bench(L(ctx, sx * 10, top, -16) * CFrame.Angles(0, sx * PI / 2, 0))
+	end
+	arrowTrail(L(ctx, 0, top, -18).Position, L(ctx, 0, top, size / 2 - 2).Position, 4, RGB(255, 140, 220))
+	ctx.x, ctx.y, ctx.z = 0, top, size / 2
+end
+
+-- 🏰 розовый замок из сладостей за финишной площадкой
+local function candyCastle(ccf, k)
+	local PINK, PINK2, CONE = RGB(255, 190, 220), RGB(255, 150, 200), RGB(220, 160, 90)
+	local ROOF = { RGB(200, 90, 230), RGB(255, 110, 180), RGB(230, 170, 80) }
+	-- терраса и парадная лестница (фронт замка — сторона -Z)
+	local tW, tD, tH = 120 * k, 80 * k, 12 * k
+	part({ Size = V3(tW, tH, tD), CFrame = ccf * CF(0, tH / 2, tD / 2 + 6 * k), Color = PINK })
+	icingDrips(ccf * CF(0, tH, tD / 2 + 6 * k), tW, tD, WHITE, Random.new(9), 5 * k)
+	local steps = math.floor(tH / 1.2)
+	for i = 1, steps do
+		part({ Size = V3(26 * k, i * 1.2, 2.2), CFrame = ccf * CF(0, i * 0.6, 6 * k - (steps - i) * 2.2 - 1.1), Color = (i % 2 == 0) and WHITE or RGB(255, 220, 235) })
+	end
+	local depth = ccf.Position.Y - LAVA_BOTTOM
+	part({ Size = V3(tW - 2, depth, tD - 2), CFrame = ccf * CF(0, -depth / 2, tD / 2 + 6 * k), Color = SPONGE })
+	part({ Size = V3(tW - 1, 3, tD - 1), CFrame = ccf * CF(0, -6, tD / 2 + 6 * k), Color = CHOC })
+	local base = ccf * CF(0, tH, tD / 2 + 6 * k)
+	-- главная башня-торт
+	local keepW, keepH = 50 * k, 34 * k
+	part({ Size = V3(keepW, keepH, 34 * k), CFrame = base * CF(0, keepH / 2, 4 * k), Color = PINK })
+	part({ Size = V3(keepW + 2, 3 * k, 36 * k), CFrame = base * CF(0, keepH, 4 * k), Color = WHITE })
+	icingDrips(base * CF(0, keepH - 1, 4 * k), keepW + 2, 36 * k, WHITE, Random.new(11), 4 * k)
+	for i = -4, 4 do
+		part({ Size = V3(3.5 * k, 4 * k, 3.5 * k), CFrame = base * CF(i * 5.6 * k, keepH + 3.5 * k, 4 * k - 17 * k), Color = PINK2 })
+	end
+	-- ворота (светятся)
+	part({ Size = V3(14 * k, 20 * k, 1), CFrame = base * CF(0, 10 * k, 4 * k - 17 * k - 0.6), Color = WHITE })
+	part({ Size = V3(11 * k, 17 * k, 1), CFrame = base * CF(0, 8.5 * k, 4 * k - 17 * k - 1.1), Color = RGB(255, 230, 120), Material = M.Neon })
+	for i = -2, 2 do
+		if i ~= 0 then
+			part({ Size = V3(4 * k, 6 * k, 0.6), CFrame = base * CF(i * 9 * k, 22 * k, 4 * k - 17 * k - 0.4), Color = RGB(255, 235, 150), Material = M.Neon })
+		end
+	end
+	-- верхний ярус + огромный завиток сливок с вишней
+	part({ Shape = CYL, Size = V3(16 * k, 30 * k, 30 * k), CFrame = base * CF(0, keepH + 9 * k, 6 * k) * ROT_UP, Color = PINK2 })
+	part({ Shape = CYL, Size = V3(2 * k, 32 * k, 32 * k), CFrame = base * CF(0, keepH + 17 * k, 6 * k) * ROT_UP, Color = WHITE })
+	creamSwirl(base * CF(0, keepH + 18 * k, 6 * k), 4.5 * k)
+	berry(base * CF(0, keepH + 37 * k, 6 * k), 3 * k, true)
+	-- башни с конусами-рожками и флагами
+	local towers = { { -32, -14, 60, 1 }, { 32, -14, 60, 2 }, { -40, 22, 48, 3 }, { 40, 22, 48, 1 }, { -16, -22, 40, 2 }, { 16, -22, 40, 3 } }
+	for _, t in ipairs(towers) do
+		local tcf = base * CF(t[1] * k, 0, t[2] * k)
+		local h, dia = t[3] * k, 12 * k
+		part({ Shape = CYL, Size = V3(h, dia, dia), CFrame = tcf * CF(0, h / 2, 0) * ROT_UP, Color = PINK })
+		part({ Shape = CYL, Size = V3(2.4 * k, dia + 2, dia + 2), CFrame = tcf * CF(0, h, 0) * ROT_UP, Color = WHITE })
+		for i = 1, 3 do
+			part({ Size = V3(2.2 * k, 3.4 * k, 0.6), CFrame = tcf * CF(0, h * (0.35 + i * 0.17), -dia / 2 - 0.2), Color = RGB(255, 235, 150), Material = M.Neon })
+		end
+		local roofCol = ROOF[t[4]]
+		for i = 0, 6 do
+			local d = (dia + 2) * (1 - i / 7)
+			part({ Shape = CYL, Size = V3(2.6 * k, d, d), CFrame = tcf * CF(0, h + 1.3 * k + i * 2.6 * k, 0) * ROT_UP, Color = (i % 2 == 0) and roofCol or roofCol:Lerp(WHITE, 0.25) })
+		end
+		local flagTop = h + 20 * k
+		part({ Size = V3(0.5, 7 * k, 0.5), CFrame = tcf * CF(0, flagTop, 0), Color = WHITE })
+		local flag = part({ Size = V3(5 * k, 3 * k, 0.3), CFrame = tcf * CF(2.5 * k, flagTop + 2 * k, 0), Color = RGB(255, 90, 170), CanCollide = false })
+		flag:SetAttribute("Wave", true)
+	end
+	-- стены между башнями с зубцами
+	for _, wseg in ipairs({ { -32, -14, -16, -22 }, { 16, -22, 32, -14 }, { -40, 22, -32, -14 }, { 32, -14, 40, 22 } }) do
+		local a = (base * CF(wseg[1] * k, 0, wseg[2] * k)).Position
+		local b = (base * CF(wseg[3] * k, 0, wseg[4] * k)).Position
+		local len = (b - a).Magnitude
+		local wcf = CFrame.lookAt((a + b) / 2, b) * CF(0, 10 * k, 0)
+		part({ Size = V3(3 * k, 20 * k, len), CFrame = wcf, Color = PINK2 })
+		part({ Size = V3(3.6 * k, 1.6 * k, len), CFrame = wcf * CF(0, 10 * k, 0), Color = WHITE })
+	end
+	for _, p in ipairs({ { -60, 6 }, { 60, 6 }, { -60, 86 }, { 60, 86 }, { 0, 46 }, { -60, 46 }, { 60, 46 }, { 0, 86 } }) do
+		addPath((ccf * CF(p[1] * k, 0, p[2] * k)).Position)
+	end
+	-- карамельные водопады с террасы в лаву
+	for _, sx in ipairs({ -1, 1 }) do
+		local tp = (ccf * CF(sx * 45 * k, tH, 6 * k - 0.5)).Position
+		caramelFall(tp, V3(tp.X, CANDYLAND.lavaY, tp.Z), 8 * k)
+	end
+end
+
+-- 🌍 берега, озеро и гигантские сладости вокруг трассы Candy Land
+local function buildCandyScenery(C, rng, pFirst, pLast)
+	local LY = CANDYLAND.lavaY
+	local GY = LY + 4 -- уровень берега
+	local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
+	for i = pFirst, pLast do
+		local p = info.pathPoints[i]
+		minX, maxX = math.min(minX, p.X), math.max(maxX, p.X)
+		minZ, maxZ = math.min(minZ, p.Z), math.max(maxZ, p.Z)
+	end
+	local margin = 45
+	local lx0, lx1, lz0, lz1 = minX - margin, maxX + margin, minZ - margin, maxZ + margin
+	local lcx, lcz = (lx0 + lx1) / 2, (lz0 + lz1) / 2
+	local lw, ld = lx1 - lx0, lz1 - lz0
+	-- 🔥 лавовое озеро
+	local lake = part({ Name = "CandyLake", Size = V3(lw, 1, ld), CFrame = CF(lcx, LY - 0.5, lcz), Color = RGB(255, 110, 20), Material = M.CrackedLava })
+	tag(lake, "Lava")
+	local glow = part({ Size = V3(lw, 0.3, ld), CFrame = CF(lcx, LY + 0.2, lcz), Color = RGB(255, 140, 30), Material = M.Neon, Transparency = 0.72, CanCollide = false, CanQuery = false })
+	tag(glow, "Lava")
+	local kill = part({ Name = "CandyVoid", Size = V3(3000, 4, 3000), CFrame = CF(lcx, LY - 160, lcz), Transparency = 1, CanCollide = false, CanQuery = false })
+	tag(kill, "Lava")
+	-- 🌱 берега вокруг озера (мятная «трава» и розовая глазурь по краю)
+	local SW = 230
+	local MINT = RGB(165, 235, 200)
+	local shores = {
+		{ lcx, lz0 - SW / 2, lw + SW * 2, SW },
+		{ lcx, lz1 + SW / 2, lw + SW * 2, SW },
+		{ lx0 - SW / 2, lcz, SW, ld },
+		{ lx1 + SW / 2, lcz, SW, ld },
+	}
+	for _, sh in ipairs(shores) do
+		part({ Size = V3(sh[3], 4, sh[4]), CFrame = CF(sh[1], GY - 2, sh[2]), Color = MINT })
+		part({ Size = V3(sh[3] - 4, 14, sh[4] - 4), CFrame = CF(sh[1], GY - 11, sh[2]), Color = SPONGE })
+		part({ Size = V3(sh[3] - 8, 4, sh[4] - 8), CFrame = CF(sh[1], GY - 20, sh[2]), Color = RGB(255, 200, 225) })
+		part({ Size = V3(sh[3] - 12, 24, sh[4] - 12), CFrame = CF(sh[1], GY - 34, sh[2]), Color = CHOC })
+	end
+	-- глазурь, стекающая с берегов в озеро
+	icingDrips(CF(lcx, GY, lcz), lw, ld, RGB(255, 170, 210), rng, 4)
+	for _, e in ipairs({ { lcx, lz0, lw, 1 }, { lcx, lz1, lw, 1 }, { lx0, lcz, ld, 0 }, { lx1, lcz, ld, 0 } }) do
+		local n = math.floor(e[3] / 70)
+		for i = 1, n do
+			local t = -e[3] / 2 + i * e[3] / (n + 1)
+			local x, z = e[1], e[2]
+			if e[4] == 1 then
+				x += t
+			else
+				z += t
+			end
+			if rng:NextNumber() < 0.5 then
+				caramelFall(V3(x, GY, z), V3(x, LY, z), 6)
+			end
+		end
+	end
+	-- облака под островом
+	for _ = 1, 30 do
+		local a = rng:NextNumber(0, 2 * PI)
+		local r = rng:NextNumber(200, 600)
+		local sz = rng:NextNumber(40, 70)
+		part({ Shape = BALL, Size = V3(sz, sz, sz), CFrame = CF(lcx + math.cos(a) * r, LY - rng:NextNumber(90, 150), lcz + math.sin(a) * r), Color = (rng:NextNumber() < 0.3) and RGB(255, 225, 240) or WHITE, CanCollide = false, CastShadow = false, CanQuery = false, CanTouch = false })
+	end
+
+	-- занятость мест
+	local busy = {}
+	local function isFree(pos, r)
+		if pos.X > lx0 - r and pos.X < lx1 + r and pos.Z > lz0 - r and pos.Z < lz1 + r then
+			return false -- в озере
+		end
+		for _, b in ipairs(busy) do
+			if (b.p.X - pos.X) ^ 2 + (b.p.Z - pos.Z) ^ 2 < (b.r + r) ^ 2 then
+				return false
+			end
+		end
+		return true
+	end
+	local function reserve(pos, r)
+		table.insert(busy, { p = pos, r = r })
+	end
+	local function faceLake(pos)
+		return CFrame.lookAt(V3(pos.X, GY, pos.Z), V3(lcx, GY, lcz))
+	end
+	-- мост от входа на берег: можно погулять по стране сладостей
+	if CANDYLAND.entrance then
+		local e = CANDYLAND.entrance
+		local right = e.cf.RightVector
+		local startP = (e.cf * CF(e.size / 2 - 1, 0, 0)).Position
+		local len = 0
+		for d = 10, 400, 5 do
+			local p = startP + right * d
+			if p.X < lx0 - 6 or p.X > lx1 + 6 or p.Z < lz0 - 6 or p.Z > lz1 + 6 then
+				len = d
+				break
+			end
+		end
+		if len > 0 then
+			local endP = startP + right * len
+			local bcf = CFrame.lookAt((startP + endP) / 2, endP)
+			part({ Size = V3(10, 1, len), CFrame = bcf * CF(0, -0.5, 0), Color = RGB(255, 200, 225) })
+			for _, sx in ipairs({ -4.8, 4.8 }) do
+				local n = math.max(4, math.floor(len / 2))
+				for i = 0, n - 1 do
+					part({ Shape = CYL, Size = V3(len / n + 0.02, 0.8, 0.8), CFrame = bcf * CF(sx, 2.6, -len / 2 + (i + 0.5) * len / n) * CFrame.Angles(0, PI / 2, 0), Color = (i % 2 == 0) and RGB(230, 30, 50) or WHITE })
+				end
+				for i = 0, 6 do
+					part({ Shape = CYL, Size = V3(2.8, 0.6, 0.6), CFrame = bcf * CF(sx, 1.2, -len / 2 + i * len / 6) * ROT_UP, Color = WHITE })
+				end
+			end
+			-- спуск на берег
+			local drop = e.top - GY
+			local nS = math.max(1, math.ceil(drop / 1))
+			for i = 1, nS do
+				local h = e.top - i
+				part({ Size = V3(10, math.max(h - (GY - 1), 0.2), 1.6), CFrame = CFrame.lookAt(endP, endP + right) * CF(0, (h + GY - 1) / 2 - e.top, -(i - 0.5) * 1.6), Color = (i % 2 == 0) and WHITE or RGB(255, 220, 235) })
+			end
+			local sp = startP + right * 2 + V3(0, 7, 0)
+			makeSign(CFrame.lookAt(sp, sp - right), V3(9, 2.4, 0.4), "sign_walk_park", RGB(255, 90, 170), WHITE, Enum.NormalId.Front)
+			reserve(endP + right * 12, 16)
+		end
+	end
+	-- 🎢 розовые американские горки вдоль дальнего берега
+	local pts = {}
+	local cz = lz1 + SW * 0.45
+	for i = 0, 60 do
+		local t = i / 60
+		local x = lx0 - SW * 0.5 + t * (lw + SW)
+		local y = GY + 22 + math.sin(t * PI * 5) * 12 + math.sin(t * PI * 13) * 3
+		local z = cz + math.sin(t * PI * 3) * 30
+		table.insert(pts, V3(x, y, z))
+	end
+	local ok = true
+	for _, p in ipairs(pts) do
+		if not isFree(p, 2) then
+			ok = false
+			break
+		end
+	end
+	if ok then
+		coasterRails(pts, GY)
+		for k = 1, #pts, 3 do
+			reserve(pts[k], 8)
+		end
+	end
+	-- 🍰 гигантские сладости вокруг озера: по кругу на берегу
+	local giants = {
+		function(cf) giantDonut(cf, 30, RGB(255, 150, 200)) end,
+		function(cf) gumballMachine(cf, 2.4) end,
+		function(cf) lollipop(cf, 5, RGB(255, 80, 150)) end,
+		function(cf) cupcake(cf, 4.5, RGB(175, 235, 215)) end,
+		function(cf) iceCream(cf, 2.6) end,
+		function(cf) giantCane(cf, 2.2) end,
+		function(cf) lollipop(cf, 4.2, RGB(90, 170, 255)) end,
+		function(cf) cupcake(cf, 3.8, RGB(210, 180, 255)) end,
+		function(cf) giantDonut(cf, 24, RGB(110, 65, 40)) end,
+		function(cf) gingerHouse(cf, 2.6) end,
+		function(cf) lollipop(cf, 4.6, RGB(140, 220, 90)) end,
+		function(cf) iceCream(cf, 2.2) end,
+	}
+	local giantR = { 42, 32, 20, 26, 24, 20, 18, 22, 34, 22, 18, 20 }
+	local perim = 2 * (lw + ld)
+	local count = 26
+	for i = 0, count - 1 do
+		local t = (i + 0.5) / count * perim
+		local px, pz, nx, nz
+		if t < lw then
+			px, pz, nx, nz = lx0 + t, lz0, 0, -1
+		elseif t < lw + ld then
+			px, pz, nx, nz = lx1, lz0 + (t - lw), 1, 0
+		elseif t < 2 * lw + ld then
+			px, pz, nx, nz = lx1 - (t - lw - ld), lz1, 0, 1
+		else
+			px, pz, nx, nz = lx0, lz1 - (t - 2 * lw - ld), -1, 0
+		end
+		local gi = (i % #giants) + 1
+		local need = giantR[gi]
+		local out = need + 18 + rng:NextNumber(0, 40)
+		local pos = V3(px + nx * out, 0, pz + nz * out)
+		if isFree(pos, need) then
+			reserve(pos, need)
+			giants[gi](faceLake(pos))
+		end
+	end
+	-- 🏰 замок пустой не бывает: дальний ряд — горы-мороженое и домики
+	for i = 0, 15 do
+		local a = i / 16 * 2 * PI
+		local dist = math.max(lw, ld) / 2 + SW - 30
+		local pos = V3(lcx + math.cos(a) * dist, 0, lcz + math.sin(a) * dist)
+		if pos.X > lx0 - SW + 10 and pos.X < lx1 + SW - 10 and pos.Z > lz0 - SW + 10 and pos.Z < lz1 + SW - 10 and isFree(pos, 26) then
+			reserve(pos, 26)
+			local cf = faceLake(pos)
+			if i % 3 == 0 then
+				-- гора из шариков мороженого
+				local cols = { RGB(255, 170, 210), RGB(175, 235, 215), RGB(255, 245, 230), RGB(210, 180, 255) }
+				for k = 0, 3 do
+					local s = 46 - k * 9
+					part({ Shape = BALL, Size = V3(s, s * 0.85, s), CFrame = cf * CF(rng:NextNumber(-4, 4), 12 + k * 15, rng:NextNumber(-4, 4)), Color = cols[k + 1] })
+				end
+				berry(cf * CF(0, 68, 0), 4, true)
+			elseif i % 3 == 1 then
+				gingerHouse(cf, 2)
+			else
+				giantCane(cf, 1.6)
+			end
+		end
+	end
+	-- 🍬 заполнение берегов: немного деревьев-ваты, конфеты, лавочки, фонари
+	for gx = lx0 - SW + 10, lx1 + SW - 10, 16 do
+		for gz = lz0 - SW + 10, lz1 + SW - 10, 16 do
+			local pos = V3(gx + rng:NextNumber(-5, 5), 0, gz + rng:NextNumber(-5, 5))
+			if rng:NextNumber() < 0.18 and isFree(pos, 5) then
+				reserve(pos, 5)
+				local cf = CF(pos.X, GY, pos.Z) * CFrame.Angles(0, rng:NextNumber(0, 2 * PI), 0)
+				local roll = rng:NextNumber()
+				if roll < 0.2 then
+					cottonTree(cf, rng, rng:NextNumber(1, 1.6))
+				elseif roll < 0.45 then
+					lollipop(cf, rng:NextNumber(0.6, 1.2), pick(rng, { RGB(255, 80, 150), RGB(90, 170, 255), RGB(140, 220, 90), RGB(255, 170, 40) }))
+				elseif roll < 0.6 then
+					cupcake(cf, rng:NextNumber(0.6, 1))
+				elseif roll < 0.72 then
+					berry(cf, rng:NextNumber(1.5, 2.5), false)
+				elseif roll < 0.82 then
+					creamSwirl(cf, rng:NextNumber(1.2, 2))
+				elseif roll < 0.91 then
+					bench(cf)
+				else
+					lamp(cf)
+				end
+			end
+		end
+	end
+	-- 🍭 леденцы и вафли, торчащие из лавы (далеко от трассы)
+	for _ = 1, 60 do
+		local pos = V3(rng:NextNumber(lx0 + 10, lx1 - 10), 0, rng:NextNumber(lz0 + 10, lz1 - 10))
+		if farFromPath(pos, 26) then
+			local cf = CF(pos.X, LY, pos.Z) * CFrame.Angles(rng:NextNumber(-0.25, 0.25), rng:NextNumber(0, 2 * PI), rng:NextNumber(-0.25, 0.25))
+			if rng:NextNumber() < 0.6 then
+				lollipop(cf, rng:NextNumber(0.8, 1.6), pick(rng, { RGB(255, 80, 150), RGB(90, 170, 255), RGB(255, 170, 40) }))
+			else
+				local w = rng:NextNumber(6, 10)
+				part({ Size = V3(w, 3, w * 0.6), CFrame = cf * CF(0, 1, 0), Color = RGB(225, 175, 105), Material = M.WoodPlanks })
+				part({ Size = V3(w + 0.2, 0.5, w * 0.6 + 0.2), CFrame = cf * CF(0, 2.6, 0), Color = pick(rng, { RGB(255, 170, 210), WHITE, CHOC }) })
+			end
+		end
+	end
+	-- 🎈 воздушные шары и острова-торты в небе
+	for i = 0, 9 do
+		local a = i / 10 * 2 * PI + rng:NextNumber(-0.2, 0.2)
+		local dist = rng:NextNumber(math.max(lw, ld) * 0.4, math.max(lw, ld) * 0.5 + SW)
+		local pos = V3(lcx + math.cos(a) * dist, LY + rng:NextNumber(70, 140), lcz + math.sin(a) * dist)
+		if i % 2 == 0 then
+			hotAirBalloon(CF(pos) * CFrame.Angles(0, rng:NextNumber(0, 2 * PI), 0), rng)
+		else
+			local s = rng:NextNumber(26, 40)
+			floatingIsland(CF(pos), rng, s, RGB(255, 200, 225))
+			cupcake(CF(pos), s / 14, pick(rng, { RGB(255, 170, 210), RGB(175, 235, 215) }))
+		end
+	end
+end
+
 -- ============ ГЛАВНАЯ ФУНКЦИЯ ============
 function MapBuilder.Build()
 	info = {
@@ -4342,9 +5117,18 @@ function MapBuilder.Build()
 
 		local isWorldEnd = s == last
 		local isFinish = isWorldEnd and last == TOTAL
+		-- в Candy Land «боковые» этапы не короче 58, чтобы ряды змейки не задевали друг друга
+		local kk = s - first + 1
+		if ctx.candy and (kk == 3 or kk == 6 or kk == 9) and ctx.z < 58 then
+			local len = 58 - ctx.z
+			walkway(ctx, ctx.x, ctx.y, ctx.z + len / 2, 9, len)
+			ctx.z = 58
+		end
 		local nextStage = s + 1
 		local padSize
-		if ctx.park then
+		if ctx.candy then
+			padSize = isWorldEnd and 56 or r:NextInteger(26, 32)
+		elseif ctx.park then
 			padSize = isWorldEnd and 44 or r:NextInteger(28, 34)
 		else
 			padSize = isWorldEnd and 30 or 14
@@ -4352,7 +5136,9 @@ function MapBuilder.Build()
 		local padTop = ctx.y + lowered
 		local padZc = ctx.z + 4.5 + padSize / 2
 		local padX = ctx.x
-		if ctx.park then
+		if ctx.candy then
+			candyPlateau(ctx, nextStage, padX, padTop, padZc, padSize, isWorldEnd)
+		elseif ctx.park then
 			parkPlateau(ctx, nextStage, padX, padTop, padZc, padSize, isWorldEnd)
 		elseif isWorldEnd and not isFinish then
 			worldEndPad(ctx, padX, padTop, padZc, padSize)
@@ -4361,7 +5147,7 @@ function MapBuilder.Build()
 		end
 
 		-- 🍫 шоколадная река под фабрикой сладостей (смертельная, как лава)
-		if ctx.zone == 2 then
+		if ctx.zone == 2 and not ctx.candy then
 			local river = part({
 				Name = "ChocolateRiver",
 				Size = V3(150, 2, padZc + 70),
@@ -4395,6 +5181,11 @@ function MapBuilder.Build()
 			local rr = PARK.ring + PARK.ringGrow * prog -- спираль: каждый этап дальше от центра
 			local tgt = V3(C.X + math.cos(a + 0.5) * rr, 0, C.Z + math.sin(a + 0.5) * rr)
 			ctx.F = CFrame.lookAt(V3(pp.X, 0, pp.Z), tgt)
+		elseif ctx.candy then
+			-- змейка: туда → вбок → обратно → вбок → туда → вбок к замку
+			local CANDY_TURNS = { [2] = 1, [3] = 1, [5] = -1, [6] = -1, [8] = 1 }
+			local turn = (CANDY_TURNS[s - first + 1] or 0) * PI / 2
+			ctx.F = ctx.F * CF(padX, 0, -padZc) * CFrame.Angles(0, turn, 0)
 		else
 			local turn = (not isWorldEnd and (s - first + 1) == 5) and -PI / 2 or 0
 			ctx.F = ctx.F * CF(padX, 0, -padZc) * CFrame.Angles(0, turn, 0)
@@ -4408,6 +5199,9 @@ function MapBuilder.Build()
 			buildFinish(ctx)
 		elseif isWorldEnd then
 			worldFinishPortal(ctx, ctx.zone)
+			if ctx.candy then
+				candyCastle(L(ctx, 0, ctx.y, ctx.z + 17) * CFrame.Angles(0, PI, 0), 1)
+			end
 		elseif Specials[nextStage] and not ctx.park then
 			Specials[nextStage](ctx)
 		end
@@ -4432,7 +5226,16 @@ function MapBuilder.Build()
 		ctx.rng = Random.new(Config.MAP_SEED + w * 101)
 		prevPlan = {}
 		local pFirst = #info.pathPoints + 1
-		if w == 1 then
+		ctx.candy = false
+		if w == 2 then
+			LAVA_BOTTOM = CANDYLAND.lavaY - 1
+			ctx.park = false
+			ctx.candy = true
+			ctx.baseY = CANDYLAND.top
+			ctx.F = CFrame.lookAt(origin, origin + V3(0, 0, -1))
+			ctx.x, ctx.y, ctx.z = 0, CANDYLAND.top, 0
+			candyEntrance(ctx, first)
+		elseif w == 1 then
 			LAVA_BOTTOM = PARK.lavaY - 1
 			ctx.park = true
 			ctx.parkCenter = origin
@@ -4479,6 +5282,13 @@ function MapBuilder.Build()
 				end
 			end
 			ctx.park = false
+		elseif w == 2 then
+			local cf2 = Instance.new("Folder")
+			cf2.Name = "CandyScenery"
+			cf2.Parent = map
+			currentFolder = cf2
+			buildCandyScenery(origin, Random.new(Config.MAP_SEED + 2525), pFirst, #info.pathPoints)
+			ctx.candy = false
 		else
 			for i = pFirst, #info.pathPoints do
 				table.insert(snakePoints, { w = w, p = info.pathPoints[i] })
@@ -4494,8 +5304,8 @@ function MapBuilder.Build()
 	local drng = Random.new(Config.MAP_SEED + 99)
 	local decorSpots = {}
 	for _, sf in ipairs(stageFrames) do
-		if sf.zone == 1 then
-			continue -- у парка свой декор
+		if sf.zone == 1 or sf.zone == 2 then
+			continue -- у парка и Candy Land свой декор
 		end
 		for _ = 1, 9 do
 			if sf.zone == 3 then
@@ -4537,7 +5347,7 @@ function MapBuilder.Build()
 	sceneFolder.Parent = map
 	currentFolder = sceneFolder
 	for _, sf in ipairs(stageFrames) do
-		if sf.zone == 1 then
+		if sf.zone == 1 or sf.zone == 2 then
 			continue
 		end
 		local minY, maxY = math.huge, -math.huge
