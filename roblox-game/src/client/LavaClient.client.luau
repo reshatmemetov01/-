@@ -210,7 +210,7 @@ rebirthBtn.Visible = false
 local right = scaled(new("Frame", {
 	AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -10, 0, 10),
-	Size = UDim2.fromOffset(180, 140),
+	Size = UDim2.fromOffset(180, 180),
 	BackgroundTransparency = 1,
 }, gui))
 new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Right }, right)
@@ -238,6 +238,8 @@ local ducksLabel = counter("🦆 0/" .. Config.DUCK_COUNT, 2)
 ducksLabel.Size = UDim2.fromOffset(130, 32)
 local multLabel = counter("x1", 3)
 multLabel.Size = UDim2.fromOffset(130, 32)
+local treasureLabel = counter("📦 0/" .. Config.TREASURE_COUNT, 4)
+treasureLabel.Size = UDim2.fromOffset(130, 32)
 
 -- ============ КРУГЛЫЙ ТАЙМЕР ЩИТА (наверху) ============
 local shieldCircle = scaled(new("Frame", {
@@ -915,6 +917,7 @@ local function refreshHud()
 	rebirthBtn.Visible = mx >= FINISH
 	coinsLabel.Text = "💰 " .. (player:GetAttribute("Coins") or 0)
 	ducksLabel.Text = "🦆 " .. (player:GetAttribute("Ducks") or 0) .. "/" .. Config.DUCK_COUNT
+	treasureLabel.Text = "📦 " .. (player:GetAttribute("Treasures") or 0) .. "/" .. Config.TREASURE_COUNT
 	local mult = player:GetAttribute("Multiplier") or 1
 	local reb = player:GetAttribute("Rebirths") or 0
 	multLabel.Text = "x" .. string.format("%.2g", mult) .. " 💰" .. (reb > 0 and ("  🔁" .. reb) or "")
@@ -953,7 +956,7 @@ task.defer(onLobbyChanged)
 CollectionService:GetInstanceAddedSignal("PortalLock"):Connect(function()
 	task.defer(refreshHud)
 end)
-for _, attr in ipairs({ "Stage", "MaxStage", "Coins", "Ducks", "Multiplier", "Rebirths", "PassVIP", "InLobby" }) do
+for _, attr in ipairs({ "Stage", "MaxStage", "Coins", "Ducks", "Treasures", "Multiplier", "Rebirths", "PassVIP", "InLobby" }) do
 	player:GetAttributeChangedSignal(attr):Connect(refreshHud)
 end
 for _, attr in ipairs({

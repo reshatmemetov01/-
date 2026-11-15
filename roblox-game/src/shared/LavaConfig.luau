@@ -135,6 +135,9 @@ Config.DUCK_COUNT = 5
 Config.DUCK_REWARD = 50
 Config.ALL_DUCKS_REWARD = 1000
 Config.SECRET_REWARD = 250
+Config.TREASURE_COUNT = 5 -- спрятанные сундуки-сокровища (лобби, парк, Candy Land, вулкан, небо)
+Config.TREASURE_REWARD = 1000
+Config.TREASURE_ALL_REWARD = 10000 -- бонус за все 5
 
 Config.WATER_BUTTON_DURATION = 12
 Config.WATER_BUTTON_COOLDOWN = 180

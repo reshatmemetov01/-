@@ -52,6 +52,7 @@ local function defaultData()
 		rebirths = 0,
 		ducks = {},
 		secrets = {},
+		treasures = {},
 		trails = {},
 		trail = "",
 		skins = {},
@@ -136,6 +137,7 @@ local function syncAttributes(player)
 	player:SetAttribute("Coins", d.coins)
 	player:SetAttribute("Rebirths", d.rebirths)
 	player:SetAttribute("Ducks", countKeys(d.ducks))
+	player:SetAttribute("Treasures", countKeys(d.treasures or {}))
 	player:SetAttribute("DucksList", csvKeys(d.ducks))
 	player:SetAttribute("Trails", csvKeys(d.trails))
 	player:SetAttribute("Trail", d.trail)
@@ -1725,6 +1727,34 @@ for _, chest in ipairs(CollectionService:GetTagged("Secret")) do
 		EffectRE:FireClient(player, "duck")
 		notify(player, "n_secret", Color3.fromRGB(255, 200, 80), gained)
 		progressChallenge(player, "secret", 1)
+	end)
+end
+
+-- 📦 спрятанные сокровища: 5 сундуков по всей игре
+for _, chest in ipairs(CollectionService:GetTagged("Treasure")) do
+	local id = chest:GetAttribute("SecretId")
+	chest.Touched:Connect(function(hit)
+		local player = playerFromHit(hit)
+		local s = player and sessions[player]
+		if not s or not s.loaded then
+			return
+		end
+		s.data.treasures = s.data.treasures or {}
+		if s.data.treasures[id] then
+			return
+		end
+		s.data.treasures[id] = true
+		local found = countKeys(s.data.treasures)
+		local gained = addCoins(player, Config.TREASURE_REWARD, true)
+		EffectRE:FireClient(player, "duck")
+		notify(player, "n_treasure", Color3.fromRGB(255, 210, 80), found, Config.TREASURE_COUNT, gained)
+		if found >= Config.TREASURE_COUNT then
+			local bonus = addCoins(player, Config.TREASURE_ALL_REWARD, false)
+			notify(player, "n_treasure_all", Color3.fromRGB(255, 230, 90), bonus)
+		end
+		progressChallenge(player, "secret", 1)
+		syncAttributes(player)
+		task.spawn(saveData, player)
 	end)
 end
 
