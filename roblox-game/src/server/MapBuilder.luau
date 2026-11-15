@@ -1354,11 +1354,132 @@ function Obstacles.starHop(ctx)
 	end
 end
 
+-- ============ 💎 ПЕЩЕРНЫЕ ПРЕПЯТСТВИЯ (мир 3) ============
+local CAVE_STONE = RGB(78, 92, 98)
+
+-- 🔥 круглая лавовая яма (как на картинке): камни-ступеньки, часть из них ныряет в лаву
+function Obstacles.lavaPit(ctx)
+	local r = ctx.rng
+	local R = 14
+	local x = 0
+	local top = ctx.y
+	local zc = ctx.z + 3 + R
+	local center = L(ctx, x, top, zc)
+	lavaPart({ Shape = CYL, Size = V3(1, R * 2, R * 2), CFrame = center * CF(0, -1.6, 0) * ROT_UP, Color = RGB(255, 120, 20), Material = M.CrackedLava })
+	part({ Shape = CYL, Size = V3(3, R * 2 + 3, R * 2 + 3), CFrame = center * CF(0, -3.4, 0) * ROT_UP, Color = darker(CAVE_STONE, 0.7), Material = M.Slate })
+	if not ctx.sky then
+		column(ctx, x, zc, LAVA_BOTTOM, top - 4.9, R * 1.4, R * 1.4, darker(CAVE_STONE, 0.6), M.Slate, true)
+	end
+	-- высокий каменный бортик со входом и выходом (по нему не пройти)
+	local segs = 24
+	for i = 0, segs - 1 do
+		local a = i / segs * 2 * PI
+		if math.abs(math.sin(a)) > 0.3 then -- проёмы спереди и сзади
+			local p = center * CF(math.sin(a) * (R + 0.8), 3, -math.cos(a) * (R + 0.8))
+			part({ Size = V3(2, 10, 2 * PI * R / segs + 0.6), CFrame = CFrame.lookAt(p.Position, center.Position + V3(0, 3, 0)) * CFrame.Angles(0, PI / 2, 0), Color = CAVE_STONE, Material = M.Slate })
+		end
+	end
+	-- ступеньки зигзагом через яму
+	local n = 4 + math.floor(ctx.diff * 2)
+	for i = 1, n do
+		local s = r:NextNumber(3.6, 4.4) - ctx.diff * 0.6
+		local sx = (i % 2 == 0 and 1 or -1) * r:NextNumber(2, 5)
+		local zz = -R + (i - 0.5) * (2 * R) / n
+		local base = L(ctx, x + sx, top - 0.6 + r:NextNumber(-0.3, 0.6), zc + zz)
+		local stone = part({ Size = V3(s, 1.2, s), CFrame = base * CFrame.Angles(0, r:NextNumber(-0.3, 0.3), 0), Color = RGB(150, 110, 85), Material = M.Slate })
+		if ctx.diff > 0.2 and i % 2 == 1 then
+			-- этот камень медленно уходит в лаву и поднимается
+			table.insert(info.movers, { part = stone, base = stone.CFrame * CF(0, -1.3, 0), axis = V3(0, 1, 0), amp = 1.6, speed = 0.9, phase = r:NextNumber(0, 2 * PI) })
+		end
+		addPath(base.Position)
+	end
+	local size = 8
+	themedPlatform(ctx, x, top, zc + R + 2 + size / 2, size, size)
+	maybeCoin(ctx, x, top, zc + R + 2 + size / 2, 0.7)
+	ctx.x, ctx.y, ctx.z = x, top, zc + R + 2 + size
+end
+
+-- 💎 мигающие кристаллы: зелёные и фиолетовые по очереди становятся твёрдыми
+function Obstacles.crystalBlink(ctx)
+	local r = ctx.rng
+	local n = r:NextInteger(5, 7)
+	local cols = { RGB(90, 255, 140), RGB(200, 90, 255) }
+	for i = 1, n do
+		local group = i % 2
+		local size = 5.5 - ctx.diff
+		local gap = r:NextNumber(2.4, 3.2)
+		local x = math.clamp(ctx.x + r:NextNumber(-4, 4), -10, 10)
+		local zc = ctx.z + gap + size / 2
+		local p = part({ Size = V3(size, 1.2, size), CFrame = L(ctx, x, ctx.y - 0.6, zc) * CFrame.Angles(0, PI / 4, 0), Color = cols[group + 1], Material = M.Neon, Transparency = 0.1 })
+		table.insert(info.blinkers, { part = p, group = group, solid = true })
+		-- кристаллики снизу
+		for k = 1, 3 do
+			part({ Size = V3(1, 3, 1), CFrame = L(ctx, x + r:NextNumber(-1.5, 1.5), ctx.y - 2.5, zc + r:NextNumber(-1.5, 1.5)) * CFrame.Angles(PI + r:NextNumber(-0.4, 0.4), 0, r:NextNumber(-0.4, 0.4)), Color = cols[group + 1], Material = M.Glass, Transparency = 0.2, CanCollide = false })
+		end
+		addPath(p.Position)
+		ctx.x, ctx.z = x, zc + size / 2
+	end
+	local size = 8
+	themedPlatform(ctx, ctx.x, ctx.y, ctx.z + 3 + size / 2, size, size)
+	ctx.z = ctx.z + 3 + size
+end
+
+-- 🏛 зал древнего храма: колонны мешают бежать, в полу провалы в лаву
+function Obstacles.templeHall(ctx)
+	local r = ctx.rng
+	local len = r:NextInteger(36, 46)
+	local w = 14
+	local x = 0
+	local top = ctx.y
+	local z0 = ctx.z + 3
+	local zc = z0 + len / 2
+	local stone = RGB(170, 160, 140)
+	-- пол из плит с провалами
+	local tile = 3.5
+	local rows = math.floor(len / tile)
+	for i = 0, rows - 1 do
+		local hole = i > 1 and i < rows - 2 and (i % 3 == 1) and r:NextNumber() < 0.75
+		local holeX = r:NextInteger(-1, 1)
+		for j = -1, 1 do
+			if not (hole and (j == holeX or (ctx.diff > 0.4 and j == -holeX))) then
+				part({ Size = V3(w / 3 - 0.15, 1.4, tile - 0.15), CFrame = L(ctx, x + j * w / 3, top - 0.7, z0 + (i + 0.5) * tile), Color = ((i + j) % 2 == 0) and stone or darker(stone, 0.88), Material = M.Slate })
+			end
+		end
+		if i % 3 == 0 then
+			addPath(L(ctx, x, top, z0 + (i + 0.5) * tile).Position)
+		end
+	end
+	if not ctx.sky then
+		column(ctx, x, zc, LAVA_BOTTOM, top - 1.4, w * 0.6, len * 0.6, darker(stone, 0.6), M.Slate)
+	end
+	-- колонны по краям и в середине (в шахматном порядке)
+	for i = 1, math.floor(len / 7) do
+		local z = z0 + i * 7 - 2
+		for sx = -1, 1, 2 do
+			part({ Shape = CYL, Size = V3(16, 2.4, 2.4), CFrame = L(ctx, x + sx * (w / 2 + 0.6), top + 8, z) * ROT_UP, Color = stone, Material = M.Marble })
+		end
+		local mx = (i % 2 == 0) and -2.5 or 2.5
+		part({ Shape = CYL, Size = V3(16, 2.2, 2.2), CFrame = L(ctx, x + mx, top + 8, z) * ROT_UP, Color = stone, Material = M.Marble })
+		part({ Size = V3(3, 1, 3), CFrame = L(ctx, x + mx, top + 0.5, z), Color = darker(stone, 0.8), Material = M.Slate })
+	end
+	-- крыша-балки
+	part({ Size = V3(w + 4, 2, len), CFrame = L(ctx, x, top + 17, zc), Color = darker(stone, 0.85), Material = M.Slate })
+	for i = 0, 3 do
+		local l = Instance.new("PointLight")
+		l.Color = RGB(255, 190, 110)
+		l.Range = 18
+		l.Brightness = 1.5
+		l.Parent = part({ Size = V3(0.8, 1.2, 0.8), CFrame = L(ctx, x + w / 2 - 0.5, top + 6, z0 + 5 + i * len / 4), Color = RGB(255, 200, 110), Material = M.Neon, CanCollide = false })
+	end
+	maybeCoin(ctx, x, top, zc, 0.8)
+	ctx.x, ctx.z = x, z0 + len
+end
+
 -- У каждого мира СВОЙ набор препятствий — они не повторяются между мирами
 local POOLS = {
 	{ "jumps", "stripes", "balloons", "bounce", "spinner", "coasterTrack" }, -- 🎡 парк
 	{ "macarons", "canes", "donuts", "chocoBridge", "pushers" }, -- 🍭 Candy Land
-	{ "cave", "climb", "lasers", "pendulum", "posts", "minecart" }, -- 💎 подземелье
+	{ "lavaPit", "crystalBlink", "templeHall", "minecart", "cave", "lasers", "pendulum" }, -- 💎 хрустальные пещеры
 	{ "plankBridge", "lavaCurtains", "geysers", "vanish", "movers" }, -- 🌋 острова вулкана
 	{ "cloudSteps", "starHop", "rope", "disks", "conveyor" }, -- ☁️ небо
 }
@@ -6023,6 +6144,423 @@ local function buildSkyScenery(rng, pFirst, pLast)
 	end
 end
 
+-- ============ МИР 3: ХРУСТАЛЬНЫЕ ПЕЩЕРЫ (огромная пещера, трасса волнами вниз) ============
+local CAVEW = { lavaY = 20, top = 80, plateaus = {}, entrance = nil, endCF = nil }
+local CRYSTAL_COLS = { RGB(90, 255, 140), RGB(200, 90, 255), RGB(90, 220, 255) }
+local TEMPLE_STONE = RGB(170, 160, 140)
+
+-- 🏛 греческий храм: ступени, колонны, фронтон, кристалл-алтарь внутри
+local function greekTemple(cf, k, broken)
+	local W, D = 30 * k, 22 * k
+	for i = 0, 2 do
+		part({ Size = V3(W + (3 - i) * 3 * k, 1.2 * k, D + (3 - i) * 3 * k), CFrame = cf * CF(0, (i + 0.5) * 1.2 * k, 0), Color = darker(TEMPLE_STONE, 0.9 + i * 0.03), Material = M.Slate })
+	end
+	local baseY = 3.6 * k
+	local colH = 14 * k
+	for row = -1, 1, 2 do
+		for i = 0, 5 do
+			local cx = -W / 2 + 2 * k + i * (W - 4 * k) / 5
+			local h = colH
+			if broken and row == 1 and (i == 1 or i == 4) then
+				h = colH * 0.45
+			end
+			part({ Size = V3(2.8 * k, 1 * k, 2.8 * k), CFrame = cf * CF(cx, baseY + 0.5 * k, row * (D / 2 - 2 * k)), Color = darker(TEMPLE_STONE, 0.85), Material = M.Slate })
+			part({ Shape = CYL, Size = V3(h, 2.2 * k, 2.2 * k), CFrame = cf * CF(cx, baseY + 1 * k + h / 2, row * (D / 2 - 2 * k)) * ROT_UP, Color = TEMPLE_STONE, Material = M.Marble })
+			if h == colH then
+				part({ Size = V3(3 * k, 1 * k, 3 * k), CFrame = cf * CF(cx, baseY + 1.5 * k + colH, row * (D / 2 - 2 * k)), Color = darker(TEMPLE_STONE, 0.9), Material = M.Slate })
+			else
+				-- упавший кусок колонны рядом
+				part({ Shape = CYL, Size = V3(colH * 0.4, 2.2 * k, 2.2 * k), CFrame = cf * CF(cx + 3 * k, baseY + 1.1 * k, row * (D / 2 + 3 * k)) * CFrame.Angles(0, 0.6, 0), Color = TEMPLE_STONE, Material = M.Marble })
+			end
+		end
+	end
+	local topY = baseY + 2 * k + colH
+	if not broken then
+		part({ Size = V3(W + 1 * k, 2 * k, D + 1 * k), CFrame = cf * CF(0, topY + 1 * k, 0), Color = darker(TEMPLE_STONE, 0.92), Material = M.Slate })
+		for sx = -1, 1, 2 do
+			local w = Instance.new("WedgePart")
+			w.Anchored = true
+			w.Size = V3(D + 1 * k, 6 * k, W / 2 + 0.5 * k)
+			w.CFrame = cf * CF(sx * (W / 4 + 0.25 * k), topY + 5 * k, 0) * CFrame.Angles(0, sx * -PI / 2, 0)
+			w.Color = TEMPLE_STONE
+			w.Material = M.Slate
+			w.Parent = currentFolder
+		end
+	else
+		part({ Size = V3(W * 0.6, 2 * k, D + 1 * k), CFrame = cf * CF(-W * 0.2, topY + 1 * k, 0) * CFrame.Angles(0, 0, 0.05), Color = darker(TEMPLE_STONE, 0.92), Material = M.Slate })
+	end
+	-- светящийся кристалл-алтарь
+	part({ Size = V3(4 * k, 3 * k, 4 * k), CFrame = cf * CF(0, baseY + 1.5 * k, 0), Color = darker(TEMPLE_STONE, 0.8), Material = M.Slate })
+	crystalCluster(cf * CF(0, baseY + 3 * k, 0), 1.4 * k, CRYSTAL_COLS[1])
+	-- мох
+	for i = 1, 6 do
+		part({ Size = V3(3 * k, 0.4 * k, 2 * k), CFrame = cf * CF((i - 3.5) * 4 * k, 3.7 * k, (i % 2 == 0 and 1 or -1) * D / 2), Color = RGB(70, 150, 90), CanCollide = false })
+	end
+end
+
+-- 💎 гигантский кристалл (с подсветкой)
+local function giantCrystal(cf, k, col, light)
+	for i = 1, 5 do
+		local h = (8 + (i % 3) * 5) * k
+		local a = i / 5 * 2 * PI
+		local tilt = (i == 1) and 0 or 0.35
+		local shard = cf * CF(math.cos(a) * 2 * k * (i > 1 and 1 or 0), 0, math.sin(a) * 2 * k * (i > 1 and 1 or 0)) * CFrame.Angles(math.sin(a) * tilt, a, math.cos(a) * tilt)
+		part({ Size = V3(3 * k, h, 3 * k), CFrame = shard * CF(0, h / 2 - 0.5 * k, 0), Color = col, Material = M.Glass, Transparency = 0.25 })
+		part({ Size = V3(1.6 * k, h * 0.85, 1.6 * k), CFrame = shard * CF(0, h / 2 - 0.5 * k, 0), Color = col, Material = M.Neon, Transparency = 0.2, CanCollide = false })
+		local w = Instance.new("WedgePart")
+		w.Anchored = true
+		w.CanCollide = false
+		w.Size = V3(3 * k, 2.5 * k, 3 * k)
+		w.CFrame = shard * CF(0, h - 0.5 * k + 1.25 * k, 0)
+		w.Color = col
+		w.Material = M.Glass
+		w.Transparency = 0.25
+		w.Parent = currentFolder
+	end
+	if light then
+		local l = Instance.new("PointLight")
+		l.Color = col
+		l.Range = 40 * math.min(k, 1.5)
+		l.Brightness = 2.5
+		l.Parent = part({ Size = V3(1, 1, 1), CFrame = cf * CF(0, 8 * k, 0), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+	end
+end
+
+-- 🍄 светящийся гриб
+local function glowShroom(cf, k, col)
+	part({ Shape = CYL, Size = V3(4 * k, 1 * k, 1 * k), CFrame = cf * CF(0, 2 * k, 0) * ROT_UP, Color = RGB(230, 225, 210) })
+	part({ Shape = CYL, Size = V3(1.2 * k, 4.4 * k, 4.4 * k), CFrame = cf * CF(0, 4.3 * k, 0) * ROT_UP, Color = col, Material = M.Neon })
+	part({ Shape = CYL, Size = V3(0.8 * k, 3 * k, 3 * k), CFrame = cf * CF(0, 5 * k, 0) * ROT_UP, Color = col:Lerp(WHITE, 0.3), Material = M.Neon, CanCollide = false })
+end
+
+-- 🪨 сталактит (висит вниз от точки cf)
+local function stalactite(cf, h, w, col)
+	for i = 0, 3 do
+		local s = w * (1 - i * 0.22)
+		part({ Size = V3(s, h / 4 + 0.2, s), CFrame = cf * CF(0, -(i + 0.5) * h / 4, 0) * CFrame.Angles(0, i * 0.5, 0), Color = col or RGB(70, 66, 72), Material = M.Slate, CanCollide = false, CastShadow = false })
+	end
+end
+
+local function stalagmite(cf, h, w, col)
+	for i = 0, 3 do
+		local s = w * (1 - i * 0.22)
+		part({ Size = V3(s, h / 4 + 0.2, s), CFrame = cf * CF(0, (i + 0.5) * h / 4, 0) * CFrame.Angles(0, i * 0.5, 0), Color = col or RGB(85, 80, 86), Material = M.Slate })
+	end
+end
+
+-- ⛏ деревянная крепь шахты с фонарём
+local function mineSupport(cf, k)
+	local wood = RGB(120, 85, 55)
+	for sx = -1, 1, 2 do
+		part({ Size = V3(1.4 * k, 12 * k, 1.4 * k), CFrame = cf * CF(sx * 5 * k, 6 * k, 0), Color = wood, Material = M.Wood })
+	end
+	part({ Size = V3(12 * k, 1.4 * k, 1.6 * k), CFrame = cf * CF(0, 12.2 * k, 0), Color = wood, Material = M.Wood })
+	part({ Size = V3(0.2, 2 * k, 0.2), CFrame = cf * CF(0, 10.6 * k, 0), Color = RGB(40, 40, 40), CanCollide = false })
+	local lan = part({ Size = V3(1 * k, 1.4 * k, 1 * k), CFrame = cf * CF(0, 9.2 * k, 0), Color = RGB(255, 200, 110), Material = M.Neon, CanCollide = false })
+	local l = Instance.new("PointLight")
+	l.Color = RGB(255, 190, 110)
+	l.Range = 18 * k
+	l.Brightness = 1.6
+	l.Parent = lan
+end
+
+-- 💎 площадка-чекпоинт пещеры: круглый каменный пол, мох, кристаллы и фонари
+local function cavePlateau(ctx, stageNum, padX, padTop, padZc, size, isEnd, noProps)
+	local rng = Random.new(Config.MAP_SEED + stageNum * 97)
+	local cf = L(ctx, padX, padTop, padZc)
+	table.insert(CAVEW.plateaus, { cf = cf, size = size })
+	local topPart = part({ Name = "Checkpoint" .. stageNum, Shape = CYL, Size = V3(2, size, size), CFrame = cf * CF(0, -1, 0) * ROT_UP, Color = CAVE_STONE, Material = M.Slate })
+	if not isEnd then
+		topPart:SetAttribute("Stage", stageNum)
+		tag(topPart, "Checkpoint")
+		info.checkpoints[stageNum] = topPart
+	end
+	-- плиточный круг и дорожка
+	part({ Shape = CYL, Size = V3(0.2, size * 0.55, size * 0.55), CFrame = cf * CF(0, 0.05, 0) * ROT_UP, Color = RGB(120, 125, 120), Material = M.Cobblestone, CanCollide = false })
+	part({ Size = V3(7, 0.2, size - 1), CFrame = cf * CF(0, 0.06, 0), Color = RGB(120, 125, 120), Material = M.Cobblestone, CanCollide = false })
+	-- мох по краю
+	for i = 0, 11 do
+		local a = i / 12 * 2 * PI
+		part({ Size = V3(rng:NextNumber(3, 6), 0.4, rng:NextNumber(2, 3)), CFrame = cf * CFrame.Angles(0, a, 0) * CF(size / 2 - 1.5, 0.1, 0), Color = RGB(70, 150, 90), CanCollide = false })
+	end
+	-- скала-столб до лавы
+	local s, y = size, -2
+	for i = 1, 3 do
+		s *= 0.85
+		part({ Shape = CYL, Size = V3(5, s, s), CFrame = cf * CF(rng:NextNumber(-0.8, 0.8), y - 2.5, rng:NextNumber(-0.8, 0.8)) * ROT_UP, Color = darker(CAVE_STONE, 0.85 - i * 0.05), Material = M.Slate })
+		y -= 5
+	end
+	local bottom = padTop + y
+	if bottom > LAVA_BOTTOM then
+		part({ Size = V3(s * 0.6, bottom - LAVA_BOTTOM, s * 0.6), CFrame = CF(cf.Position.X, (bottom + LAVA_BOTTOM) / 2, cf.Position.Z), Color = darker(CAVE_STONE, 0.6), Material = M.Slate })
+	end
+	if not isEnd then
+		local glow = part({ Shape = CYL, Size = V3(0.25, 7, 7), CFrame = cf * CF(0, 0.12, 0) * ROT_UP, Color = RGB(90, 255, 140), Material = M.Neon, CanCollide = false })
+		local sg = Instance.new("SurfaceGui")
+		sg.Face = Enum.NormalId.Right
+		sg.LightInfluence = 0
+		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		sg.PixelsPerStud = 40
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.fromScale(1, 1)
+		lbl.BackgroundTransparency = 1
+		lbl.TextScaled = true
+		lbl.Font = Enum.Font.GothamBlack
+		lbl.TextColor3 = RGB(10, 40, 20)
+		lbl.Text = tostring(stageNum)
+		lbl.Parent = sg
+		sg.Parent = glow
+	end
+	if not noProps then
+		for i = 1, 4 do
+			local a = (i - 0.5) / 4 * 2 * PI + PI / 4
+			local pcf = cf * CF(math.cos(a) * (size / 2 - 4), 0, math.sin(a) * (size / 2 - 4)) * CFrame.Angles(0, a, 0)
+			local roll = (i + stageNum) % 4
+			if roll == 0 then
+				crystalCluster(pcf, 1.1, pick(rng, CRYSTAL_COLS))
+			elseif roll == 1 then
+				glowShroom(pcf, 0.9, pick(rng, { RGB(90, 220, 255), RGB(200, 90, 255) }))
+			elseif roll == 2 then
+				part({ Shape = CYL, Size = V3(rng:NextNumber(3, 7), 2.2, 2.2), CFrame = pcf * CF(0, 2, 0) * ROT_UP, Color = TEMPLE_STONE, Material = M.Marble })
+			else
+				crystalCluster(pcf, 0.8, pick(rng, CRYSTAL_COLS))
+				part({ Size = V3(3, 2, 2.5), CFrame = pcf * CF(2, 1, 0) * CFrame.Angles(0.2, 1, 0), Color = darker(CAVE_STONE, 0.8), Material = M.Slate })
+			end
+		end
+	end
+	-- фонари у выхода (тёплый свет в тёмной пещере)
+	for sx = -1, 1, 2 do
+		lamp(cf * CF(sx * 5.5, 0, size / 2 - 2.5))
+	end
+	if not isEnd then
+		arrowSign(cf * CF(6.5, 0, size / 2 - 1.5))
+	end
+	for k = 0, 3 do
+		local a = k / 4 * 2 * PI
+		addPath((cf * CF(math.cos(a) * size / 2, 0, math.sin(a) * size / 2)).Position)
+	end
+	addPath(cf.Position)
+	return topPart, cf
+end
+
+-- 🚪 вход в пещеры: шахтные ворота, вагонетки, ящики, фонари
+local function caveEntrance(ctx, first)
+	local top = ctx.y
+	local size = 60
+	cavePlateau(ctx, first, 0, top, 0, size, false, true)
+	CAVEW.entrance = L(ctx, 0, top, 0)
+	info.spawnCF[first] = L(ctx, 0, top + 3.5, -20)
+	portalGate(L(ctx, 0, top + 7, -25), 6, RGB(90, 255, 140), WHITE, RGB(90, 255, 140))
+	-- ворота шахты с вывеской
+	local gate = L(ctx, 0, top, -6)
+	mineSupport(gate * CF(-8, 0, 0), 1.6)
+	mineSupport(gate * CF(8, 0, 0), 1.6)
+	part({ Size = V3(36, 3, 3), CFrame = gate * CF(0, 21, 0), Color = RGB(110, 75, 50), Material = M.Wood })
+	local board = gate * CF(0, 26, 0)
+	part({ Size = V3(32, 8, 2), CFrame = board, Color = RGB(60, 50, 55), Material = M.Slate })
+	makeSign(board * CF(0, 0, -1.1), V3(29, 6, 0.3), "sign_cave_title", RGB(30, 40, 45), RGB(120, 255, 170), Enum.NormalId.Back)
+	makeSign(board * CF(0, 0, 1.1), V3(29, 6, 0.3), "sign_cave_title", RGB(30, 40, 45), RGB(120, 255, 170), Enum.NormalId.Front)
+	for sx = -1, 1, 2 do
+		giantCrystal(L(ctx, sx * 22, top, -12), 0.9, sx < 0 and CRYSTAL_COLS[1] or CRYSTAL_COLS[2], true)
+	end
+	-- рельсы и вагонетка с кристаллами
+	for sx = -1, 1, 2 do
+		part({ Size = V3(0.4, 0.3, 30), CFrame = L(ctx, 20 + sx * 1.8, top + 0.15, 10), Color = RGB(130, 130, 140), Material = M.Metal })
+	end
+	part({ Size = V3(4.6, 2.6, 5.6), CFrame = L(ctx, 20, top + 1.6, 12), Color = RGB(110, 75, 50), Material = M.WoodPlanks })
+	part({ Size = V3(3.8, 0.6, 4.6), CFrame = L(ctx, 20, top + 3, 12), Color = CRYSTAL_COLS[3], Material = M.Neon })
+	for i, p in ipairs({ { -21, 8 }, { -23, 12 }, { -20, 16 } }) do
+		part({ Size = V3(3, 3, 3), CFrame = L(ctx, p[1], top + 1.5 + (i == 3 and 3 or 0), p[2]) * CFrame.Angles(0, i, 0), Color = RGB(150, 110, 70), Material = M.WoodPlanks })
+	end
+	arrowTrail(L(ctx, 0, top, -18).Position, L(ctx, 0, top, size / 2 - 2).Position, 4, RGB(90, 255, 140))
+	ctx.x, ctx.y, ctx.z = 0, top, size / 2
+end
+
+-- 🕳 сама пещера: купол, стены, сталактиты, храмы, кристаллы, река, шахта, выход к свету
+local function buildCaveScenery(rng, pFirst, pLast)
+	local LY = CAVEW.lavaY
+	-- выход из пещеры: точки добавляем заранее, чтобы стены пещеры его обошли
+	local ep, exitP
+	if CAVEW.endCF then
+		ep = (CAVEW.endCF * CF(0, 0, -70)).Position
+		exitP = (CAVEW.endCF * CF(0, 14, -150)).Position
+		addPath(ep)
+		addPath(exitP)
+		pLast = #info.pathPoints
+	end
+	local minX, maxX, minZ, maxZ, maxY = math.huge, -math.huge, math.huge, -math.huge, -math.huge
+	for i = pFirst, pLast do
+		local p = info.pathPoints[i]
+		minX, maxX = math.min(minX, p.X), math.max(maxX, p.X)
+		minZ, maxZ = math.min(minZ, p.Z), math.max(maxZ, p.Z)
+		maxY = math.max(maxY, p.Y)
+	end
+	local M_ = 110 -- от трассы до стен
+	local x0, x1, z0, z1 = minX - M_, maxX + M_, minZ - M_, maxZ + M_
+	local cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
+	local W, D = x1 - x0, z1 - z0
+	local ceilY = maxY + 55
+	local function tiles(fn)
+		local nx, nz = math.ceil(W / 1800), math.ceil(D / 1800)
+		for ix = 0, nx - 1 do
+			for iz = 0, nz - 1 do
+				local tw, td = W / nx, D / nz
+				fn(x0 + (ix + 0.5) * tw, z0 + (iz + 0.5) * td, tw, td)
+			end
+		end
+	end
+	-- 🔥 лавовое дно и тёмный купол
+	tiles(function(x, z, tw, td)
+		local lava = part({ Name = "CaveLava", Size = V3(tw + 2, 1, td + 2), CFrame = CF(x, LY - 0.5, z), Color = RGB(255, 100, 20), Material = M.CrackedLava })
+		tag(lava, "Lava")
+		local g = part({ Size = V3(tw + 2, 0.3, td + 2), CFrame = CF(x, LY + 0.2, z), Color = RGB(255, 120, 30), Material = M.Neon, Transparency = 0.8, CanCollide = false, CanQuery = false })
+		tag(g, "Lava")
+		part({ Size = V3(tw + 2, 24, td + 2), CFrame = CF(x, ceilY + 12, z), Color = RGB(45, 42, 50), Material = M.Slate })
+	end)
+	-- стены
+	local wallH = ceilY - LY + 30
+	for _, w in ipairs({ { cx, z0 - 15, W + 60, 30 }, { cx, z1 + 15, W + 60, 30 }, { x0 - 15, cz, 30, D }, { x1 + 15, cz, 30, D } }) do
+		part({ Size = V3(math.min(w[3], 2048), wallH, math.min(w[4], 2048)), CFrame = CF(w[1], LY - 10 + wallH / 2, w[2]), Color = RGB(60, 58, 66), Material = M.Slate })
+	end
+	-- уступы-берега вдоль стен (на них храмы, кристаллы, шахта)
+	local LEDGE = 60
+	local ledgeY = LY + 8
+	local ledges = {
+		{ cx, z0 + LEDGE / 2, W, LEDGE },
+		{ cx, z1 - LEDGE / 2, W, LEDGE },
+		{ x0 + LEDGE / 2, cz, LEDGE, D - LEDGE * 2 },
+		{ x1 - LEDGE / 2, cz, LEDGE, D - LEDGE * 2 },
+	}
+	for _, l in ipairs(ledges) do
+		part({ Size = V3(math.min(l[3], 2048), ledgeY - LY + 10, math.min(l[4], 2048)), CFrame = CF(l[1], (ledgeY + LY - 10) / 2, l[2]), Color = RGB(70, 72, 78), Material = M.Slate })
+	end
+	-- места на уступах
+	local spots = {}
+	local function ledgeSpot()
+		local side = rng:NextInteger(1, 4)
+		local l = ledges[side]
+		local x = l[1] + rng:NextNumber(-l[3] / 2 + 15, l[3] / 2 - 15)
+		local z = l[2] + rng:NextNumber(-l[4] / 2 + 15, l[4] / 2 - 15)
+		return V3(x, ledgeY, z)
+	end
+	local function free(p, r)
+		for _, s in ipairs(spots) do
+			if (s.p - p).Magnitude < s.r + r then
+				return false
+			end
+		end
+		return true
+	end
+	local function faceIn(p)
+		return CFrame.lookAt(p, V3(cx, p.Y, cz))
+	end
+	-- 🏛 храмы
+	local temples = 0
+	for _ = 1, 80 do
+		if temples >= 6 then
+			break
+		end
+		local p = ledgeSpot()
+		local k = rng:NextNumber(1, 1.5)
+		if free(p, 28 * k) then
+			table.insert(spots, { p = p, r = 28 * k })
+			greekTemple(faceIn(p), k, temples % 2 == 1)
+			temples += 1
+		end
+	end
+	-- 💎 гигантские кристаллы (на уступах и из лавы)
+	local lights = 0
+	for _ = 1, 120 do
+		local p = ledgeSpot()
+		if free(p, 12) then
+			table.insert(spots, { p = p, r = 12 })
+			lights += 1
+			giantCrystal(faceIn(p) * CFrame.Angles(0, rng:NextNumber(0, 6), 0), rng:NextNumber(1.2, 2.4), pick(rng, CRYSTAL_COLS), lights <= 18)
+		end
+		if lights >= 26 then
+			break
+		end
+	end
+	for _ = 1, 50 do
+		local p = V3(rng:NextNumber(x0 + LEDGE + 10, x1 - LEDGE - 10), LY, rng:NextNumber(z0 + LEDGE + 10, z1 - LEDGE - 10))
+		if farFromPath(p, 24) then
+			local roll = rng:NextNumber()
+			local cf = CF(p) * CFrame.Angles(0, rng:NextNumber(0, 6), 0)
+			if roll < 0.45 then
+				part({ Size = V3(rng:NextNumber(10, 18), rng:NextNumber(8, 16), rng:NextNumber(10, 18)), CFrame = cf * CF(0, 3, 0), Color = RGB(80, 76, 84), Material = M.Slate })
+				giantCrystal(cf * CF(0, 9, 0), rng:NextNumber(0.6, 1.1), pick(rng, CRYSTAL_COLS), false)
+			else
+				stalagmite(cf, rng:NextNumber(14, 34), rng:NextNumber(5, 9))
+			end
+		end
+	end
+	-- 🍄 светящиеся грибы, ⛏ шахтные крепи, рельсы
+	for _ = 1, 140 do
+		local p = ledgeSpot()
+		if free(p, 6) then
+			table.insert(spots, { p = p, r = 6 })
+			local roll = rng:NextNumber()
+			local cf = faceIn(p) * CFrame.Angles(0, rng:NextNumber(-0.5, 0.5), 0)
+			if roll < 0.4 then
+				glowShroom(cf, rng:NextNumber(1, 2.4), pick(rng, { RGB(90, 220, 255), RGB(200, 90, 255), RGB(90, 255, 160) }))
+			elseif roll < 0.6 then
+				mineSupport(cf, rng:NextNumber(1, 1.4))
+			elseif roll < 0.8 then
+				stalagmite(cf, rng:NextNumber(8, 20), rng:NextNumber(3, 6))
+			else
+				crystalCluster(cf, rng:NextNumber(1, 1.8), pick(rng, CRYSTAL_COLS))
+			end
+		end
+	end
+	-- 🪨 сталактиты на потолке
+	for _ = 1, 160 do
+		local p = V3(rng:NextNumber(x0, x1), ceilY, rng:NextNumber(z0, z1))
+		local h = rng:NextNumber(10, 40)
+		local tip = p.Y - h
+		if tip > maxY + 12 or farFromPath(p, 12) then
+			stalactite(CF(p), h, rng:NextNumber(4, 10))
+		end
+	end
+	-- 💧 подземная река вдоль уступа и водопад со стены
+	local rz = z1 - LEDGE * 0.5
+	part({ Size = V3(math.min(W - 40, 2048), 0.4, 10), CFrame = CF(cx, ledgeY + 0.15, rz), Color = RGB(60, 190, 255), Material = M.Neon, Transparency = 0.35, CanCollide = false })
+	for i = 0, 2 do
+		local fx = x0 + W * (0.25 + i * 0.25)
+		blueFall(V3(fx, ceilY - 4, z1 - 2), V3(fx, ledgeY, z1 - 2), 10)
+	end
+	-- ☀️ свет на выходе из пещеры: огромная скала с сияющим проёмом + храм у выхода
+	if ep then
+		local look = CAVEW.endCF.LookVector
+		local rockCf = CFrame.lookAt(exitP, exitP + look)
+		part({ Size = V3(90, ceilY - LY + 10, 30), CFrame = CF(exitP.X, (ceilY + LY) / 2, exitP.Z) * (rockCf - rockCf.Position) * CF(0, 0, -16), Color = RGB(60, 58, 66), Material = M.Slate })
+		local exitDisc = part({ Shape = CYL, Size = V3(1, 44, 44), CFrame = rockCf * CF(0, 0, -0.5) * CFrame.Angles(0, PI / 2, 0), Color = RGB(225, 248, 255), Material = M.Neon, CanCollide = false })
+		local l = Instance.new("SpotLight")
+		l.Face = Enum.NormalId.Right
+		l.Range = 60
+		l.Angle = 80
+		l.Brightness = 5
+		l.Color = RGB(220, 245, 255)
+		l.Parent = exitDisc
+		local base = V3(ep.X, ep.Y - 20, ep.Z)
+		part({ Size = V3(70, base.Y - LY, 50), CFrame = CF(base.X, (base.Y + LY) / 2, base.Z), Color = RGB(70, 72, 78), Material = M.Slate })
+		greekTemple(CFrame.lookAt(base, base - look), 1.6, false)
+	end
+	-- ✨ пыль, светлячки в воздухе
+	for _ = 1, 8 do
+		local p = V3(rng:NextNumber(minX, maxX), maxY - 10, rng:NextNumber(minZ, maxZ))
+		local holder = part({ Size = V3(80, 30, 80), CFrame = CF(p), Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+		local em = Instance.new("ParticleEmitter")
+		em.Color = ColorSequence.new(RGB(150, 255, 200), RGB(200, 150, 255))
+		em.LightEmission = 1
+		em.Size = NumberSequence.new(0.25)
+		em.Speed = NumberRange.new(0.5, 1.5)
+		em.Lifetime = NumberRange.new(4, 7)
+		em.Rate = 6
+		em.SpreadAngle = Vector2.new(180, 180)
+		em.Parent = holder
+	end
+end
+
 -- ============ ГЛАВНАЯ ФУНКЦИЯ ============
 function MapBuilder.Build()
 	info = {
@@ -6157,12 +6695,15 @@ function MapBuilder.Build()
 			padSize = isWorldEnd and 56 or r:NextInteger(26, 32)
 		elseif ctx.park then
 			padSize = isWorldEnd and 44 or r:NextInteger(28, 34)
-		elseif (ctx.isles or ctx.skyland) and not isFinish then
+		elseif (ctx.isles or ctx.skyland or ctx.cavew) and not isFinish then
 			padSize = isWorldEnd and 50 or r:NextInteger(26, 32)
 		else
 			padSize = isWorldEnd and 30 or 14
 		end
 		local padTop = ctx.y + lowered
+		if ctx.cavew then
+			padTop = ctx.y - 3 -- пещера уходит всё глубже
+		end
 		local padZc = ctx.z + 4.5 + padSize / 2
 		local padX = ctx.x
 		if ctx.candy then
@@ -6171,6 +6712,8 @@ function MapBuilder.Build()
 			parkPlateau(ctx, nextStage, padX, padTop, padZc, padSize, isWorldEnd)
 		elseif ctx.isles then
 			islePlateau(ctx, nextStage, padX, padTop, padZc, padSize, isWorldEnd)
+		elseif ctx.cavew then
+			cavePlateau(ctx, nextStage, padX, padTop, padZc, padSize, isWorldEnd)
 		elseif ctx.skyland and not isFinish then
 			skyPlateau(ctx, nextStage, padX, padTop, padZc, padSize, isWorldEnd)
 		elseif isWorldEnd and not isFinish then
@@ -6214,6 +6757,11 @@ function MapBuilder.Build()
 			local rr = PARK.ring + PARK.ringGrow * prog -- спираль: каждый этап дальше от центра
 			local tgt = V3(C.X + math.cos(a + 0.5) * rr, 0, C.Z + math.sin(a + 0.5) * rr)
 			ctx.F = CFrame.lookAt(V3(pp.X, 0, pp.Z), tgt)
+		elseif ctx.cavew then
+			-- мир 3: волны — три поворота вправо, три влево
+			local kk3 = s - first + 1
+			local turn = isWorldEnd and 0 or ((math.floor((kk3 - 1) / 3) % 2 == 0) and PI / 6 or -PI / 6)
+			ctx.F = ctx.F * CF(padX, 0, -padZc) * CFrame.Angles(0, turn, 0)
 		elseif ctx.isles or ctx.skyland then
 			-- мир 4: зигзаг по 45°; мир 5: «лесенка» по 90°
 			local kk2 = s - first + 1
@@ -6240,6 +6788,9 @@ function MapBuilder.Build()
 			worldFinishPortal(ctx, ctx.zone)
 			if ctx.isles then
 				VOLC.endCF = ctx.F
+			end
+			if ctx.cavew then
+				CAVEW.endCF = ctx.F + V3(0, ctx.y, 0)
 			end
 			if ctx.candy then
 				candyCastle(L(ctx, 0, ctx.y, ctx.z + 17) * CFrame.Angles(0, PI, 0), 1)
@@ -6271,7 +6822,16 @@ function MapBuilder.Build()
 		ctx.candy = false
 		ctx.isles = false
 		ctx.skyland = false
-		if w == 4 or w == 5 then
+		ctx.cavew = false
+		if w == 3 then
+			LAVA_BOTTOM = CAVEW.lavaY - 1
+			ctx.park = false
+			ctx.cavew = true
+			ctx.baseY = CAVEW.top
+			ctx.F = CFrame.lookAt(origin, origin + V3(0, 0, -1))
+			ctx.x, ctx.y, ctx.z = 0, CAVEW.top, 0
+			caveEntrance(ctx, first)
+		elseif w == 4 or w == 5 then
 			local isSky = w == 5
 			LAVA_BOTTOM = isSky and (SKYK.cloudY - 20) or (VOLC.lavaY - 1)
 			ctx.park = false
@@ -6343,6 +6903,13 @@ function MapBuilder.Build()
 			currentFolder = cf2
 			buildCandyScenery(origin, Random.new(Config.MAP_SEED + 2525), pFirst, #info.pathPoints)
 			ctx.candy = false
+		elseif w == 3 then
+			local sf3 = Instance.new("Folder")
+			sf3.Name = "CaveScenery"
+			sf3.Parent = map
+			currentFolder = sf3
+			buildCaveScenery(Random.new(Config.MAP_SEED + 3333), pFirst, #info.pathPoints)
+			ctx.cavew = false
 		elseif w == 4 or w == 5 then
 			local sf2 = Instance.new("Folder")
 			sf2.Name = w == 4 and "IslesScenery" or "SkyScenery"
@@ -6370,7 +6937,7 @@ function MapBuilder.Build()
 	local drng = Random.new(Config.MAP_SEED + 99)
 	local decorSpots = {}
 	for _, sf in ipairs(stageFrames) do
-		if sf.zone ~= 3 then
+		if sf.zone >= 1 then -- у всех миров теперь свой декор
 			continue -- у парка и Candy Land свой декор
 		end
 		for _ = 1, 9 do
@@ -6413,7 +6980,7 @@ function MapBuilder.Build()
 	sceneFolder.Parent = map
 	currentFolder = sceneFolder
 	for _, sf in ipairs(stageFrames) do
-		if sf.zone ~= 3 then
+		if sf.zone >= 1 then -- у всех миров теперь свой декор
 			continue
 		end
 		local minY, maxY = math.huge, -math.huge

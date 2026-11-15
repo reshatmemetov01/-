@@ -1970,3 +1970,40 @@ CollectionService:GetInstanceAddedSignal("LocText"):Connect(translateLabel)
 task.delay(2, function()
 	showBanner(tr("welcome"), Color3.fromRGB(255, 140, 50))
 end)
+
+-- 🔦 НАЛОБНЫЙ ФОНАРИК в Хрустальных пещерах (мир 3): светит туда, куда смотрит игрок
+task.spawn(function()
+	while true do
+		local char = player.Character
+		local head = char and char:FindFirstChild("Head")
+		local st = player:GetAttribute("Stage") or 1
+		local inCave = player:GetAttribute("InLobby") ~= true and st < FINISH and Config.ZoneOfStage(math.min(st, TOTAL)) == 3
+		if head then
+			local lampLight = head:FindFirstChild("LavaHeadlamp")
+			if inCave and not lampLight then
+				lampLight = Instance.new("SpotLight")
+				lampLight.Name = "LavaHeadlamp"
+				lampLight.Face = Enum.NormalId.Front
+				lampLight.Range = 45
+				lampLight.Angle = 55
+				lampLight.Brightness = 3
+				lampLight.Color = Color3.fromRGB(255, 245, 220)
+				lampLight.Shadows = true
+				lampLight.Parent = head
+				local glow = Instance.new("PointLight")
+				glow.Name = "LavaHeadGlow"
+				glow.Range = 14
+				glow.Brightness = 0.6
+				glow.Color = Color3.fromRGB(255, 240, 210)
+				glow.Parent = head
+			elseif not inCave and lampLight then
+				lampLight:Destroy()
+				local glow = head:FindFirstChild("LavaHeadGlow")
+				if glow then
+					glow:Destroy()
+				end
+			end
+		end
+		task.wait(0.5)
+	end
+end)

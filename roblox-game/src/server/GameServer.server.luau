@@ -1474,10 +1474,16 @@ task.spawn(function()
 		local anyone = refreshOverlap()
 		for _, b in ipairs(map.blinkers) do
 			local on = b.group == groupOn
-			b.part:SetAttribute("Off", not on)
-			b.part.Transparency = on and 0 or 0.85
-			if on and anyone and not isWater() then
-				killInside(b.part)
+			if b.solid then
+				-- 💎 кристаллы пещеры: включён — твёрдый, выключен — призрачный (провалишься)
+				b.part.CanCollide = on
+				b.part.Transparency = on and 0.1 or 0.8
+			else
+				b.part:SetAttribute("Off", not on)
+				b.part.Transparency = on and 0 or 0.85
+				if on and anyone and not isWater() then
+					killInside(b.part)
+				end
 			end
 		end
 	end
