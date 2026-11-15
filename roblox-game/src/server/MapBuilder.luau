@@ -1087,15 +1087,283 @@ function Obstacles.donuts(ctx)
 	end
 end
 
+-- ============ УНИКАЛЬНЫЕ ПРЕПЯТСТВИЯ КАЖДОГО МИРА ============
+
+-- 🎢 МИР 1: бег по рельсам американских горок (шпалы, местами пропуски)
+function Obstacles.coasterTrack(ctx)
+	local r = ctx.rng
+	local len = r:NextInteger(34, 44)
+	local x = ctx.x
+	local z0 = ctx.z + 3
+	local base = ctx.y
+	local step = 1.7
+	local n = math.floor(len / step)
+	local holeAt = {}
+	for _ = 1, 2 + math.floor(ctx.diff * 2) do
+		local h = r:NextInteger(4, n - 5)
+		holeAt[h] = true
+		holeAt[h + 1] = true
+		if ctx.diff > 0.3 then
+			holeAt[h + 2] = true
+		end
+	end
+	local function yAt(t)
+		return base + math.sin(t * PI) * 5 - math.sin(t * PI * 2) * 1.5
+	end
+	for i = 0, n - 1 do
+		local t = i / (n - 1)
+		local z = z0 + i * step
+		local y = yAt(t)
+		if not holeAt[i] then
+			part({ Size = V3(5, 0.5, 1.1), CFrame = L(ctx, x, y - 0.25, z), Color = RGB(150, 100, 60), Material = M.WoodPlanks })
+		end
+		-- рельсы (узкие, по ним тоже можно бежать)
+		local y2 = yAt(math.min(1, (i + 1) / (n - 1)))
+		local a = L(ctx, x, y + 0.1, z).Position
+		local b = L(ctx, x, y2 + 0.1, z + step).Position
+		for sx = -1, 1, 2 do
+			local off = ctx.F.RightVector * sx * 2.2
+			part({ Size = V3(0.5, 0.5, (b - a).Magnitude + 0.1), CFrame = CFrame.lookAt((a + b) / 2 + off, b + off), Color = RGB(230, 40, 50), Material = M.Metal })
+		end
+		if i % 6 == 0 and not ctx.sky then
+			column(ctx, x, z, LAVA_BOTTOM, y - 0.6, 1, 1, RGB(90, 90, 105), M.Metal)
+		end
+		if i % 3 == 0 then
+			addPath(L(ctx, x, y, z).Position)
+		end
+		if i % 8 == 4 then
+			maybeCoin(ctx, x, y, z, 0.6)
+		end
+	end
+	local endZ = z0 + n * step
+	local size = 8
+	themedPlatform(ctx, x, base, endZ + 2 + size / 2, size, size)
+	ctx.x, ctx.y, ctx.z = x, base, endZ + 2 + size
+end
+
+-- 🍫 МИР 2: шоколадный мост «угадай плитку» — в каждом ряду одна плитка ненастоящая
+-- (подсказка: на настоящих плитках есть посыпка)
+function Obstacles.chocoBridge(ctx)
+	local r = ctx.rng
+	local rows = r:NextInteger(4, 6)
+	local x = ctx.x
+	local top = ctx.y
+	local z = ctx.z + 3
+	for _ = 1, rows do
+		local zc = z + 2.5
+		local realSide = r:NextNumber() < 0.5 and -1 or 1
+		for sx = -1, 1, 2 do
+			local real = sx == realSide
+			local tile = part({ Size = V3(5, 1, 5), CFrame = L(ctx, x + sx * 3.3, top - 0.5, zc), Color = RGB(110, 60, 30), CanCollide = real })
+			for k = -1, 1, 2 do
+				part({ Size = V3(0.15, 1.04, 5), CFrame = L(ctx, x + sx * 3.3 + k * 0.85, top - 0.5, zc), Color = RGB(80, 42, 20), CanCollide = false })
+			end
+			if real then
+				for _ = 1, 5 do
+					part({ Size = V3(0.5, 0.1, 0.15), CFrame = L(ctx, x + sx * 3.3 + r:NextNumber(-2, 2), top + 0.02, zc + r:NextNumber(-2, 2)) * CFrame.Angles(0, r:NextNumber(0, 3), 0), Color = pick(r, PARTY), CanCollide = false })
+				end
+			end
+			tile.CanQuery = real
+		end
+		addPath(L(ctx, x, top, zc).Position)
+		z = zc + 2.5 + 2.2
+	end
+	local size = 9
+	themedPlatform(ctx, x, top, z + 1 + size / 2, size, size)
+	maybeCoin(ctx, x, top, z + 1 + size / 2, 0.8)
+	ctx.x, ctx.y, ctx.z = x, top, z + 1 + size
+end
+
+-- ⛏ МИР 3: вагонетки на рельсах — прыгай с вагонетки на вагонетку, некоторые катаются
+function Obstacles.minecart(ctx)
+	local r = ctx.rng
+	local n = r:NextInteger(3, 5)
+	local x = math.clamp(ctx.x, -4, 4)
+	local top = ctx.y
+	local z0 = ctx.z + 2
+	local totalLen = n * 10 + 2
+	-- рельсы под вагонетками (на них стоять нельзя — лава рядом)
+	for sx = -1, 1, 2 do
+		part({ Size = V3(0.4, 0.4, totalLen), CFrame = L(ctx, x + sx * 2, top - 3.6, z0 + totalLen / 2), Color = RGB(120, 120, 130), Material = M.Metal, CanCollide = false })
+	end
+	for i = 0, math.floor(totalLen / 3) do
+		part({ Size = V3(6, 0.3, 0.8), CFrame = L(ctx, x, top - 3.9, z0 + i * 3), Color = RGB(90, 60, 40), Material = M.Wood, CanCollide = false })
+	end
+	if not ctx.sky then
+		column(ctx, x, z0 + totalLen / 2, LAVA_BOTTOM, top - 4.1, 6, totalLen * 0.3, RGB(70, 62, 66), M.Slate)
+	end
+	local z = z0
+	for i = 1, n do
+		local zc = z + 2.5 + 3
+		local base = L(ctx, x, top - 1.6, zc)
+		local cart = part({ Size = V3(5, 3, 6), CFrame = base, Color = RGB(110, 75, 50), Material = M.WoodPlanks })
+		local rim = part({ Size = V3(5.3, 0.5, 6.3), CFrame = base * CF(0, 1.3, 0), Color = RGB(80, 80, 90), Material = M.Metal, CanCollide = false })
+		local ore = part({ Size = V3(4, 0.6, 5), CFrame = base * CF(0, 1.5, 0), Color = pick(r, { RGB(255, 200, 60), RGB(90, 220, 255), RGB(200, 90, 255) }), Material = M.Neon, CanCollide = false })
+		local moving = ctx.diff > 0.2 and i % 2 == 0
+		if moving then
+			local amp, speed, phase = 2 + 2 * ctx.diff, 0.9 + 0.5 * ctx.diff, r:NextNumber(0, 2 * PI)
+			for _, p in ipairs({ cart, rim, ore }) do
+				table.insert(info.movers, { part = p, base = p.CFrame, axis = ctx.F.LookVector, amp = amp, speed = speed, phase = phase })
+			end
+		end
+		maybeCoin(ctx, x, top, zc, 0.4)
+		addPath(base.Position)
+		z = zc + 3 + r:NextNumber(1.2, 2 + 1.5 * ctx.diff)
+	end
+	local size = 9
+	themedPlatform(ctx, x, top, z + 2 + size / 2, size, size)
+	ctx.x, ctx.y, ctx.z = x, top, z + 2 + size
+end
+
+-- 🌉 МИР 4: шаткий верёвочный мост с дырами (часть досок рассыпается)
+function Obstacles.plankBridge(ctx)
+	local r = ctx.rng
+	local len = r:NextInteger(30, 40)
+	local x = ctx.x
+	local top = ctx.y
+	local z0 = ctx.z + 2
+	themedPlatform(ctx, x, top, z0 + 2, 4, 4)
+	local step = 1.5
+	local n = math.floor(len / step)
+	local sag = 2.5
+	local missing = {}
+	for _ = 1, 2 + math.floor(ctx.diff * 2) do
+		local m = r:NextInteger(3, n - 4)
+		missing[m] = true
+		missing[m + 1] = true
+	end
+	for i = 0, n - 1 do
+		local t = i / (n - 1)
+		local y = top - math.sin(t * PI) * sag
+		local z = z0 + 4 + i * step
+		if not missing[i] then
+			local p = part({ Size = V3(5, 0.4, 1.2), CFrame = L(ctx, x, y - 0.2, z) * CFrame.Angles(r:NextNumber(-0.04, 0.04), 0, r:NextNumber(-0.05, 0.05)), Color = RGB(150, 105, 65), Material = M.WoodPlanks })
+			if ctx.diff > 0.35 and r:NextNumber() < 0.15 then
+				p.Color = RGB(120, 85, 55)
+				tag(p, "Vanish")
+			end
+		end
+		if i % 2 == 0 then
+			for sx = -1, 1, 2 do
+				part({ Size = V3(0.25, 0.25, step * 2 + 0.1), CFrame = L(ctx, x + sx * 2.8, y + 2.2, z + step / 2), Color = RGB(200, 170, 120), CanCollide = false })
+				part({ Size = V3(0.15, 2.2, 0.15), CFrame = L(ctx, x + sx * 2.8, y + 1.1, z), Color = RGB(200, 170, 120), CanCollide = false })
+			end
+		end
+		if i % 4 == 0 then
+			addPath(L(ctx, x, y, z).Position)
+		end
+	end
+	local endZ = z0 + 4 + n * step
+	local size = 8
+	themedPlatform(ctx, x, top, endZ + size / 2, size, size)
+	maybeCoin(ctx, x, top, endZ + size / 2, 0.7)
+	ctx.x, ctx.y, ctx.z = x, top, endZ + size
+end
+
+-- 🔥 МИР 4: лавопады поперёк дорожки — в каждой завесе только один проход
+function Obstacles.lavaCurtains(ctx)
+	local r = ctx.rng
+	local count = r:NextInteger(4, 5)
+	local w = 13
+	local len = count * 7 + 6
+	local x = 0
+	local z0 = ctx.z + 3
+	local zc = z0 + len / 2
+	local top = ctx.y
+	walkway(ctx, x, top, zc, w, len)
+	for i = 1, count do
+		local z = z0 + i * 7
+		local gapW = 3.6 - 0.8 * ctx.diff
+		local gx = r:NextNumber(-w / 2 + gapW / 2 + 0.5, w / 2 - gapW / 2 - 0.5)
+		local leftW = (gx - gapW / 2) - (-w / 2)
+		local rightW = (w / 2) - (gx + gapW / 2)
+		local h = 14
+		if leftW > 0.2 then
+			killPart({ Size = V3(leftW, h, 0.6), CFrame = L(ctx, -w / 2 + leftW / 2, top + h / 2, z), Color = RGB(255, 110, 10), Material = M.Neon, Transparency = 0.15 })
+		end
+		if rightW > 0.2 then
+			killPart({ Size = V3(rightW, h, 0.6), CFrame = L(ctx, w / 2 - rightW / 2, top + h / 2, z), Color = RGB(255, 110, 10), Material = M.Neon, Transparency = 0.15 })
+		end
+		-- каменный уступ, с которого течёт лава
+		part({ Size = V3(w + 2, 2, 3), CFrame = L(ctx, 0, top + h + 1, z), Color = RGB(90, 75, 70), Material = M.Basalt })
+		part({ Size = V3(gapW, 0.3, 0.8), CFrame = L(ctx, gx, top + 0.2, z), Color = RGB(255, 230, 120), Material = M.Neon, CanCollide = false })
+		addPath(L(ctx, gx, top, z).Position)
+	end
+	for sx = -1, 1, 2 do
+		part({ Size = V3(2, 16, len), CFrame = L(ctx, sx * (w / 2 + 1), top + 8, zc), Color = RGB(100, 85, 80), Material = M.Basalt })
+	end
+	maybeCoin(ctx, 0, top, z0 + len - 2, 0.7)
+	ctx.x, ctx.z = 0, z0 + len
+end
+
+-- 🌈 МИР 5: радужная винтовая лестница вокруг облачной башни
+function Obstacles.cloudSteps(ctx)
+	local r = ctx.rng
+	local n = r:NextInteger(9, 12)
+	local R = 7
+	local x = ctx.x
+	local zc = ctx.z + 3 + R + 2
+	local top = ctx.y
+	local center = L(ctx, x, top, zc)
+	part({ Shape = CYL, Size = V3(n * 1.4 + 10, 6, 6), CFrame = center * CF(0, (n * 1.4) / 2 - 3, 0) * ROT_UP, Color = Color3.new(1, 1, 1) })
+	local rainbow = { RGB(255, 70, 70), RGB(255, 170, 40), RGB(255, 240, 60), RGB(80, 220, 90), RGB(70, 150, 255), RGB(170, 90, 255) }
+	local a0 = -PI / 2
+	local last
+	for i = 0, n - 1 do
+		local a = a0 + i * (2 * PI / 9)
+		local y = top + i * 1.4
+		local cf = center * CFrame.Angles(0, -a, 0) * CF(R, y - top - 0.5, 0)
+		last = part({ Size = V3(4.4, 1, 3.4 - ctx.diff * 0.8), CFrame = cf, Color = rainbow[(i % #rainbow) + 1] })
+		addPath(last.Position)
+		if i % 4 == 2 then
+			coinAt(CF(last.Position + V3(0, 3, 0)))
+		end
+	end
+	local topY = top + (n - 1) * 1.4
+	local exitZ = zc + R + 2
+	local size = 8
+	themedPlatform(ctx, x, topY, exitZ + size / 2, size, size)
+	ctx.x, ctx.y, ctx.z = x, topY, exitZ + size
+end
+
+-- ⭐ МИР 5: прыжки по звёздам, часть звёзд качается вверх-вниз
+function Obstacles.starHop(ctx)
+	local r = ctx.rng
+	local n = r:NextInteger(4, 6)
+	for i = 1, n do
+		local gap = r:NextNumber(2.8, 3.4 + 1.2 * ctx.diff)
+		local x = math.clamp(ctx.x + r:NextNumber(-5, 5), -10, 10)
+		local zc = ctx.z + gap + 3
+		local base = L(ctx, x, ctx.y - 0.5, zc)
+		local parts = {}
+		table.insert(parts, part({ Shape = CYL, Size = V3(1, 4.4, 4.4), CFrame = base * ROT_UP, Color = RGB(255, 220, 60) }))
+		for k = 0, 4 do
+			local a = k / 5 * 2 * PI
+			table.insert(parts, part({ Size = V3(1.8, 1, 2.6), CFrame = base * CFrame.Angles(0, a, 0) * CF(0, 0, -2.9), Color = RGB(255, 200, 40) }))
+		end
+		table.insert(parts, part({ Shape = CYL, Size = V3(0.3, 2, 2), CFrame = base * CF(0, 0.5, 0) * ROT_UP, Color = RGB(255, 250, 200), Material = M.Neon, CanCollide = false }))
+		if ctx.diff > 0.15 and i % 2 == 0 then
+			local amp, speed, phase = 2 + 1.5 * ctx.diff, 0.8 + 0.5 * ctx.diff, r:NextNumber(0, 2 * PI)
+			for _, p in ipairs(parts) do
+				table.insert(info.movers, { part = p, base = p.CFrame, axis = V3(0, 1, 0), amp = amp, speed = speed, phase = phase })
+			end
+		end
+		addPath(base.Position)
+		maybeCoin(ctx, x, ctx.y, zc, 0.35)
+		ctx.x, ctx.z = x, zc + 3
+	end
+end
+
+-- У каждого мира СВОЙ набор препятствий — они не повторяются между мирами
 local POOLS = {
-	{ "jumps", "stripes", "climb", "rope", "posts", "vanish", "movers", "bounce", "pendulum", "balloons", "pushers", "disks", "spinner" },
-	{ "macarons", "canes", "donuts", "macarons", "canes", "donuts", "jumps", "bounce", "conveyor", "spinner", "pushers", "movers", "disks" },
-	{ "jumps", "cave", "vanish", "posts", "climb", "rope", "disks", "geysers", "lasers", "pendulum" },
-	{ "jumps", "movers", "spinner", "vanish", "disks", "posts", "conveyor", "stripes", "geysers", "lasers", "pushers" },
-	{ "jumps", "bounce", "rope", "movers", "vanish", "disks", "posts", "balloons", "pendulum", "pushers" },
+	{ "jumps", "stripes", "balloons", "bounce", "spinner", "coasterTrack" }, -- 🎡 парк
+	{ "macarons", "canes", "donuts", "chocoBridge", "pushers" }, -- 🍭 Candy Land
+	{ "cave", "climb", "lasers", "pendulum", "posts", "minecart" }, -- 💎 подземелье
+	{ "plankBridge", "lavaCurtains", "geysers", "vanish", "movers" }, -- 🌋 острова вулкана
+	{ "cloudSteps", "starHop", "rope", "disks", "conveyor" }, -- ☁️ небо
 }
 
-local CLIMBING = { climb = true, bounce = true }
+local CLIMBING = { climb = true, bounce = true, cloudSteps = true }
 
 -- ============ ЧЕКПОИНТЫ, ВОРОТА ЗОН ============
 local function checkpointPad(ctx, stageNum, x, top, zc, size, isFinish)
