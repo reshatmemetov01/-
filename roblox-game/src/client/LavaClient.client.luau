@@ -1959,12 +1959,18 @@ end)
 -- ============ ПРИВИЛЕГИЯ «ДВОЙНОЙ ПРЫЖОК» ============
 local UserInputService = game:GetService("UserInputService")
 local doubleUsed = false
+local lastJumpReq = 0 -- время последнего сигнала прыжка (зажатая кнопка шлёт их каждый кадр)
+local airSince = 0 -- когда персонаж оторвался от земли
 -- двойной прыжок: пропуск «Прыжок x2» (или старая привилегия, если уже куплена)
 local function hasDoubleJump()
 	return player:GetAttribute("PassSuperJump") == true or csvSet(player:GetAttribute("Perks")).doublejump == true
 end
 UserInputService.JumpRequest:Connect(function()
-	if not hasDoubleJump() then
+	local now = os.clock()
+	-- новое нажатие = был перерыв между сигналами (кнопку отпустили и нажали снова)
+	local newPress = now - lastJumpReq > 0.15
+	lastJumpReq = now
+	if not newPress or not hasDoubleJump() then
 		return
 	end
 	local char = player.Character
@@ -1975,10 +1981,11 @@ UserInputService.JumpRequest:Connect(function()
 	end
 	local state = hum:GetState()
 	local inAir = state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping
-	if inAir and not doubleUsed then
+	if inAir and not doubleUsed and now - airSince > 0.12 then
 		doubleUsed = true
 		local v = root.AssemblyLinearVelocity
-		root.AssemblyLinearVelocity = Vector3.new(v.X, 50, v.Z)
+		local up = math.sqrt(2 * workspace.Gravity * math.max(hum.JumpHeight, 7.2))
+		root.AssemblyLinearVelocity = Vector3.new(v.X, up, v.Z)
 		hum:ChangeState(Enum.HumanoidStateType.Jumping)
 		burst(12, { Color3.new(1, 1, 1), Color3.fromRGB(150, 220, 255) })
 	end
@@ -1986,9 +1993,12 @@ end)
 local function watchLanding(char)
 	local hum = char:WaitForChild("Humanoid", 10)
 	if hum then
-		hum.StateChanged:Connect(function(_, new)
-			if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
+		hum.StateChanged:Connect(function(old, new)
+			if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running or new == Enum.HumanoidStateType.Swimming then
 				doubleUsed = false
+			elseif (new == Enum.HumanoidStateType.Jumping or new == Enum.HumanoidStateType.Freefall)
+				and old ~= Enum.HumanoidStateType.Jumping and old ~= Enum.HumanoidStateType.Freefall then
+				airSince = os.clock()
 			end
 		end)
 	end
@@ -1996,7 +2006,10 @@ end
 if player.Character then
 	task.spawn(watchLanding, player.Character)
 end
-player.CharacterAdded:Connect(watchLanding)
+player.CharacterAdded:Connect(function(char)
+	doubleUsed = false
+	watchLanding(char)
+end)
 
 -- ============ ПЕРЕВОД ТАБЛИЧЕК НА КАРТЕ ============
 local function translateLabel(lbl)
