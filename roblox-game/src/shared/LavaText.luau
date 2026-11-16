@@ -181,7 +181,7 @@ T.Strings = {
 		welcome = "🌋 THE WORLD IS MELTING! 🌋",
 
 		-- условия открытия
-		unlock_ducks = "Find all 5 ducks 🦆",
+		unlock_ducks = "🦆 Find 5 secret ducks hidden in 5 secret places!",
 		unlock_vip = "VIP only 👑",
 		unlock_rebirth3 = "3 rebirths 🔁",
 		["unlock_pass:SkinPack"] = "Pass 🌈 PRO Skins",
@@ -193,7 +193,7 @@ T.Strings = {
 		pass_Speed = "⚡ Speed x2",
 		pass_Speed_desc = "Run 2x faster. Forever.",
 		pass_SuperJump = "🚀 Jump x2",
-		pass_SuperJump_desc = "Jump 2x higher. Stages get much easier!",
+		pass_SuperJump_desc = "Double jump! Press jump again in the air.",
 		pass_DoubleCoins = "💰 x2 Coins",
 		pass_DoubleCoins_desc = "All coins are doubled. Forever.",
 		pass_SkinPack = "🌈 PRO Skins",
@@ -470,7 +470,7 @@ T.Strings = {
 		help_close = "Попробую ещё 💪",
 		welcome = "🌋 МИР ПЛАВИТСЯ! 🌋",
 
-		unlock_ducks = "Найди все 5 уточек 🦆",
+		unlock_ducks = "🦆 Найди 5 уточек в 5 секретных местах игры!",
 		unlock_vip = "Только для 👑 VIP",
 		unlock_rebirth3 = "3 перерождения 🔁",
 		["unlock_pass:SkinPack"] = "Пропуск 🌈 Скины PRO",
@@ -481,7 +481,7 @@ T.Strings = {
 		pass_Speed = "⚡ Скорость x2",
 		pass_Speed_desc = "Бегаешь в 2 раза быстрее. Навсегда.",
 		pass_SuperJump = "🚀 Прыжок x2",
-		pass_SuperJump_desc = "Прыгаешь в 2 раза выше. Этапы станут намного проще!",
+		pass_SuperJump_desc = "Двойной прыжок! Нажми прыжок ещё раз в воздухе.",
 		pass_DoubleCoins = "💰 x2 монеты",
 		pass_DoubleCoins_desc = "Все монеты удваиваются. Навсегда.",
 		pass_SkinPack = "🌈 Скины PRO",

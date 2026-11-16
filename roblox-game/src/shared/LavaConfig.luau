@@ -243,7 +243,7 @@ Config.Perks = {
 	{ id = "lucky", price = 3000, rarity = "epic" }, -- +15% монет
 	{ id = "shieldplus", price = 3500, rarity = "epic" }, -- щит от лавы длится на 30 сек дольше
 	{ id = "magnet", price = 4000, rarity = "legendary" }, -- монетки сами летят к тебе
-	{ id = "doublejump", price = 8000, rarity = "legendary" }, -- двойной прыжок
+	-- двойной прыжок теперь даёт пропуск «Прыжок x2» (кто купил привилегию раньше — она у них работает)
 }
 Config.PERK_SWIFT_BONUS = 3
 Config.PERK_LUCKY_BONUS = 1.15

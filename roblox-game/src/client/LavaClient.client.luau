@@ -1959,8 +1959,9 @@ end)
 -- ============ ПРИВИЛЕГИЯ «ДВОЙНОЙ ПРЫЖОК» ============
 local UserInputService = game:GetService("UserInputService")
 local doubleUsed = false
+-- двойной прыжок: пропуск «Прыжок x2» (или старая привилегия, если уже куплена)
 local function hasDoubleJump()
-	return csvSet(player:GetAttribute("Perks")).doublejump == true
+	return player:GetAttribute("PassSuperJump") == true or csvSet(player:GetAttribute("Perks")).doublejump == true
 end
 UserInputService.JumpRequest:Connect(function()
 	if not hasDoubleJump() then

@@ -1224,7 +1224,7 @@ local function applyCharacter(player)
 		end
 		hum.WalkSpeed = speed
 		hum.UseJumpPower = false
-		hum.JumpHeight = player:GetAttribute("PassSuperJump") and Config.SUPER_JUMP or Config.NORMAL_JUMP
+		hum.JumpHeight = Config.NORMAL_JUMP -- «Прыжок x2» = двойной прыжок в воздухе (делает клиент)
 	end
 	applyTrail(player)
 	applySkin(player)
