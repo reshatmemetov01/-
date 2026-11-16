@@ -56,6 +56,17 @@ local PARTY = {
 }
 local CANDY = { RGB(255, 140, 200), RGB(140, 240, 210), RGB(255, 235, 120), RGB(200, 160, 255), RGB(255, 170, 110), RGB(140, 210, 255) }
 
+-- Новые материалы Roblox (если в старой версии их нет — берём запасной)
+local function matOr(name, fallback)
+	local ok, v = pcall(function()
+		return Enum.Material[name]
+	end)
+	return ok and v or fallback
+end
+local MAT_PLASTER = matOr("Plaster", Enum.Material.SmoothPlastic)
+local MAT_ROOF = matOr("RoofShingles", Enum.Material.Slate)
+local MAT_PAVE = matOr("Pavement", Enum.Material.Cobblestone)
+
 -- ============ БАЗОВЫЕ ПОМОЩНИКИ ============
 local function tag(inst, name)
 	CollectionService:AddTag(inst, name)
@@ -1634,18 +1645,18 @@ local function blockyTree(cf, rng, scale, leafColor)
 	part({ Size = V3(1.6 * scale, h, 1.6 * scale), CFrame = cf * CF(0, h / 2, 0), Color = RGB(125, 82, 48), Material = M.Wood })
 	local leaf = leafColor or pick(rng, LEAVES)
 	local s1 = 7 * scale
-	part({ Size = V3(s1, s1 * 0.8, s1), CFrame = cf * CF(0, h + s1 * 0.25, 0) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = leaf })
+	part({ Size = V3(s1, s1 * 0.8, s1), CFrame = cf * CF(0, h + s1 * 0.25, 0) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = leaf, Material = M.Grass })
 	local s2 = 5 * scale
-	part({ Size = V3(s2, s2 * 0.8, s2), CFrame = cf * CF(rng:NextNumber(-0.8, 0.8) * scale, h + s1 * 0.7 + s2 * 0.2, rng:NextNumber(-0.8, 0.8) * scale) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = leaf:Lerp(Color3.new(1, 1, 1), 0.12) })
+	part({ Size = V3(s2, s2 * 0.8, s2), CFrame = cf * CF(rng:NextNumber(-0.8, 0.8) * scale, h + s1 * 0.7 + s2 * 0.2, rng:NextNumber(-0.8, 0.8) * scale) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = leaf:Lerp(Color3.new(1, 1, 1), 0.12), Material = M.Grass })
 	if rng:NextNumber() < 0.5 then
 		local s3 = 3 * scale
-		part({ Size = V3(s3, s3 * 0.8, s3), CFrame = cf * CF(0, h + s1 * 1.05 + s2 * 0.4, 0) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = leaf:Lerp(Color3.new(1, 1, 1), 0.22) })
+		part({ Size = V3(s3, s3 * 0.8, s3), CFrame = cf * CF(0, h + s1 * 1.05 + s2 * 0.4, 0) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = leaf:Lerp(Color3.new(1, 1, 1), 0.22), Material = M.Grass })
 	end
 end
 
 local function bush(cf, rng)
 	local s = rng:NextNumber(2, 3.5)
-	part({ Size = V3(s, s * 0.8, s), CFrame = cf * CF(0, s * 0.4, 0) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = pick(rng, LEAVES), CanCollide = false })
+	part({ Size = V3(s, s * 0.8, s), CFrame = cf * CF(0, s * 0.4, 0) * CFrame.Angles(0, rng:NextNumber(0, 1.5), 0), Color = pick(rng, LEAVES), Material = M.Grass, CanCollide = false })
 	if rng:NextNumber() < 0.6 then
 		part({ Size = V3(0.6, 0.6, 0.6), CFrame = cf * CF(s * 0.3, s * 0.85, 0), Color = pick(rng, PARTY), CanCollide = false })
 	end
@@ -1816,7 +1827,7 @@ local function gableRoof(base, w, d, rh, colA, colB, glow)
 			if side == 1 then
 				cf = cf * CFrame.Angles(0, PI, 0)
 			end
-			wedgeAt(V3(seg + 0.02, rh, D), cf, (i % 2 == 0) and colA or colB)
+			wedgeAt(V3(seg + 0.02, rh, D), cf, (i % 2 == 0) and colA or colB, MAT_ROOF)
 		end
 		-- торцевые неоновые линии
 		for sx = -1, 1, 2 do
@@ -1837,8 +1848,8 @@ local function prettyBuilding(cf, o)
 	local w, d, h = o.w, o.d, o.h
 	local F = -d / 2
 	local trim = o.trim or Color3.new(1, 1, 1)
-	part({ Size = V3(w + 2, 0.5, d + 2), CFrame = cf * CF(0, 0.25, 0), Color = RGB(150, 140, 165), Material = M.Cobblestone })
-	part({ Size = V3(w, h, d), CFrame = cf * CF(0, 0.5 + h / 2, 0), Color = o.wall })
+	part({ Size = V3(w + 2, 0.5, d + 2), CFrame = cf * CF(0, 0.25, 0), Color = RGB(150, 140, 165), Material = MAT_PAVE })
+	part({ Size = V3(w, h, d), CFrame = cf * CF(0, 0.5 + h / 2, 0), Color = o.wall, Material = MAT_PLASTER })
 	part({ Size = V3(w + 0.3, 2.2, d + 0.3), CFrame = cf * CF(0, 1.6, 0), Color = o.band, Material = M.Brick })
 	part({ Size = V3(w + 0.4, 0.4, d + 0.4), CFrame = cf * CF(0, 2.8, 0), Color = trim })
 	-- углы-колонны
@@ -3853,7 +3864,7 @@ local function parkPlateau(ctx, stageNum, padX, padTop, padZc, size, isEnd, noPr
 	local rng = Random.new(Config.MAP_SEED + stageNum * 31)
 	local cf = L(ctx, padX, padTop, padZc)
 	table.insert(PARK.plateaus, { pos = cf.Position, size = size })
-	local topPart = part({ Name = "Checkpoint" .. stageNum, Shape = CYL, Size = V3(2, size, size), CFrame = cf * CF(0, -1, 0) * ROT_UP, Color = RGB(115, 210, 85) })
+	local topPart = part({ Name = "Checkpoint" .. stageNum, Shape = CYL, Size = V3(2, size, size), CFrame = cf * CF(0, -1, 0) * ROT_UP, Color = RGB(115, 210, 85), Material = M.Grass })
 	if not isEnd then
 		topPart:SetAttribute("Stage", stageNum)
 		tag(topPart, "Checkpoint")
@@ -4336,7 +4347,7 @@ local function buildParkScenery(C, rng, stageFrames)
 	end
 
 	-- 🌱 земля парка: трава, под ней скалы
-	part({ Name = "ParkGround", Shape = CYL, Size = V3(4, PARK.R * 2, PARK.R * 2), CFrame = CF(C.X, GY - 2, C.Z) * ROT_UP, Color = RGB(110, 205, 80) })
+	part({ Name = "ParkGround", Shape = CYL, Size = V3(4, PARK.R * 2, PARK.R * 2), CFrame = CF(C.X, GY - 2, C.Z) * ROT_UP, Color = RGB(110, 205, 80), Material = M.Grass })
 	local s = PARK.R * 2
 	for i = 1, 5 do
 		s *= 0.82
@@ -5487,9 +5498,9 @@ local function bigIsle(cf, rng, size, style, bottomY)
 	local isRound = not sky and rng:NextNumber() < 0.6
 	local top
 	if isRound then
-		top = part({ Shape = CYL, Size = V3(2.4, size, size), CFrame = cf * CF(0, -1.2, 0) * ROT_UP, Color = topCol })
+		top = part({ Shape = CYL, Size = V3(2.4, size, size), CFrame = cf * CF(0, -1.2, 0) * ROT_UP, Color = topCol, Material = M.Grass })
 	else
-		top = part({ Size = V3(size, 2.4, size), CFrame = cf * CF(0, -1.2, 0), Color = topCol })
+		top = part({ Size = V3(size, 2.4, size), CFrame = cf * CF(0, -1.2, 0), Color = topCol, Material = (sky and topCol ~= RGB(120, 230, 110)) and M.SmoothPlastic or M.Grass })
 	end
 	if sky then
 		-- волнистая «глазурь» по краю
@@ -5586,7 +5597,7 @@ local function islePlateau(ctx, stageNum, padX, padTop, padZc, size, isEnd, noPr
 	local rng = Random.new(Config.MAP_SEED + stageNum * 71)
 	local cf = L(ctx, padX, padTop, padZc)
 	table.insert(VOLC.plateaus, { cf = cf, size = size })
-	local topPart = part({ Name = "Checkpoint" .. stageNum, Shape = CYL, Size = V3(2, size, size), CFrame = cf * CF(0, -1, 0) * ROT_UP, Color = GRASS })
+	local topPart = part({ Name = "Checkpoint" .. stageNum, Shape = CYL, Size = V3(2, size, size), CFrame = cf * CF(0, -1, 0) * ROT_UP, Color = GRASS, Material = M.Grass })
 	if not isEnd then
 		topPart:SetAttribute("Stage", stageNum)
 		tag(topPart, "Checkpoint")

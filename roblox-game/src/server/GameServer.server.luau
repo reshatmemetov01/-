@@ -1062,6 +1062,69 @@ do
 	previews.Parent = ReplicatedStorage
 end
 
+-- ✨ «полировка» питомца: мультяшный контур, лёгкий блеск, табличка с именем,
+-- эффекты по редкости (эпик — свечение, легендарный — искры, эксклюзив — сияющее кольцо)
+local function polishPet(model, pet)
+	local root = model.PrimaryPart
+	if not root then
+		return
+	end
+	local rarityColor = Config.Rarities[pet.rarity or "common"] or Color3.new(1, 1, 1)
+	local hl = Instance.new("Highlight")
+	hl.FillTransparency = 1
+	hl.OutlineColor = RGB(35, 25, 40)
+	hl.OutlineTransparency = 0.15
+	hl.DepthMode = Enum.HighlightDepthMode.Occluded
+	hl.Adornee = model
+	hl.Parent = model
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 0.5 and d.Material == MAT.SmoothPlastic then
+			d.Reflectance = 0.06
+		end
+	end
+	-- табличка с именем цвета редкости (клиент переведёт на язык игрока)
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "PetTag"
+	bb.Size = UDim2.fromOffset(150, 24)
+	bb.StudsOffset = V(0, 2.4, 0)
+	bb.MaxDistance = 60
+	bb.LightInfluence = 0
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.fromScale(1, 1)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamBlack
+	lbl.TextScaled = true
+	lbl.TextColor3 = rarityColor
+	lbl.Text = pet.id
+	lbl:SetAttribute("TextKey", "item_pets_" .. pet.id)
+	CollectionService:AddTag(lbl, "LocText")
+	local st = Instance.new("UIStroke")
+	st.Thickness = 2
+	st.Color = RGB(20, 15, 25)
+	st.Parent = lbl
+	lbl.Parent = bb
+	bb.Parent = root
+	local r = pet.rarity
+	if r == "epic" or r == "legendary" or r == "exclusive" then
+		addLight(root, rarityColor, 7)
+	end
+	if r == "legendary" or r == "exclusive" then
+		local em = Instance.new("ParticleEmitter")
+		em.Color = ColorSequence.new(Color3.new(1, 1, 1), rarityColor)
+		em.LightEmission = 1
+		em.Size = NumberSequence.new(0.25, 0)
+		em.Lifetime = NumberRange.new(0.6, 1.2)
+		em.Rate = 6
+		em.Speed = NumberRange.new(0.5, 1.5)
+		em.SpreadAngle = Vector2.new(180, 180)
+		em.Parent = root
+	end
+	if r == "exclusive" then
+		shape(model, "cyl", V(0.12, 2.6, 2.6), root.CFrame * CF(0, -1.25, 0) * UPR, rarityColor, MAT.Neon, { Transparency = 0.45 })
+		shape(model, "cyl", V(0.1, 2.0, 2.0), root.CFrame * CF(0, -1.24, 0) * UPR, Color3.new(1, 1, 1), MAT.Neon, { Transparency = 0.7 })
+	end
+end
+
 local function applyPet(player)
 	local s = sessions[player]
 	for _, m in ipairs(petFolder:GetChildren()) do
@@ -1078,6 +1141,10 @@ local function applyPet(player)
 		return
 	end
 	local model = buildPet(pet)
+	local okP, errP = pcall(polishPet, model, pet)
+	if not okP then
+		warn("[LavaObby] pet polish:", errP)
+	end
 	model:SetAttribute("OwnerId", player.UserId)
 	model:PivotTo(root.CFrame * CFrame.new(2.5, 1.5, 2))
 	model.Parent = petFolder
@@ -2452,7 +2519,7 @@ task.spawn(function()
 end)
 
 -- ============ ГЛОБАЛЬНЫЕ СОБЫТИЯ ============
-local EVENT_ORDER = { "eruption", "night", "meteors", "icestorm", "golden" }
+local EVENT_ORDER = { "eruption", "meteors", "icestorm", "golden" } -- ночь убрана
 local eventRunning = false
 
 local function setEruptors(mult)
