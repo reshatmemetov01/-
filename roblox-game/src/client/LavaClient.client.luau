@@ -141,9 +141,15 @@ local menuIcon = new("TextLabel", {
 	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
 	TextColor3 = Color3.new(1, 1, 1),
-	Text = "☰",
+	Text = "",
 }, menuBtn)
 textStroke(menuIcon)
+local menuBars = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Size = UDim2.fromOffset(34, 26) }, menuBtn)
+for i = 0, 2 do
+	local bar = new("Frame", { Position = UDim2.fromOffset(0, i * 10), Size = UDim2.fromOffset(34, 6), BackgroundColor3 = Color3.new(1, 1, 1) }, menuBars)
+	corner(bar, 3)
+	outline(bar, Color3.new(0, 0, 0), 1.5)
+end
 local menuText = new("TextLabel", {
 	BackgroundTransparency = 1,
 	Size = UDim2.new(1, -8, 0.28, 0),
@@ -180,7 +186,8 @@ new("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10)
 new("UIGridLayout", { CellSize = UDim2.fromOffset(155, 46), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, left)
 local function setMenu(open)
 	left.Visible = open
-	menuIcon.Text = open and "✕" or "☰"
+	menuIcon.Text = open and "✕" or ""
+	menuBars.Visible = not open
 end
 menuBtn.Activated:Connect(function()
 	setMenu(not left.Visible)
@@ -194,10 +201,13 @@ left.ChildAdded:Connect(function(c)
 	end
 end)
 local shopBtn = button({ text = tr("ui_shop"), color = Color3.fromRGB(60, 170, 90), order = 1 }, left)
-local vipBtn = button({ text = tr("ui_vip"), color = Color3.fromRGB(230, 170, 20), order = 2 }, left)
+local donateBtn = button({ text = tr("ui_donate"), color = Color3.fromRGB(0, 175, 120), order = 2 }, left)
+new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(120, 255, 190), Color3.fromRGB(0, 150, 255)) }, donateBtn)
+-- платные кнопки (VIP, пропуск, щит) теперь живут в донат-магазине
+local vipBtn = button({ text = tr("ui_vip"), color = Color3.fromRGB(230, 170, 20), order = 2 })
 local giftBtn = button({ text = "🎁 5:00", color = Color3.fromRGB(150, 90, 200), order = 3 }, left)
-local skipBtn = button({ text = tr("ui_skip"), color = Color3.fromRGB(230, 140, 30), order = 4 }, left)
-local shieldBtn = button({ text = tr("ui_shield"), color = Color3.fromRGB(40, 130, 230), order = 5 }, left)
+local skipBtn = button({ text = tr("ui_skip"), color = Color3.fromRGB(230, 140, 30), order = 4 })
+local shieldBtn = button({ text = tr("ui_shield"), color = Color3.fromRGB(40, 130, 230), order = 5 })
 local respawnBtn = button({ text = tr("ui_respawn"), color = Color3.fromRGB(90, 90, 100), order = 6 }, left)
 local lobbyBtn = button({ text = tr("ui_lobby"), color = Color3.fromRGB(60, 160, 120), order = 6 }, left)
 lobbyBtn.Activated:Connect(function()
@@ -544,7 +554,24 @@ local function buildPreviewModel(category, item)
 	return model
 end
 
+local ROBUX_ICONS = {
+	VIP = "👑", Speed = "⚡", SuperJump = "🚀", DoubleCoins = "💰", SkinPack = "🌈", DragonPet = "🐉",
+	UnlockWorld = "🔓", SkipStage = "⏭️", SkipZone = "⏩", LavaShield = "🛡️",
+	Coins500 = "💰", Coins2500 = "💰", Coins10000 = "💎", LavaToWater = "🌊",
+}
+
 local function addPreview(c, category, item)
+	if category == "icon" then
+		return new("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(8, 42),
+			Size = UDim2.new(1, -16, 0, 88),
+			Font = Enum.Font.GothamBlack,
+			TextScaled = true,
+			Text = item.icon or "⭐",
+			ZIndex = 7,
+		}, c)
+	end
 	if category == "perks" then
 		local l = new("TextLabel", {
 			BackgroundTransparency = 1,
@@ -760,13 +787,13 @@ local function refreshShop()
 				if not owned then
 					promptPass(key)
 				end
-			end)
+			end, nil, "icon", { icon = ROBUX_ICONS[key] })
 		end
 		for _, key in ipairs(Config.ShopProducts) do
 			order += 1
 			card(order, tr("prod_" .. key), tr("prod_" .. key .. "_desc"), nil, tr("buy_robux"), Color3.fromRGB(0, 170, 110), function()
 				promptProduct(key)
-			end)
+			end, nil, "icon", { icon = ROBUX_ICONS[key] })
 		end
 	end
 end
@@ -780,9 +807,26 @@ local function setTab(tab)
 end
 setTab("trails")
 
+-- обычный магазин — только за монеты; донат-магазин — только за Robux
+local function setDonateMode(on)
+	shopTitle.Text = on and tr("ui_donate_title") or tr("ui_shop_title")
+	for key, b in pairs(tabButtons) do
+		b.Visible = (not on) and key ~= "robux"
+	end
+end
+setDonateMode(false)
+local function openDonate()
+	setDonateMode(true)
+	shop.Visible = true
+	setTab("robux")
+end
 shopBtn.Activated:Connect(function()
+	setDonateMode(false)
+	if currentTab == "robux" then
+		currentTab = "trails"
+	end
 	shop.Visible = not shop.Visible
-	refreshShop()
+	setTab(currentTab)
 end)
 closeBtn.Activated:Connect(function()
 	shop.Visible = false
@@ -794,9 +838,15 @@ for key, b in pairs(tabButtons) do
 end
 
 local function openShop(tab)
+	if tab == "robux" then
+		openDonate()
+		return
+	end
+	setDonateMode(false)
 	shop.Visible = true
 	setTab(tab)
 end
+donateBtn.Activated:Connect(openDonate)
 
 -- ============ ОКНО ПЕРЕРОЖДЕНИЯ ============
 local rebirthWin = scaled(new("Frame", {
@@ -1870,7 +1920,7 @@ end
 
 local currentGuide = nil
 local function refreshGuide()
-	currentGuide = findGuideTarget()
+	currentGuide = nil -- светящаяся линия-подсказка отключена
 end
 for _, attr in ipairs({ "Stage", "MaxStage", "InLobby" }) do
 	player:GetAttributeChangedSignal(attr):Connect(refreshGuide)
