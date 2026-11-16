@@ -244,7 +244,7 @@ treasureLabel.Size = UDim2.fromOffset(130, 32)
 -- ============ КРУГЛЫЙ ТАЙМЕР ЩИТА (наверху) ============
 local shieldCircle = scaled(new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 86),
+	Position = UDim2.new(0.5, 0, 0, 118),
 	Size = UDim2.fromOffset(66, 66),
 	BackgroundColor3 = Color3.fromRGB(20, 40, 70),
 	BackgroundTransparency = 0.1,
@@ -1568,17 +1568,18 @@ local EVENT_COLORS = {
 }
 local eventBar = scaled(new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 158),
-	Size = UDim2.fromOffset(460, 44),
+	Position = UDim2.new(0.5, 0, 0, 84), -- сразу под панелью этапа, не закрывает персонажа
+	Size = UDim2.fromOffset(330, 28),
 	BackgroundColor3 = Color3.fromRGB(255, 80, 30),
+	BackgroundTransparency = 0.1,
 	Visible = false,
 }, gui))
 corner(eventBar, 12)
-outline(eventBar, Color3.new(0, 0, 0), 3)
+outline(eventBar, Color3.new(0, 0, 0), 2)
 local eventText = new("TextLabel", {
 	BackgroundTransparency = 1,
-	Size = UDim2.new(1, -16, 1, -8),
-	Position = UDim2.fromOffset(8, 4),
+	Size = UDim2.new(1, -12, 1, -6),
+	Position = UDim2.fromOffset(6, 3),
 	Font = Enum.Font.GothamBlack,
 	TextScaled = true,
 	TextColor3 = Color3.new(1, 1, 1),

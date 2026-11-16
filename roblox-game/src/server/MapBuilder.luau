@@ -1486,10 +1486,61 @@ function Obstacles.templeHall(ctx)
 	ctx.x, ctx.z = x, z0 + len
 end
 
+-- 🪟 Стеклянный мост «как в Игре в кальмара»: 5 рядов по 2 стекла (слева и справа).
+-- В каждом ряду одно стекло держит, другое разбивается. Какое — решает сервер,
+-- и раз в час расклад меняется.
+local glassBridgeCount = 0
+function Obstacles.glassBridge(ctx)
+	glassBridgeCount += 1
+	local bridgeId = glassBridgeCount
+	local rows = 5
+	local x = ctx.x
+	local top = ctx.y
+	local tile = 5
+	local gapZ = 2.6
+	local laneX = 3.4
+	local z0 = ctx.z + 3
+	themedPlatform(ctx, x, top, z0 + 2, 6, 4)
+	local zStart = z0 + 4 + gapZ
+	local len = rows * (tile + gapZ)
+	-- стальная рама моста (по ней не пройти — она ниже стёкол и без столкновений)
+	for _, sx in ipairs({ -laneX - tile / 2 - 0.3, -laneX + tile / 2 + 0.3, laneX - tile / 2 - 0.3, laneX + tile / 2 + 0.3 }) do
+		part({ Size = V3(0.4, 0.6, len + 2), CFrame = L(ctx, x + sx, top - 0.9, zStart + len / 2 - gapZ / 2), Color = RGB(70, 75, 85), Material = M.DiamondPlate, CanCollide = false })
+	end
+	for i = 0, rows do
+		part({ Size = V3(laneX * 2 + tile + 1, 0.5, 0.4), CFrame = L(ctx, x, top - 0.9, zStart - gapZ / 2 + i * (tile + gapZ)), Color = RGB(70, 75, 85), Material = M.DiamondPlate, CanCollide = false })
+	end
+	if not ctx.sky then
+		for _, z in ipairs({ zStart, zStart + len - tile }) do
+			column(ctx, x, z, LAVA_BOTTOM, top - 1.2, 1.4, 1.4, RGB(70, 75, 85), M.Metal)
+		end
+	end
+	for row = 1, rows do
+		local zc = zStart + (row - 1) * (tile + gapZ) + tile / 2
+		for _, side in ipairs({ -1, 1 }) do
+			local g = part({ Name = "GlassTile", Size = V3(tile, 0.4, tile), CFrame = L(ctx, x + side * laneX, top - 0.2, zc), Color = RGB(190, 235, 255), Material = M.Glass, Transparency = 0.35, Reflectance = 0.15 })
+			g:SetAttribute("Bridge", bridgeId)
+			g:SetAttribute("Row", row)
+			g:SetAttribute("Side", side)
+			tag(g, "GlassTile")
+		end
+		addPath(L(ctx, x, top, zc).Position)
+	end
+	-- табличка
+	makeSign(L(ctx, x, top + 8, z0 + 1), V3(10, 2.4, 0.4), "sign_glass", RGB(30, 40, 60), RGB(190, 235, 255), Enum.NormalId.Back)
+	part({ Size = V3(0.4, 9, 0.4), CFrame = L(ctx, x - 5.5, top + 4.5, z0 + 1), Color = RGB(70, 75, 85), Material = M.Metal })
+	part({ Size = V3(0.4, 9, 0.4), CFrame = L(ctx, x + 5.5, top + 4.5, z0 + 1), Color = RGB(70, 75, 85), Material = M.Metal })
+	local endZ = zStart + len
+	local size = 9
+	themedPlatform(ctx, x, top, endZ + size / 2, size, size)
+	maybeCoin(ctx, x, top, endZ + size / 2, 0.9)
+	ctx.x, ctx.y, ctx.z = x, top, endZ + size
+end
+
 -- У каждого мира СВОЙ набор препятствий — они не повторяются между мирами
 local POOLS = {
 	{ "jumps", "stripes", "balloons", "bounce", "spinner", "coasterTrack" }, -- 🎡 парк
-	{ "macarons", "canes", "donuts", "chocoBridge", "pushers" }, -- 🍭 Candy Land
+	{ "macarons", "canes", "donuts", "glassBridge", "glassBridge", "pushers" }, -- 🍭 Candy Land
 	{ "lavaPit", "crystalBlink", "templeHall", "minecart", "cave", "lasers", "pendulum" }, -- 💎 хрустальные пещеры
 	{ "plankBridge", "lavaCurtains", "geysers", "vanish", "movers" }, -- 🌋 острова вулкана
 	{ "cloudSteps", "starHop", "rope", "disks", "conveyor" }, -- ☁️ небо

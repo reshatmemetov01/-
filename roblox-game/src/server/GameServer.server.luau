@@ -1803,6 +1803,72 @@ for _, chest in ipairs(CollectionService:GetTagged("Secret")) do
 	end)
 end
 
+-- 🪟 СТЕКЛЯННЫЕ МОСТЫ: в каждом ряду одно стекло настоящее, другое разбивается.
+-- Расклад зависит от текущего часа — каждый час он меняется.
+local glassHour = -1
+local function glassIsReal(tile, hour)
+	local seed = hour * 1000 + (tile:GetAttribute("Bridge") or 0) * 37 + (tile:GetAttribute("Row") or 0) * 11
+	local realSide = Random.new(seed):NextNumber() < 0.5 and -1 or 1
+	return tile:GetAttribute("Side") == realSide
+end
+local function resetGlass(tile)
+	tile:SetAttribute("Broken", false)
+	tile.CanCollide = true
+	tile.Transparency = 0.35
+end
+local function refreshGlass()
+	local hour = math.floor(os.time() / 3600)
+	if hour == glassHour then
+		return
+	end
+	glassHour = hour
+	for _, tile in ipairs(CollectionService:GetTagged("GlassTile")) do
+		tile:SetAttribute("Real", glassIsReal(tile, hour))
+		resetGlass(tile)
+	end
+end
+local function shatter(tile)
+	tile:SetAttribute("Broken", true)
+	tile.CanCollide = false
+	tile.Transparency = 1
+	for _ = 1, 8 do
+		local shard = Instance.new("Part")
+		shard.Size = Vector3.new(math.random(6, 14) / 10, 0.2, math.random(6, 14) / 10)
+		shard.CFrame = tile.CFrame * CFrame.new(math.random(-20, 20) / 10, 0, math.random(-20, 20) / 10) * CFrame.Angles(math.random(), math.random(), math.random())
+		shard.Color = tile.Color
+		shard.Material = Enum.Material.Glass
+		shard.Transparency = 0.3
+		shard.CanCollide = false
+		shard.CanQuery = false
+		shard.CanTouch = false
+		shard.AssemblyLinearVelocity = Vector3.new(math.random(-8, 8), math.random(-2, 6), math.random(-8, 8))
+		shard.Parent = workspace
+		game:GetService("Debris"):AddItem(shard, 2.5)
+	end
+	task.delay(3, function()
+		if tile.Parent then
+			resetGlass(tile)
+		end
+	end)
+end
+refreshGlass()
+for _, tile in ipairs(CollectionService:GetTagged("GlassTile")) do
+	tile.Touched:Connect(function(hit)
+		if tile:GetAttribute("Real") or tile:GetAttribute("Broken") then
+			return
+		end
+		if playerFromHit(hit) then
+			shatter(tile)
+		end
+	end)
+end
+task.spawn(function()
+	while true do
+		task.wait(30)
+		refreshGlass()
+	end
+end)
+
 -- 📦 спрятанные сокровища: 5 сундуков по всей игре
 for _, chest in ipairs(CollectionService:GetTagged("Treasure")) do
 	local id = chest:GetAttribute("SecretId")
