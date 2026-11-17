@@ -1527,10 +1527,6 @@ function Obstacles.glassBridge(ctx)
 		end
 		addPath(L(ctx, x, top, zc).Position)
 	end
-	-- табличка
-	makeSign(L(ctx, x, top + 8, z0 + 1), V3(10, 2.4, 0.4), "sign_glass", RGB(30, 40, 60), RGB(190, 235, 255), Enum.NormalId.Back)
-	part({ Size = V3(0.4, 9, 0.4), CFrame = L(ctx, x - 5.5, top + 4.5, z0 + 1), Color = RGB(70, 75, 85), Material = M.Metal })
-	part({ Size = V3(0.4, 9, 0.4), CFrame = L(ctx, x + 5.5, top + 4.5, z0 + 1), Color = RGB(70, 75, 85), Material = M.Metal })
 	local endZ = zStart + len
 	local size = 9
 	themedPlatform(ctx, x, top, endZ + size / 2, size, size)
@@ -1542,7 +1538,7 @@ end
 local POOLS = {
 	{ "jumps", "stripes", "balloons", "bounce", "spinner", "coasterTrack" }, -- 🎡 парк
 	{ "macarons", "canes", "donuts", "glassBridge", "glassBridge", "pushers" }, -- 🍭 Candy Land
-	{ "lavaPit", "glassBridge", "glassBridge", "templeHall", "minecart", "cave", "lasers", "pendulum" }, -- 💎 хрустальные пещеры
+	{ "lavaPit", "glassBridge", "templeHall", "minecart", "cave", "lasers", "pendulum" }, -- 💎 хрустальные пещеры
 	{ "plankBridge", "lavaCurtains", "geysers", "vanish", "movers" }, -- 🌋 острова вулкана
 	{ "cloudSteps", "starHop", "rope", "disks", "conveyor" }, -- ☁️ небо
 }
