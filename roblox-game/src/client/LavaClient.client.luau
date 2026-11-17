@@ -186,7 +186,7 @@ new("UIPadding", { PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10)
 new("UIGridLayout", { CellSize = UDim2.fromOffset(155, 46), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, left)
 local function setMenu(open)
 	left.Visible = open
-	menuIcon.Text = open and "✕" or ""
+	menuIcon.Text = open and "X" or ""
 	menuBars.Visible = not open
 end
 menuBtn.Activated:Connect(function()
@@ -405,7 +405,7 @@ local shopTitle = new("TextLabel", {
 	ZIndex = 6,
 }, shop)
 textStroke(shopTitle)
-local closeBtn = button({ text = "✕", size = UDim2.fromOffset(44, 44), position = UDim2.new(1, -56, 0, 10), color = Color3.fromRGB(200, 50, 50) }, shop)
+local closeBtn = button({ text = "X", size = UDim2.fromOffset(44, 44), position = UDim2.new(1, -56, 0, 10), color = Color3.fromRGB(200, 50, 50) }, shop)
 closeBtn.ZIndex = 6
 local TABS = {
 	{ "trails", tr("tab_trails") },
@@ -783,8 +783,18 @@ local function refreshShop()
 		for _, key in ipairs(Config.ShopPasses) do
 			order += 1
 			local owned = player:GetAttribute("Pass" .. key) == true
-			card(order, tr("pass_" .. key), tr("pass_" .. key .. "_desc"), nil, owned and tr("owned") or tr("buy_robux"), owned and Color3.fromRGB(60, 170, 90) or Color3.fromRGB(0, 170, 110), function()
-				if not owned then
+			local toggle = owned and (key == "Speed" or key == "SuperJump")
+			local btnText, btnColor = owned and tr("owned") or tr("buy_robux"), owned and Color3.fromRGB(60, 170, 90) or Color3.fromRGB(0, 170, 110)
+			if toggle then
+				-- купленную скорость/прыжок можно включать и выключать
+				local off = player:GetAttribute(key .. "Off") == true
+				btnText = off and tr("ui_off") or tr("ui_on")
+				btnColor = off and Color3.fromRGB(110, 100, 110) or Color3.fromRGB(60, 170, 90)
+			end
+			card(order, tr("pass_" .. key), tr("pass_" .. key .. "_desc"), nil, btnText, btnColor, function()
+				if toggle then
+					ActionRE:FireServer("TogglePass", key)
+				elseif not owned then
 					promptPass(key)
 				end
 			end, nil, "icon", { icon = ROBUX_ICONS[key] })
@@ -834,6 +844,14 @@ end)
 for key, b in pairs(tabButtons) do
 	b.Activated:Connect(function()
 		setTab(key)
+	end)
+end
+
+for _, attr in ipairs({ "SpeedOff", "SuperJumpOff" }) do
+	player:GetAttributeChangedSignal(attr):Connect(function()
+		if shop.Visible then
+			refreshShop()
+		end
 	end)
 end
 
@@ -1733,7 +1751,7 @@ corner(tasksWin, 18)
 outline(tasksWin, Color3.fromRGB(90, 200, 255), 3)
 local tTitle = new("TextLabel", { BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 10), Size = UDim2.new(1, -80, 0, 40), Font = Enum.Font.GothamBlack, TextScaled = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = GOLD, Text = tr("tasks_title"), ZIndex = 9 }, tasksWin)
 textStroke(tTitle)
-local tClose = button({ text = "✕", size = UDim2.fromOffset(40, 40), position = UDim2.new(1, -52, 0, 10), color = Color3.fromRGB(200, 50, 50) }, tasksWin)
+local tClose = button({ text = "X", size = UDim2.fromOffset(40, 40), position = UDim2.new(1, -52, 0, 10), color = Color3.fromRGB(200, 50, 50) }, tasksWin)
 tClose.ZIndex = 9
 new("TextLabel", { BackgroundTransparency = 1, Position = UDim2.new(0, 16, 1, -34), Size = UDim2.new(1, -32, 0, 24), Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = Color3.fromRGB(180, 210, 240), Text = tr("tasks_hint"), ZIndex = 9 }, tasksWin)
 local taskRows = {}
@@ -1963,7 +1981,7 @@ local lastJumpReq = 0 -- время последнего сигнала прыж
 local airSince = 0 -- когда персонаж оторвался от земли
 -- двойной прыжок: пропуск «Прыжок x2» (или старая привилегия, если уже куплена)
 local function hasDoubleJump()
-	return player:GetAttribute("PassSuperJump") == true or csvSet(player:GetAttribute("Perks")).doublejump == true
+	return (player:GetAttribute("PassSuperJump") == true and not player:GetAttribute("SuperJumpOff")) or csvSet(player:GetAttribute("Perks")).doublejump == true
 end
 UserInputService.JumpRequest:Connect(function()
 	local now = os.clock()

@@ -53,6 +53,7 @@ local function defaultData()
 		ducks = {},
 		secrets = {},
 		treasures = {},
+		passOff = {}, -- выключенные пропуски (Скорость x2 / Прыжок x2)
 		trails = {},
 		trail = "",
 		skins = {},
@@ -138,6 +139,8 @@ local function syncAttributes(player)
 	player:SetAttribute("Rebirths", d.rebirths)
 	player:SetAttribute("Ducks", countKeys(d.ducks))
 	player:SetAttribute("Treasures", countKeys(d.treasures or {}))
+	player:SetAttribute("SpeedOff", (d.passOff or {}).Speed == true)
+	player:SetAttribute("SuperJumpOff", (d.passOff or {}).SuperJump == true)
 	player:SetAttribute("DucksList", csvKeys(d.ducks))
 	player:SetAttribute("Trails", csvKeys(d.trails))
 	player:SetAttribute("Trail", d.trail)
@@ -1218,7 +1221,8 @@ end
 local function applyCharacter(player)
 	local _, hum = getCharacterParts(player)
 	if hum then
-		local speed = player:GetAttribute("PassSpeed") and Config.SPEED_WALKSPEED or Config.NORMAL_WALKSPEED
+		local speedOn = player:GetAttribute("PassSpeed") and not player:GetAttribute("SpeedOff")
+		local speed = speedOn and Config.SPEED_WALKSPEED or Config.NORMAL_WALKSPEED
 		if hasPerk(player, "swift") then
 			speed += Config.PERK_SWIFT_BONUS
 		end
@@ -2228,6 +2232,14 @@ ActionRE.OnServerEvent:Connect(function(player, action, arg)
 		doRebirth(player, s)
 	elseif action == "Respawn" then
 		teleportToStage(player)
+	elseif action == "TogglePass" then
+		-- включить / выключить купленную «Скорость x2» или «Прыжок x2»
+		if (arg == "Speed" or arg == "SuperJump") and player:GetAttribute("Pass" .. arg) then
+			d.passOff = d.passOff or {}
+			d.passOff[arg] = not d.passOff[arg] or nil
+			syncAttributes(player)
+			applyCharacter(player)
+		end
 	elseif action == "ToLobby" then
 		setInLobby(player, true)
 		teleportToStage(player)

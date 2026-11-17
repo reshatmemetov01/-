@@ -6415,8 +6415,17 @@ local function caveEntrance(ctx, first)
 	portalGate(L(ctx, 0, top + 7, -25), 6, RGB(90, 255, 140), WHITE, RGB(90, 255, 140))
 	-- ворота шахты с вывеской
 	local gate = L(ctx, 0, top, -6)
-	mineSupport(gate * CF(-8, 0, 0), 1.6)
-	mineSupport(gate * CF(8, 0, 0), 1.6)
+	-- широкая рама: столбы только по краям, проход в центре свободен
+	for sx = -1, 1, 2 do
+		part({ Size = V3(2.4, 20, 2.4), CFrame = gate * CF(sx * 15, 10, 0), Color = RGB(120, 85, 55), Material = M.Wood })
+		part({ Size = V3(0.2, 2.6, 0.2), CFrame = gate * CF(sx * 7, 18.2, 0), Color = RGB(40, 40, 40), CanCollide = false })
+		local lan = part({ Size = V3(1.4, 2, 1.4), CFrame = gate * CF(sx * 7, 16.2, 0), Color = RGB(255, 200, 110), Material = M.Neon, CanCollide = false })
+		local l = Instance.new("PointLight")
+		l.Color = RGB(255, 190, 110)
+		l.Range = 24
+		l.Brightness = 1.6
+		l.Parent = lan
+	end
 	part({ Size = V3(36, 3, 3), CFrame = gate * CF(0, 21, 0), Color = RGB(110, 75, 50), Material = M.Wood })
 	local board = gate * CF(0, 26, 0)
 	part({ Size = V3(32, 8, 2), CFrame = board, Color = RGB(60, 50, 55), Material = M.Slate })
