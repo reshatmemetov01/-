@@ -1150,8 +1150,27 @@ local function applyPet(player)
 	end
 	model:SetAttribute("OwnerId", player.UserId)
 	model:PivotTo(root.CFrame * CFrame.new(2.5, 1.5, 2))
+	-- питомец всегда загружен у всех игроков, даже если карта подгружается частями
+	pcall(function()
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	end)
 	model.Parent = petFolder
 end
+
+-- сервер тоже водит питомцев за хозяевами (раз в полсекунды): иначе питомец «оставался» в лобби
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		for _, m in ipairs(petFolder:GetChildren()) do
+			local owner = Players:GetPlayerByUserId(m:GetAttribute("OwnerId") or 0)
+			local char = owner and owner.Character
+			local r = char and char:FindFirstChild("HumanoidRootPart")
+			if r and m.PrimaryPart and (m.PrimaryPart.Position - r.Position).Magnitude > 6 then
+				m:PivotTo(r.CFrame * CFrame.new(2.6, 1.2, 2.2))
+			end
+		end
+	end
+end)
 
 -- ============ АУРЫ ============
 local function colorSeq(colors)
