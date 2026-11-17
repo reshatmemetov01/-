@@ -1518,7 +1518,8 @@ function Obstacles.glassBridge(ctx)
 	for row = 1, rows do
 		local zc = zStart + (row - 1) * (tile + gapZ) + tile / 2
 		for _, side in ipairs({ -1, 1 }) do
-			local g = part({ Name = "GlassTile", Size = V3(tile, 0.4, tile), CFrame = L(ctx, x + side * laneX, top - 0.2, zc), Color = RGB(190, 235, 255), Material = M.Glass, Transparency = 0.35, Reflectance = 0.15 })
+			local glassCol = ctx.zone == 3 and RGB(200, 160, 255) or RGB(190, 235, 255)
+			local g = part({ Name = "GlassTile", Size = V3(tile, 0.4, tile), CFrame = L(ctx, x + side * laneX, top - 0.2, zc), Color = glassCol, Material = M.Glass, Transparency = 0.35, Reflectance = 0.15 })
 			g:SetAttribute("Bridge", bridgeId)
 			g:SetAttribute("Row", row)
 			g:SetAttribute("Side", side)
@@ -1541,7 +1542,7 @@ end
 local POOLS = {
 	{ "jumps", "stripes", "balloons", "bounce", "spinner", "coasterTrack" }, -- 🎡 парк
 	{ "macarons", "canes", "donuts", "glassBridge", "glassBridge", "pushers" }, -- 🍭 Candy Land
-	{ "lavaPit", "crystalBlink", "templeHall", "minecart", "cave", "lasers", "pendulum" }, -- 💎 хрустальные пещеры
+	{ "lavaPit", "glassBridge", "glassBridge", "templeHall", "minecart", "cave", "lasers", "pendulum" }, -- 💎 хрустальные пещеры
 	{ "plankBridge", "lavaCurtains", "geysers", "vanish", "movers" }, -- 🌋 острова вулкана
 	{ "cloudSteps", "starHop", "rope", "disks", "conveyor" }, -- ☁️ небо
 }
