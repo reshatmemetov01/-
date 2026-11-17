@@ -5917,11 +5917,14 @@ local function buildIslesScenery(rng, pFirst, pLast, endCF)
 	local cx, cz = (minX + maxX) / 2, (minZ + maxZ) / 2
 	local ext = math.max(maxX - minX, maxZ - minZ)
 	-- 🔥 лавовое море
-	for ix = -1, 1 do
-		for iz = -1, 1 do
-			local sea = part({ Name = "IslesLava", Size = V3(2000, 1, 2000), CFrame = CF(cx + ix * 2000, LY - 0.5, cz + iz * 2000), Color = RGB(255, 100, 20), Material = M.CrackedLava })
+	-- море только вокруг этого мира (раньше доставало до соседнего неба)
+	local seaTile = math.min(1400, (ext + 1100) / 2)
+	for ix = -1, 1, 2 do
+		for iz = -1, 1, 2 do
+			local px, pz = cx + ix * seaTile / 2, cz + iz * seaTile / 2
+			local sea = part({ Name = "IslesLava", Size = V3(seaTile, 1, seaTile), CFrame = CF(px, LY - 0.5, pz), Color = RGB(255, 100, 20), Material = M.CrackedLava })
 			tag(sea, "Lava")
-			local glow = part({ Size = V3(2000, 0.3, 2000), CFrame = CF(cx + ix * 2000, LY + 0.2, cz + iz * 2000), Color = RGB(255, 120, 30), Material = M.Neon, Transparency = 0.75, CanCollide = false, CanQuery = false })
+			local glow = part({ Size = V3(seaTile, 0.3, seaTile), CFrame = CF(px, LY + 0.2, pz), Color = RGB(255, 120, 30), Material = M.Neon, Transparency = 0.75, CanCollide = false, CanQuery = false })
 			tag(glow, "Lava")
 		end
 	end
